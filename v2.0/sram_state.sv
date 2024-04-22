@@ -1,9 +1,8 @@
 `include "fifo_null_pages.sv"
-
 module sram_state(
     input clk,
     input rst_n,
-
+ 
     input wr_ecc_en,
     input [10:0] wr_ecc_addr,
     input [7:0] wr_ecc_code,
