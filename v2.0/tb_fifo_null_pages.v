@@ -7,7 +7,7 @@ module tb_fifo_null_pages();
     reg clk = 1;
     reg rst_n = 1;
 
-    reg pop_head = 0;
+    reg pop_head = 0; 
     wire [10:0] head_addr;
 
     reg push_tail = 0;
