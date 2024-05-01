@@ -24,12 +24,16 @@ always @(posedge clk or negedge rst_n) begin
         initialized <= 1;
     end else begin
         if(pop_head) 
-            if(initialized && head_addr < 2047) 
-                head_addr <= head_addr + 1;
-            else begin
-                initialized <= 0;
-                head_ptr <= head_ptr + 1;
+            if(initialized) begin
+                if(head_addr < 2047) begin
+                    head_addr <= head_addr + 1;
+                end else begin 
+                    initialized <= 0;
+                    head_addr <= fifo[head_ptr];
+                end
+            end else begin
                 head_addr <= fifo[head_ptr + 1];
+                head_ptr <= head_ptr + 1;
             end
         if(push_tail) begin
             fifo[tail_ptr + 1] <= tail_addr;
