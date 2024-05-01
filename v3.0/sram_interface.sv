@@ -26,22 +26,16 @@ module sram_state
     input [3:0] rd_port,
     input [10:0] rd_addr,
 
-    //SRAM State
-    output reg writting = 0,
     output reg [15:0][10:0] port_amount,
 
-    //LOCK
-    input reg lock_en,
-    input reg lock_dis,
+    //Lock
+    input lock_en,
+    input lock_dis,
     output reg locking = 0,
-
-    //TODO Read Mechanisms
 
     //Null Pages
     output [10:0] null_ptr,
-    output reg [10:0] free_space = 2047,
-    output reg full = 0
-    
+    output reg [10:0] free_space = 2047
 );
 
 reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
@@ -55,6 +49,14 @@ end
 always @(posedge clk) begin
     if(ecc_rd_en && rst_n) begin
         ecc_dout <= ecc_storage[ecc_rd_addr];
+    end
+end
+
+always @(posedge clk) begin
+    if(lock_en && !locking) begin
+        locking <= 1;
+    end else if(lock_dis && locking) begin
+        locking <= 0;
     end
 end
 
