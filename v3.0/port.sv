@@ -46,12 +46,16 @@ always @(posedge clk) begin
 
     if(xfer_en) begin
         data <= buffer[xfer_ptr];
-        if(xfer_ptr + 1 == write_ptr) begin
+        if(xfer_ptr + 1 == write_ptr || (xfer_ptr == 31 && write_ptr == 0)) begin
             xfer_en <= 0;
         end
-        if(xfer_ptr + 1 == last_ptr && xfer_stop) begin
+        if((xfer_ptr == last_ptr) && xfer_stop) begin
             xfer_en <= 0;
-        end 
+        end
+        //$display("last_ptr = %d",last_ptr);
+        //$display("xfer_ptr = %d",xfer_ptr);
+        //$display("xfer_stop = %d",xfer_stop);
+        //$display("data = %d",data);
         xfer_ptr <= xfer_ptr + 1;
     end
 
@@ -68,12 +72,13 @@ always @(posedge clk) begin
         else begin
             buffer[write_ptr] <= wr_data;
         end
-        if(write_ptr + 1 == xfer_ptr) begin
+        if(write_ptr + 1 == xfer_ptr || (write_ptr == 31 && xfer_ptr == 0)) begin
             xfer_en <= 1;
         end
         write_ptr <= write_ptr + 1;
+        //$display("         write_ptr = %d",write_ptr);
     end else begin
-        if(heartbeat == 4) begin
+        if(heartbeat == 3) begin
             heartbeat <= 0;
             unlock <= 1;
         end
