@@ -14,7 +14,7 @@ module port(
     output reg [15:0] data = 16'b0,
     output reg [8:0] length = 0,
     output reg writting = 0,
-    output reg unlock = 0
+    output reg new_packet = 0
 );
 
 reg is_ctrl_frame = 0;
@@ -28,12 +28,10 @@ reg xfer_en = 0;
 reg [4:0] xfer_ptr = 0;
 reg [4:0] write_ptr = 0;
 reg [4:0] last_ptr = 0;
-
-//为突发传输准备
-reg [1:0] heartbeat = 0;
  
 always @(posedge clk) begin 
     if(wr_sop) begin
+        new_packet <= 1;
         is_ctrl_frame <= 1;
     end
     if(wr_eop) begin
@@ -60,8 +58,6 @@ always @(posedge clk) begin
     end
 
     if(wr_vld) begin
-        unlock <= 1;
-        heartbeat <= 0;
         if(is_ctrl_frame) begin
             dest_port <= wr_data[3:0];
             prior <= wr_data[6:4];
@@ -70,6 +66,7 @@ always @(posedge clk) begin
             is_ctrl_frame <= 0;
         end
         else begin
+            new_packet <= 0;
             buffer[write_ptr] <= wr_data;
         end
         if(write_ptr + 1 == xfer_ptr || (write_ptr == 31 && xfer_ptr == 0)) begin
@@ -77,12 +74,6 @@ always @(posedge clk) begin
         end
         write_ptr <= write_ptr + 1;
         //$display("         write_ptr = %d",write_ptr);
-    end else begin
-        if(heartbeat == 3) begin
-            heartbeat <= 0;
-            unlock <= 1;
-        end
-        heartbeat <= heartbeat + 1;
     end
 end
 
