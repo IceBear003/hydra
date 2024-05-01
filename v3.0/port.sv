@@ -30,7 +30,7 @@ reg [4:0] write_ptr = 0;
 reg [4:0] last_ptr = 0;
 
 //为突发传输准备
-reg [3:0] heartbeat = 0;
+reg [1:0] heartbeat = 0;
  
 always @(posedge clk) begin 
     if(wr_sop) begin
@@ -73,7 +73,7 @@ always @(posedge clk) begin
         end
         write_ptr <= write_ptr + 1;
     end else begin
-        if(heartbeat == 15) begin
+        if(heartbeat == 4) begin
             heartbeat <= 0;
             unlock <= 1;
         end

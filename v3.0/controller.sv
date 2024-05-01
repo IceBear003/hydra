@@ -21,7 +21,7 @@ integer i;
 always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
         if(port_writting[i]) begin
-            wr_buffer[i] <= wr_data[i];
+            
         end
     end
 end
@@ -31,6 +31,7 @@ wire [15:0] [3:0] port_dest_port;
 wire [15:0] [15:0] port_data;
 wire [15:0] [8:0] port_length;
 wire [15:0] port_writting;
+wire [15:0] port_unlock;
 
 port port [15:0]
 (
