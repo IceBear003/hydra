@@ -6,8 +6,6 @@ module port(
     input wr_eop,
     input wr_vld,
     input [15:0] wr_data,
-    output reg full = 0,
-    output reg almost_full = 0,
 
     //INTERNAL
     output reg writting = 0,
