@@ -1,5 +1,5 @@
 $date
-	Mon Apr 22 22:25:29 2024
+	Wed May 01 14:30:56 2024
 $end
 $version
 	Icarus Verilog
@@ -36,7 +36,7 @@ $end
 $dumpvars
 b0 ,
 1+
-b0 *
+b1 *
 bx )
 b0 (
 b0 '
