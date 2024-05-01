@@ -1,52 +1,83 @@
 module port(
     input clk,
 
-    //INTERFACE
     input wr_sop,
     input wr_eop,
     input wr_vld,
     input [15:0] wr_data,
 
-    //INTERNAL
-    output reg writting = 0,
-    output reg page_over = 0,
+    input xfer_stop,
+
     output reg [2:0] prior = 3'b0,
     output reg [3:0] dest_port = 4'b0,
-    output reg [15:0] data = 16'b0
+    //前32拍延迟32拍发出，后续拍数据的延迟情况取决于vld
+    output reg [15:0] data = 16'b0,
+    output reg [8:0] length = 0,
+    output reg writting = 0,
+    output reg unlock = 0
 );
 
 reg is_ctrl_frame = 0;
-reg [2:0] batch = 3'b0;
-reg left = 0;
 
+//数据包缓冲区 32×16
+reg [31:0][15:0] buffer = 0;
+
+//多数据包数据缓冲管理
+//兼容32周期的搜索时序
+reg xfer_en = 0;
+reg [4:0] xfer_ptr = 0;
+reg [4:0] write_ptr = 0;
+reg [4:0] last_ptr = 0;
+
+//为突发传输准备
+reg [3:0] heartbeat = 0;
+ 
 always @(posedge clk) begin 
     if(wr_sop) begin
         is_ctrl_frame <= 1;
     end
     if(wr_eop) begin
-        batch <= 3'b0;
         prior <= 3'b0;
         dest_port <= 4'b0;
         data <= 16'b0;
+        last_ptr <= write_ptr;
     end
     writting <= wr_vld;
+
+    if(xfer_en) begin
+        data <= buffer[xfer_ptr];
+        if(xfer_ptr + 1 == write_ptr) begin
+            xfer_en <= 0;
+        end
+        if(xfer_ptr + 1 == last_ptr && xfer_stop) begin
+            xfer_en <= 0;
+        end 
+        xfer_ptr <= xfer_ptr + 1;
+    end
+
     if(wr_vld) begin
+        unlock <= 1;
+        heartbeat <= 0;
         if(is_ctrl_frame) begin
             dest_port <= wr_data[3:0];
             prior <= wr_data[6:4];
-            data[2:0] <= wr_data[9:7];
-            data[13:8] <= wr_data[15:10];
-            left <= wr_data[15:7];
+            length <= wr_data[15:7];
+            buffer[write_ptr] <= {7'b0, wr_data[15:7]};
             is_ctrl_frame <= 0;
         end
         else begin
-            data <= wr_data;
+            buffer[write_ptr] <= wr_data;
         end
-
-        if(batch == 7 || left == 1) 
-            page_over <= 1;
-        batch <= batch + 1;
-        left <= left - 1;
+        if(write_ptr + 1 == xfer_ptr) begin
+            xfer_en <= 1;
+        end
+        write_ptr <= write_ptr + 1;
+    end else begin
+        if(heartbeat == 15) begin
+            heartbeat <= 0;
+            unlock <= 1;
+        end
+        heartbeat <= heartbeat + 1;
     end
 end
 
