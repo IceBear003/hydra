@@ -69,8 +69,8 @@ always @(posedge clk) begin
             port_amount[wr_port] <= port_amount[wr_port] + 1;
         end 
         if(rd_op) begin
-            free_space <= free_space - 1;
-            port_amount[wr_port] <= port_amount[wr_port] - 1;
+            free_space <= free_space + 1;
+            port_amount[rd_port] <= port_amount[rd_port] - 1;
         end
     end
 end
