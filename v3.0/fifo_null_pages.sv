@@ -10,7 +10,7 @@ module fifo_null_pages
     input [10:0] tail_addr
 );
 
-(*ram_styl = "block"*) reg [10:0] fifo [2047:0]; //22Kbit
+(*ram_style = "block"*) reg [10:0] fifo [2047:0]; //22Kbit
 reg [10:0] head_ptr = 1;
 reg [10:0] tail_ptr = 0;
 reg initialized = 1;

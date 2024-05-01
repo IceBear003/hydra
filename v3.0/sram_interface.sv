@@ -19,6 +19,7 @@ module sram_state
     input [10:0] ecc_rd_addr,
     output reg [7:0] ecc_dout = 0,
 
+    //SRAM Operations
     input wr_op,
     input [3:0] wr_port,
     input rd_op,
@@ -27,18 +28,20 @@ module sram_state
 
     //SRAM State
     output reg writting = 0,
+    output reg [15:0][10:0] port_amount,
 
     //LOCK
     input reg lock_en,
     input reg lock_dis,
     output reg locking = 0,
 
-    //TODO READ MECHANISM
+    //TODO Read Mechanisms
 
     //Null Pages
     output [10:0] null_ptr,
     output reg [10:0] free_space = 2047,
     output reg full = 0
+    
 );
 
 reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
@@ -54,5 +57,30 @@ always @(posedge clk) begin
         ecc_dout <= ecc_storage[ecc_rd_addr];
     end
 end
+
+always @(posedge clk) begin
+    if(!rst_n) begin 
+        port_amount <= 0;
+    end else begin 
+        if(wr_op) begin
+            free_space <= free_space - 1;
+            port_amount[wr_port] <= port_amount[wr_port] + 1;
+        end 
+        if(rd_op) begin
+            free_space <= free_space - 1;
+            port_amount[wr_port] <= port_amount[wr_port] - 1;
+        end
+    end
+end
+
+fifo_null_pages null_pages
+(
+    .clk(clk),
+    .rst_n(rst_n),
+    .pop_head(wr_op),
+    .head_addr(null_ptr),
+    .push_tail(rd_op),
+    .tail_addr(rd_addr)
+);
 
 endmodule
