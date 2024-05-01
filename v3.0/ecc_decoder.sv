@@ -1,6 +1,6 @@
 module ecc_decoder(
     input [127:0] data,
-    input [7:0] sec_code,
+    input [7:0] code,
     output reg [127:0] cr_data
 );
 
@@ -18,7 +18,7 @@ always @(data) begin
     cur_code[7] <= data[127];
 
     //1t(XOR)
-    cur_code = cur_code ^ sec_code;
+    cur_code = cur_code ^ code;
     
     cr_data = data;
     if(cur_code != 0)

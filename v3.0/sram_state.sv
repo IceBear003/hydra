@@ -64,13 +64,17 @@ always @(posedge clk) begin
     if(!rst_n) begin 
         port_amount <= 0;
     end else begin 
-        if(wr_op) begin
+        if(wr_op && !rd_op) begin
             free_space <= free_space - 1;
             port_amount[wr_port] <= port_amount[wr_port] + 1;
-        end 
-        if(rd_op) begin
+        end else if(rd_op && !wr_op) begin
             free_space <= free_space + 1;
             port_amount[rd_port] <= port_amount[rd_port] - 1;
+        end else if(rd_op && wr_op) begin
+            if(wr_port != rd_port) begin
+                port_amount[wr_port] <= port_amount[wr_port] + 1;
+                port_amount[rd_port] <= port_amount[rd_port] - 1;
+            end
         end
     end
 end
