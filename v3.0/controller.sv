@@ -17,16 +17,20 @@ module controller(
     output reg [15:0] almost_full = 0
 );
 
-integer port_i;
+integer i;
 always @(posedge clk) begin
-    for(port_i = 0; port_i < 16; port_i = port_i + 1) begin
-        
+    for(i = 0; i < 16; i = i + 1) begin
+        if(port_writting[i]) begin
+            if(port_page_over) begin
+                
+            end
+            wr_buffer[i] = wr_buffer[i] << 16 + port_data[i];
+        end
     end
 end
 
 wire [15:0] port_writting;
-wire [15:0] port_is_ctrl_frame;
-wire [15:0] [2:0] port_batch;
+wire [15:0] port_page_over;
 wire [15:0] [2:0] port_prior;
 wire [15:0] [3:0] port_dest_port;
 wire [15:0] [15:0] port_data;
@@ -40,8 +44,7 @@ port port [15:0]
     .wr_data(wr_data),
 
     .writting(port_writting),
-    .is_ctrl_frame(port_is_ctrl_frame),
-    .batch(port_batch),
+    .page_over(port_page_over),
     .prior(port_prior),
     .dest_port(port_dest_port),
     .data(port_data)
