@@ -22,8 +22,7 @@ reg [4:0] cnt = 0;
 integer i;
 
 reg [4:0] distribution [15:0];
-reg [4:0] pre_distribution [15:0];
-reg [31:0] pre_distributed;
+reg [3:0] bind_dest_port [15:0];
 
 always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
@@ -35,6 +34,7 @@ always @(posedge clk) begin
                     //若可用则直接用                      force_mode
                     //若不可用就等待，将xfer_stop拉高，进入强制搜索模式
         end
+        
         //如果正在进入数据(加数据有效信号)
             //已经分配好SRAM，
             //直接取nullptr
@@ -98,6 +98,79 @@ ecc_decoder ecc_decoder [15:0]
     .data(rd_buffer),
     .code(ecc_decoder_code),
     .cr_data(cr_rd_buffer)
+);
+
+reg [31:0] sram_wr_en;
+reg [31:0][13:0] sram_wr_addr;
+reg [31:0][15:0] sram_din;
+
+reg [31:0] sram_rd_en;
+reg [31:0][13:0] sram_rd_addr;
+wire [31:0][15:0] sram_dout;
+
+sram sram [31:0]
+(
+    .clk(clk),
+    .rst_n(rst_n),
+    
+    .wr_en(sram_wr_en),
+    .wr_addr(sram_wr_addr),
+    .din(sram_din),
+    
+    .rd_en(sram_rd_en),
+    .rd_addr(sram_rd_addr),
+    .dout(sram_dout)
+);
+
+reg [31:0] ecc_wr_en;
+reg [31:0][10:0] ecc_wr_addr;
+reg [31:0][7:0] ecc_din;
+
+reg [31:0]ecc_rd_en;
+reg [31:0][10:0] ecc_rd_addr;
+wire [31:0][7:0] ecc_dout;
+
+reg [31:0]wr_op;
+reg [31:0][3:0] wr_port;
+reg [31:0]rd_op;
+reg [31:0][3:0] rd_port;
+reg [31:0][10:0] rd_addr;
+
+wire [31:0][15:0][10:0] port_amount;
+
+reg [31:0]lock_en;
+reg [31:0]lock_dis;
+wire [31:0]locking;
+
+wire [31:0][10:0] null_ptr;
+wire [31:0][10:0] free_space;
+
+sram_state sram_state [31:0] 
+(
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .ecc_wr_en(ecc_wr_en),
+    .ecc_wr_addr(ecc_wr_addr),
+    .ecc_din(ecc_din),
+    .ecc_rd_en(ecc_rd_en),
+    .ecc_rd_addr(ecc_rd_addr),
+    .ecc_dout(ecc_dout),
+
+    .wr_op(wr_op),
+    .wr_port(wr_port),
+    .rd_addr(rd_addr),
+    .rd_op(rd_op),
+    .rd_port(rd_port),
+
+    .port_amount(port_amount),
+
+    .lock_dis(lock_dis),
+    .lock_en(lock_en),
+    .locking(locking),
+
+    .null_ptr(null_ptr),
+    .free_space(free_space)
 );
 
 endmodule
