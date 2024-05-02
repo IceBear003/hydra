@@ -1,8 +1,8 @@
-`include "sram_state.sv"
-`include "sram.sv"
-`include "ecc_encoder.sv"
-`include "ecc_decoder.sv"
-`include "port.sv"
+`include "./v3.0/sram_state.sv"
+`include "./v3.0/sram.sv"
+`include "./v3.0/ecc_encoder.sv"
+`include "./v3.0/ecc_decoder.sv"
+`include "./v3.0/port.sv"
 
 module controller(
     input clk,
@@ -22,7 +22,7 @@ reg [4:0] cnt = 0;
 integer i, j;
 
 reg [15:0][4:0] distribution;//端口对应的SRAM
-reg [31:0][3:0] bind_dest_port;//SRAM对应的端�?
+reg [31:0][3:0] bind_dest_port;//SRAM对应的端口
 
 always @(negedge rst_n) begin
     for(i = 0; i < 16; i = i + 1) begin
@@ -31,7 +31,7 @@ always @(negedge rst_n) begin
 end
 
 reg [15:0] search_tag = 0;
-reg [15:0][10:0] max_amount = 0;//临时�?大�??
+reg [15:0][10:0] max_amount = 0;//临时最大值
 reg [31:0]locking = 0;//SRAM lock
 reg [15:0][2:0]batch = 0;// Data page
 reg [15:0][8:0]left = 0;//持久化的数据长度
@@ -57,7 +57,7 @@ always @(posedge clk) begin
         end
 
         if(port_data_vld[i]) begin//端口正在输出data
-            if(left[i] == 0) begin//输出data的第�?个tick和输入data的最后一个tick应该都需要，有点混乱
+            if(left[i] == 0) begin//输出data的第一个tick和输入data的最后一个tick应该都需要，有点混乱
                 left[i] <= port_length[i];
                 dest_port_[i] <= port_dest_port[i];
                 prior_[i] <= port_prior[i];
@@ -68,13 +68,13 @@ always @(posedge clk) begin
                 end
                 left[i] <= left[i] - 1;
             end
-            if(batch[i] == 7 && !end_[i]) begin//在数据末的时候？在数据初的时�?,应当�?要预先一个tick（在搜索结束的时候）处理page
+            if(batch[i] == 7 && !end_[i]) begin//在数据末的时候？在数据初的时候,应当需要预先一个tick（在搜索结束的时候）处理page
                 page[i] <= null_ptr[distribution[i]];
                 wr_op[distribution[i]] <= 1;//SRAM正在写入
-                wr_port[distribution[i]] <= dest_port_[i];//写入的端�?
+                wr_port[distribution[i]] <= dest_port_[i];//写入的端口
 
                 //FIXME 有可能是空的，初始化queue head\tail
-                jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];//tail填充下一�?
+                jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];//tail填充下一个
                 queue_tail[{dest_port_[i],port_prior}] <= null_ptr[distribution[i]];
                 
                 ecc_wr_en[distribution[i]] <= 1;
@@ -97,11 +97,11 @@ always @(posedge clk) begin
         
         if(search_tag[i]) begin
             if(locking[(cnt+i)%32] != 1) begin
-                if(page_amount[(cnt+i)%32] > max_amount[i]) begin//�?个SRAM中有多少个dest_port的数�?
+                if(page_amount[(cnt+i)%32] > max_amount[i]) begin//一个SRAM中有多少个dest_port的数据
                     locking[(cnt+i)%32] <= 1; 
                     locking[distribution[i]] <= 0;
                     distribution[i] <= (cnt+i)%32;
-                    //max amount要还�?
+                    //max amount要还原
                     max_amount[i] <= page_amount[(cnt+i)%32];
                     bind_dest_port[(cnt+i)%32] <= port_dest_port[i];
                 end
