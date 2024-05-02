@@ -21,8 +21,8 @@ reg [4:0] cnt = 0;
 
 integer i, j;
 
-reg [15:0][4:0] distribution;
-reg [31:0][3:0] bind_dest_port;
+reg [15:0][4:0] distribution;//端口对应的SRAM
+reg [31:0][3:0] bind_dest_port;//SRAM对应的端口
 
 always @(negedge rst_n) begin
     for(i = 0; i < 16; i = i + 1) begin
@@ -31,13 +31,14 @@ always @(negedge rst_n) begin
 end
 
 reg [15:0] search_tag = 0;
-reg [15:0][10:0] max_amount = 0;
-reg [31:0]locking = 0;
-reg [31:0][2:0]batch = 0;
-reg [31:0][8:0]left = 0;
-reg [31:0][3:0]dest_port_;
-reg [31:0][2:0]prior_;
-reg [31:0][10:0]page;
+reg [15:0][10:0] max_amount = 0;//临时最大值
+reg [31:0]locking = 0;//SRAM lock
+reg [15:0][2:0]batch = 0;// Data page
+reg [15:0][8:0]left = 0;//持久化的数据长度
+reg [15:0][3:0]dest_port_;//持久化的dest port
+reg [15:0][2:0]prior_;
+reg [15:0][10:0]page;// port page writein
+reg [15:0]end_;
 
 always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
@@ -45,58 +46,57 @@ always @(posedge clk) begin
             if(port_new_packet[i]) begin
                 if(bind_dest_port[distribution[i]] != port_dest_port[i] ||
                     free_space[distribution[i]] < port_length[i]) begin
-                    search_tag[i] <= 1;
+                    search_tag[i] <= 1;//更换写入的SRAM
                 end
             end
-            //                 dest_port      length
-            //判断已经被绑定的ditribution的sram是否空间充足
-                //若充足，则不做搜索操作
-                //若不充足，则查看预分配（dest port）是否可用
-                    //若可用则直接用                      force_mode
-                    //若不可用就等待，将xfer_stop拉高，进入强制搜索模式
         end
 
-        if(port_data_vld[i]) begin
-            if(left[i] == 0) begin
+        if(left[i] == 0) begin
+            end_[i] <= 0;
+        end
+
+        if(port_data_vld[i]) begin//端口正在输出data
+            if(left[i] == 0) begin//输出data的第一个tick和输入data的最后一个tick应该都需要，有点混乱
                 left[i] <= port_length[i];
                 dest_port_[i] <= port_dest_port[i];
                 prior_[i] <= port_prior[i];
-                if(batch[i] != 7) begin
-                    //ECC
+                search_tag[i] <= 0;
+            end else begin 
+                if(left[i] == 1) begin
+                    end_[i] <= 1;
+                end
+                left[i] <= left[i] - 1;
+            end
+            if(batch[i] == 7 && !end_[i]) begin//在数据末的时候？在数据初的时候,应当需要预先一个tick（在搜索结束的时候）处理page
+                page[i] <= null_ptr[distribution[i]];
+                wr_op[distribution[i]] <= 1;//SRAM正在写入
+                wr_port[distribution[i]] <= dest_port_[i];//写入的端口
+
+                //FIXME 有可能是空的，初始化queue head\tail
+                jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];//tail填充下一个
+                queue_tail[{dest_port_[i],port_prior}] <= null_ptr[distribution[i]];
+                
+                ecc_wr_en[distribution[i]] <= 1;
+                ecc_wr_addr[distribution[i]] <= page[i];
+                ecc_din[distribution[i]] <= ecc_encoder_code[i];
+            end else begin
+                if(end_[i] == 1) begin
                     ecc_wr_en[distribution[i]] <= 0;
                     ecc_wr_addr[distribution[i]] <= page[i];
                     ecc_din[distribution[i]] <= ecc_encoder_code[i];
                 end
-            end else begin 
-                left[i] <= left[i] - 1;
+                wr_op[distribution[i]] <= 0;
             end
-            if(batch[i] == 7) begin
-                page[i] <= null_ptr[distribution[i]];
-                wr_op <= 1;
-                wr_port <= dest_port_[i];
-
-                //有可能是空的，初始化queue head\tail
-                jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];
-                queue_tail <= null_ptr[distribution[i]];
-                
-                //ECC
-                ecc_wr_en[distribution[i]] <= 1;
-                ecc_wr_addr[distribution[i]] <= page[i];
-                ecc_din[distribution[i]] <= ecc_encoder_code[i];
-                
-
-            end else begin
-                wr_op <= 0;
-            end
+            batch[i] <= batch[i] + 1;
             sram_wr_en[distribution[i]] <= 1;
             sram_wr_addr[distribution[i]] <= {page[i], batch[i]};
             sram_din[distribution[i]] <= port_data[i];
-            ecc_encoder_data[i] <= (port_data[i] << (batch[i]*16)) + ecc_encoder_data[i];
+            ecc_encoder_data[i] <= (port_data[i] << (batch[i] << 4)) + ecc_encoder_data[i];
         end
         
-        if(search_tag) begin
+        if(search_tag[i]) begin
             if(locking[(cnt+i)%32] != 1) begin
-                if(port_amount[(cnt+i)%32][port_dest_port[i]] > max_amount[i]) begin
+                if(port_amount[(cnt+i)%32][port_dest_port[i]] > max_amount[i]) begin//一个SRAM中有多少个dest_port的数据
                     locking[(cnt+i)%32] <= 1; 
                     locking[distribution[i]] <= 0;
                     distribution[i] <= (cnt+i)%32;
@@ -106,22 +106,6 @@ always @(posedge clk) begin
                 end
             end
         end
-
-        //如果正在进入数据(加数据有效信号)
-            //已经分配好SRAM，
-            //直接取nullptr
-            //开始调用sram写
-            //累计8个
-            //触发ECC，写ECC
-        //无论何时，则开始分配流程，
-            //如果不是强制搜索模式
-                //即当端口自己作为dest port，择优
-                //看SRAM是否正在被写、是否被别的端口预分配占用、是否有己方的大量数据
-                //如果sram数据量过少并且可用的SRAM数量过少，则不预分配，拉高almost_full
-            //如果是强制搜索模式
-                //看SRAM是否正在被写、是否有己方的数据
-                //如果得不到结果，拉高full、把xfer_ptr往后移直到write_ptr
-                //如果可用的SRAM，就正常写
     end
     cnt <= cnt + 1;
 end
