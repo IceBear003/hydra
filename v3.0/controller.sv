@@ -19,14 +19,35 @@ module controller(
 
 reg [4:0] cnt = 0;
 
-integer i;
+integer i, j;
 
-reg [4:0] distribution [15:0];
-reg [3:0] bind_dest_port [15:0];
+reg [15:0][4:0] distribution;
+reg [31:0][3:0] bind_dest_port;
+
+always @(negedge rst_n) begin
+    for(i = 0; i < 16; i = i + 1) begin
+        distribution[i] <= i;
+    end
+end
+
+reg [15:0] search_tag = 0;
+reg [15:0][10:0] max_amount = 0;
+reg [31:0]locking = 0;
+reg [31:0][2:0]batch = 0;
+reg [31:0][8:0]left = 0;
+reg [31:0][3:0]dest_port_;
+reg [31:0][2:0]prior_;
+reg [31:0][10:0]page;
 
 always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
-        if(port_new_packet[i] && port_writting[i]) begin
+        if(port_writting[i]) begin
+            if(port_new_packet[i]) begin
+                if(bind_dest_port[distribution[i]] != port_dest_port[i] ||
+                    free_space[distribution[i]] < port_length[i]) begin
+                    search_tag[i] <= 1;
+                end
+            end
             //                 dest_port      length
             //判断已经被绑定的ditribution的sram是否空间充足
                 //若充足，则不做搜索操作
@@ -34,7 +55,58 @@ always @(posedge clk) begin
                     //若可用则直接用                      force_mode
                     //若不可用就等待，将xfer_stop拉高，进入强制搜索模式
         end
+
+        if(port_data_vld[i]) begin
+            if(left[i] == 0) begin
+                left[i] <= port_length[i];
+                dest_port_[i] <= port_dest_port[i];
+                prior_[i] <= port_prior[i];
+                if(batch[i] != 7) begin
+                    //ECC
+                    ecc_wr_en[distribution[i]] <= 0;
+                    ecc_wr_addr[distribution[i]] <= page[i];
+                    ecc_din[distribution[i]] <= ecc_encoder_code[i];
+                end
+            end else begin 
+                left[i] <= left[i] - 1;
+            end
+            if(batch[i] == 7) begin
+                page[i] <= null_ptr[distribution[i]];
+                wr_op <= 1;
+                wr_port <= dest_port_[i];
+
+                //有可能是空的，初始化queue head\tail
+                jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];
+                queue_tail <= null_ptr[distribution[i]];
+                
+                //ECC
+                ecc_wr_en[distribution[i]] <= 1;
+                ecc_wr_addr[distribution[i]] <= page[i];
+                ecc_din[distribution[i]] <= ecc_encoder_code[i];
+                
+
+            end else begin
+                wr_op <= 0;
+            end
+            sram_wr_en[distribution[i]] <= 1;
+            sram_wr_addr[distribution[i]] <= {page[i], batch[i]};
+            sram_din[distribution[i]] <= port_data[i];
+            ecc_encoder_data[i] <= (port_data[i] << (batch[i]*16)) + ecc_encoder_data[i];
+        end
         
+        if(search_tag) begin
+            if(locking[(cnt+i)%32] != 1) begin
+                if(port_amount[(cnt+i)%32][port_dest_port[i]] > max_amount[i]) begin
+                    locking[(cnt+i)%32] <= 1; 
+                    locking[distribution[i]] <= 0;
+                    distribution[i] <= (cnt+i)%32;
+                    //max amount要还原
+                    max_amount[i] <= port_amount[(cnt+i)%32][port_dest_port[i]];
+                    bind_dest_port[(cnt+i)%32] <= port_dest_port[i];
+                end
+            end
+        end
+
         //如果正在进入数据(加数据有效信号)
             //已经分配好SRAM，
             //直接取nullptr
@@ -56,11 +128,22 @@ end
 
 wire [15:0] [2:0] port_prior;
 wire [15:0] [3:0] port_dest_port;
+wire [15:0] port_data_vld;
 wire [15:0] [15:0] port_data;
 wire [15:0] [8:0] port_length;
 wire [15:0] port_writting;
 wire [15:0] port_new_packet;
 wire [15:0] port_unlock;
+
+reg [127:0][15:0] queue_head;
+reg [127:0][15:0] queue_tail;
+reg [15:0][7:0] queue_empty;
+
+always @(negedge rst_n) begin
+    queue_head = 'b0;
+    queue_tail = 'b0;
+    queue_empty = {128{1'b1}};
+end
 
 port port [15:0]
 (
@@ -73,6 +156,7 @@ port port [15:0]
 
     .prior(port_prior),
     .dest_port(port_dest_port),
+    .data_vld(port_data_vld),
     .data(port_data),
     .length(port_length),
     .writting(port_writting),
@@ -138,12 +222,10 @@ reg [31:0][10:0] rd_addr;
 
 wire [31:0][15:0][10:0] port_amount;
 
-reg [31:0]lock_en;
-reg [31:0]lock_dis;
-wire [31:0]locking;
-
 wire [31:0][10:0] null_ptr;
 wire [31:0][10:0] free_space;
+
+reg [65535:0][15:0] jump_table;
 
 sram_state sram_state [31:0] 
 (
@@ -164,10 +246,6 @@ sram_state sram_state [31:0]
     .rd_port(rd_port),
 
     .port_amount(port_amount),
-
-    .lock_dis(lock_dis),
-    .lock_en(lock_en),
-    .locking(locking),
 
     .null_ptr(null_ptr),
     .free_space(free_space)

@@ -28,11 +28,6 @@ module sram_state
 
     output reg [15:0][10:0] port_amount,
 
-    //Lock
-    input lock_en,
-    input lock_dis,
-    output reg locking = 0,
-
     //Null Pages
     output [10:0] null_ptr,
     output reg [10:0] free_space = 2047
@@ -49,14 +44,6 @@ end
 always @(posedge clk) begin
     if(ecc_rd_en && rst_n) begin
         ecc_dout <= ecc_storage[ecc_rd_addr];
-    end
-end
-
-always @(posedge clk) begin
-    if(lock_en && !locking) begin
-        locking <= 1;
-    end else if(lock_dis && locking) begin
-        locking <= 0;
     end
 end
 
