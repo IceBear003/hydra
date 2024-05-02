@@ -55,16 +55,17 @@ always @(posedge clk) begin
                 left[i] <= port_length[i];
                 dest_port_[i] <= port_dest_port[i];
                 prior_[i] <= port_prior[i];
-                if(batch[i] != 7) begin
+                if(batch[i] != 7) begin//batch[i]会不会等于7
                     //ECC
                     ecc_wr_en[distribution[i]] <= 0;
                     ecc_wr_addr[distribution[i]] <= page[i];
-                    ecc_din[distribution[i]] <= ecc_encoder_code[i];//数据末的时候应当也写入
+                    ecc_din[distribution[i]] <= ecc_encoder_code[i];
+
                 end
             end else begin 
                 left[i] <= left[i] - 1;
             end
-            if(batch[i] == 7) begin//在数据末的时候？在数据初的时候,应当需要预先一个tick处理page
+            if(batch[i] == 7) begin//在数据末的时候？在数据初的时候,应当需要预先一个tick（在搜索结束的时候）处理page
                 page[i] <= null_ptr[distribution[i]];
                 wr_op[distribution[i]] <= 1;//SRAM正在写入
                 wr_port[distribution[i]] <= dest_port_[i];//写入的端口
@@ -82,13 +83,14 @@ always @(posedge clk) begin
             end else begin
                 wr_op[distribution[i]] <= 0;
             end
+            batch[i] <= batch[i] + 1;
             sram_wr_en[distribution[i]] <= 1;
             sram_wr_addr[distribution[i]] <= {page[i], batch[i]};
             sram_din[distribution[i]] <= port_data[i];
             ecc_encoder_data[i] <= (port_data[i] << (batch[i] << 4)) + ecc_encoder_data[i];
         end
         
-        if(search_tag[i]) begin//搜索SRAM。search_tag没有置0以及这个search如何结束
+        if(search_tag[i]) begin//搜索SRAM。search_tag没有置0以及这个search如何结束（可以添加一个计数器）
             if(locking[(cnt+i)%32] != 1) begin
                 if(port_amount[(cnt+i)%32][port_dest_port[i]] > max_amount[i]) begin//一个SRAM中有多少个dest_port的数据
                     locking[(cnt+i)%32] <= 1; 
