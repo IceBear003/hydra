@@ -26,7 +26,9 @@ module sram_state
     input [3:0] rd_port,
     input [10:0] rd_addr,
 
-    output reg [15:0][10:0] port_amount,
+    //Check the amount of an port's pages
+    input [3:0] request_port,
+    output [10:0] page_amount,
 
     //Null Pages
     output [10:0] null_ptr,
@@ -34,6 +36,9 @@ module sram_state
 );
 
 reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
+reg [15:0][10:0] port_amount = 0;
+
+assign page_amount = port_amount[request_port];
 
 always @(posedge clk) begin
     if(ecc_wr_en && rst_n) begin 

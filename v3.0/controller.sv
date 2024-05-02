@@ -44,9 +44,10 @@ always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
         if(port_writting[i]) begin
             if(port_new_packet[i]) begin
-                if(bind_dest_port[distribution[i]] != port_dest_port[i] ||
+                if(dest_port_[i] != port_dest_port[i] ||
                     free_space[distribution[i]] < port_length[i]) begin
                     search_tag[i] <= 1;//更换写入的SRAM
+                    request_port[(cnt+i)%32 + 1] <= port_dest_port[i];
                 end
             end
         end
@@ -96,14 +97,15 @@ always @(posedge clk) begin
         
         if(search_tag[i]) begin
             if(locking[(cnt+i)%32] != 1) begin
-                if(port_amount[(cnt+i)%32][port_dest_port[i]] > max_amount[i]) begin//一个SRAM中有多少个dest_port的数据
+                if(page_amount[(cnt+i)%32] > max_amount[i]) begin//一个SRAM中有多少个dest_port的数据
                     locking[(cnt+i)%32] <= 1; 
                     locking[distribution[i]] <= 0;
                     distribution[i] <= (cnt+i)%32;
                     //max amount要还原
-                    max_amount[i] <= port_amount[(cnt+i)%32][port_dest_port[i]];
+                    max_amount[i] <= page_amount[(cnt+i)%32];
                     bind_dest_port[(cnt+i)%32] <= port_dest_port[i];
                 end
+                request_port[(cnt+i)%32 + 1] <= port_dest_port[i];
             end
         end
     end
@@ -204,7 +206,8 @@ reg [31:0]rd_op;
 reg [31:0][3:0] rd_port;
 reg [31:0][10:0] rd_addr;
 
-wire [31:0][15:0][10:0] port_amount;
+reg [31:0][3:0] request_port;
+wire [31:0][10:0] page_amount;
 
 wire [31:0][10:0] null_ptr;
 wire [31:0][10:0] free_space;
@@ -229,7 +232,8 @@ sram_state sram_state [31:0]
     .rd_op(rd_op),
     .rd_port(rd_port),
 
-    .port_amount(port_amount),
+    .request_port(request_port),
+    .page_amount(page_amount),
 
     .null_ptr(null_ptr),
     .free_space(free_space)
