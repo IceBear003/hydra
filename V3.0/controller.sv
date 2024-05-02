@@ -51,7 +51,7 @@ always @(posedge clk) begin
         end
 
         if(port_data_vld[i]) begin//端口正在输出data
-            if(left[i] == 0) begin//输出data的第一个tick和输入data的最后一个tick，有点混乱
+            if(left[i] == 0) begin//输出data的第一个tick和输入data的最后一个tick应该都需要，有点混乱
                 left[i] <= port_length[i];
                 dest_port_[i] <= port_dest_port[i];
                 prior_[i] <= port_prior[i];
@@ -59,7 +59,7 @@ always @(posedge clk) begin
                     //ECC
                     ecc_wr_en[distribution[i]] <= 0;
                     ecc_wr_addr[distribution[i]] <= page[i];
-                    ecc_din[distribution[i]] <= ecc_encoder_code[i];
+                    ecc_din[distribution[i]] <= ecc_encoder_code[i];//数据末的时候应当也写入
                 end
             end else begin 
                 left[i] <= left[i] - 1;
