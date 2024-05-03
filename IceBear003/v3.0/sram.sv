@@ -19,13 +19,13 @@ module sram
 
 reg [DATA_WIDTH-1:0] d_latches [DATA_DEPTH-1:0];
 
-always @(posedge clk) begin
+always @(negedge clk) begin
     if(wr_en && rst_n) begin 
         d_latches[wr_addr] <= din;
     end
 end
 
-always @(posedge clk) begin
+always @(negedge clk) begin
     if(rd_en && rst_n) begin
         dout <= d_latches[rd_addr];
     end

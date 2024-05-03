@@ -1,8 +1,8 @@
-`include "./v3.0/sram_state.sv"
-`include "./v3.0/sram.sv"
-`include "./v3.0/ecc_encoder.sv"
-`include "./v3.0/ecc_decoder.sv"
-`include "./v3.0/port.sv"
+`include "./IceBear003/v3.0/sram_state.sv"
+`include "./IceBear003/v3.0/sram.sv"
+`include "./IceBear003/v3.0/ecc_encoder.sv"
+`include "./IceBear003/v3.0/ecc_decoder.sv"
+`include "./IceBear003/v3.0/port.sv"
 
 module controller(
     input clk,
@@ -122,133 +122,124 @@ always @(posedge clk) begin
     cnt <= cnt + 1;
 end
 
-integer k,m,n,p;
-reg [15:0][7:0] queue_waiting;
-reg [15:0] sending;
-reg [15:0][2:0] sending_priority;
-reg [31:0][15:0] sram_request;
-reg [31:0][3:0] processing_request; 
-reg [31:0] processing; 
+//Read Mechanism
 
-reg [15:0] sending_ctrl;
-reg [15:0][8:0] sending_left;
-reg [15:0][2:0] sending_batch = 0;
+reg [15:0][6:0] processing_priority; //negedge update
+reg [15:0] sop_trigger; //negedge update | need reset
 
-reg [15:0][3:0] rd_batch = 0;
-
-always @(posedge clk) begin
-    for(p = 0; p < 16; p = p + 1) begin
-        if(rd_batch[p] > 0) begin
-            rd_batch[p] <= rd_batch[p] - 1;
-            rd_vld[p] <= 1;
-            rd_data[p] <= cr_rd_buffer[p] >> (16 * (7 - rd_batch[p]));
-            ecc_decoder_enable[processing_request[m]] <= 0;
-        end else begin
-            rd_vld <= 0;
-            rd_eop[p] <= 0;
-        end
-    end
-end
-
-always @(posedge clk) begin
-    for(n = 0; n < 16; n = n + 1) begin
-        queue_waiting[n] = {
-            queue_head[n<<3 + 0] != 16'h0000,
-            queue_head[n<<3 + 1] != 16'h0000,
-            queue_head[n<<3 + 2] != 16'h0000,
-            queue_head[n<<3 + 3] != 16'h0000,
-            queue_head[n<<3 + 4] != 16'h0000,
-            queue_head[n<<3 + 5] != 16'h0000,
-            queue_head[n<<3 + 6] != 16'h0000,
-            queue_head[n<<3 + 7] != 16'h0000
-        };
-    end
-end
-
-always @(posedge clk) begin
-    for(m = 0; m <32; m = m + 1) begin
-        if(sram_request[m] != 0 && processing[m] != 1) begin
-            case(sram_request[m]) 
-                16'h0001: begin processing_request[m] <= 4'h0; sending_ctrl[m]<= 4'h0; end
-                16'h0002: begin processing_request[m] <= 4'h1; sending_ctrl[m]<= 4'h1; end
-                16'h0004: begin processing_request[m] <= 4'h2; sending_ctrl[m]<= 4'h2; end
-                16'h0008: begin processing_request[m] <= 4'h3; sending_ctrl[m]<= 4'h3; end
-                16'h0010: begin processing_request[m] <= 4'h4; sending_ctrl[m]<= 4'h4; end
-                16'h0020: begin processing_request[m] <= 4'h5; sending_ctrl[m]<= 4'h5; end
-                16'h0040: begin processing_request[m] <= 4'h6; sending_ctrl[m]<= 4'h6; end
-                16'h0080: begin processing_request[m] <= 4'h7; sending_ctrl[m]<= 4'h7; end
-                16'h0100: begin processing_request[m] <= 4'h8; sending_ctrl[m]<= 4'h8; end
-                16'h0200: begin processing_request[m] <= 4'h9; sending_ctrl[m]<= 4'h9; end
-                16'h0400: begin processing_request[m] <= 4'hA; sending_ctrl[m]<= 4'hA; end
-                16'h0800: begin processing_request[m] <= 4'hB; sending_ctrl[m]<= 4'hB; end
-                16'h1000: begin processing_request[m] <= 4'hC; sending_ctrl[m]<= 4'hC; end
-                16'h2000: begin processing_request[m] <= 4'hD; sending_ctrl[m]<= 4'hD; end
-                16'h4000: begin processing_request[m] <= 4'hE; sending_ctrl[m]<= 4'hE; end
-                16'h8000: begin processing_request[m] <= 4'hF; sending_ctrl[m]<= 4'hF; end
+integer p1;
+always @(negedge clk) begin
+    for(p1 = 0; p1 < 16; p1 = p1 + 1) begin
+        if(ready[p1] == 1 && sop_trigger[p1] == 0) begin
+            casex (queue_empty[p1])
+                8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
+                8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
+                8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
+                8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
+                8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
+                8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
+                8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
+                8'b00000001: processing_priority[p1] <= {p1, 3'd7};
             endcase
-            processing[m] <= 1;
-
-            sram_rd_en[m] <= 1;
-            sram_rd_addr[m] <= {queue_head[10:0],3'd0};
-        end
-        if(processing[m] == 1) begin
-            if(sending_ctrl[m] == 1) begin
-                sending_ctrl[m] <= 0;
-                sending_left[m] <= sram_dout[m] - 1;
-                sending_batch[processing_request[m]] <= 1;
-                sram_rd_addr[m] <= {queue_head[10:0],3'd1};
-            end else begin
-                if(sending_left[m] > 0) begin
-                    sending_left[m] <= sending_left[m] - 1;
-                    sending_batch[m] <= sending_batch[m] + 1;
-                    sram_rd_addr[m] <= {queue_head[10:0],sending_batch[m]};
-                    rd_buffer[processing_request[m]] <= rd_buffer[processing_request[m]] << 16 + sram_dout[m];
-
-                    if(sending_batch[m] == 0) begin
-                        ecc_rd_en[processing_request[m]] <= 1;
-                        ecc_rd_addr[processing_request[m]] <= queue_head[10:0];
-                    end
-                    if(sending_batch[m] == 1) begin
-                        ecc_decoder_code[processing_request[m]] <= ecc_dout[processing_request[m]];
-                    end
-                    if(sending_batch[m] == 7) begin
-                        ecc_decoder_enable[processing_request[m]] <= 1;
-                        rd_batch[processing_request[m]] <= 4'd8;
-                        queue_head <= jump_table[queue_head]; //注意，可能是结尾，应改动
-                    end
-                end else begin 
-                    sram_rd_en[m] <= 0;
-                    rd_buffer[processing_request[m]] <= rd_buffer[processing_request[m]] << (16 * (7 - sending_batch[processing_request[m]]));
-                    ecc_decoder_enable[processing_request[m]] <= 1;
-                    rd_batch[processing_request[m]] <= sending_batch[processing_request[m]] + 1;
-                    queue_head <= jump_table[queue_head]; //注意，可能是结尾，应改动
-                end
-            end
+            sop_trigger[p1] <= queue_empty[p1] == 0;
         end
     end
 end
 
-always @(posedge clk) begin
-    for(k = 0; k < 16; k = k + 1) begin
-        if(ready[k]) begin
-            if(queue_waiting[k] != 0) begin
-                case(k)
-                    8'b1XXXXXXX: sending_priority[k] <= 3'd0;
-                    8'b01XXXXXX: sending_priority[k] <= 3'd1;
-                    8'b001XXXXX: sending_priority[k] <= 3'd2;
-                    8'b0001XXXX: sending_priority[k] <= 3'd3;
-                    8'b00001XXX: sending_priority[k] <= 3'd4;
-                    8'b000001XX: sending_priority[k] <= 3'd5;
-                    8'b0000001X: sending_priority[k] <= 3'd6;
-                    8'b00000001: sending_priority[k] <= 3'd7;
-                endcase
-                sending[k] <= 1;
-            end
-        end
+reg [15:0][4:0] processing_sram; //posedge update
+reg [15:0][10:0] processing_page; //posedge update
+reg [31:0][15:0] requesting_port; //nededge update | need reset
 
-        if(sending[k]) begin
-            sram_request[queue_head[sending_priority[k]]] <= sram_request[queue_head[sending_priority[k]]] | {16'b1 << k};
-            rd_sop[k] <= 1;
+integer p2;
+always @(posedge clk) begin
+    for(p2 = 0; p2 < 16; p2 = p2 + 1) begin
+        if(sop_trigger[p2]) begin
+            processing_sram[p2] <= queue_head[processing_priority[k]] >> 11;
+            processing_page[p2] <= queue_head[processing_priority[k]];
+            rd_sop[p2] <= 1;
+        end
+    end
+end
+
+integer p3;
+always @(negedge clk) begin
+    for(p3 = 0; p3 < 16; p3 = p3 + 1) begin
+        if(sop_trigger[p3]) begin
+            requesting_port[processing_sram[p3]] <= 
+                (16'b1 << p3) | requesting_port[processing_sram[p3]];
+            sop_trgger[p3] <= 0;
+        end
+    end
+end
+
+reg [31:0][3:0] processing_port; //posedge update
+reg [31:0] reading_starting_batches; //posedge update
+reg [15:0][2:0] reading_packet_batch;
+reg [15:0][8:0] reading_packet_length;
+
+reg [15:0] sending_trigger;
+
+integer s1;
+always @(posedge clk) begin
+    for(s1 = 0; s1 < 32; s1 = s1 + 1) begin
+        if(requesting_port[s1] != 0) begin
+            casex (sram_request[s1]) 
+                16'b1xxxxxxxxxxxxxxx: processing_port[s1] <= 4'h0;
+                16'b01xxxxxxxxxxxxxx: processing_port[s1] <= 4'h1;
+                16'b001xxxxxxxxxxxxx: processing_port[s1] <= 4'h2;
+                16'b0001xxxxxxxxxxxx: processing_port[s1] <= 4'h3;
+                16'b00001xxxxxxxxxxx: processing_port[s1] <= 4'h4;
+                16'b000001xxxxxxxxxx: processing_port[s1] <= 4'h5;
+                16'b0000001xxxxxxxxx: processing_port[s1] <= 4'h6;
+                16'b00000001xxxxxxxx: processing_port[s1] <= 4'h7;
+                16'b000000001xxxxxxx: processing_port[s1] <= 4'h8;
+                16'b0000000001xxxxxx: processing_port[s1] <= 4'h9;
+                16'b00000000001xxxxx: processing_port[s1] <= 4'ha;
+                16'b000000000001xxxx: processing_port[s1] <= 4'hb;
+                16'b0000000000001xxx: processing_port[s1] <= 4'hc;
+                16'b00000000000001xx: processing_port[s1] <= 4'hd;
+                16'b000000000000001x: processing_port[s1] <= 4'he;
+                16'b0000000000000001: processing_port[s1] <= 4'hf;
+            endcase
+            starting_batches[s1] <= 1;
+            sram_rd_en <= 1;
+            sram_rd_addr <= {processing_page[processing_port[s1]], 3'b000};
+        end
+        if(reading_starting_batches[s1] == 1 || reading_packet_length[s1] > 8) begin
+            reading_packet_batch[s1] <= reading_packet_batch[s1] + 1;
+            rd_buffer[processing_port[s1]] <= rd_buffer[processing_port[s1]] << 16 + sram_dout[s1];
+            if(reading_packet_batch[s1] == 7) begin
+                ecc_decoder_enable[processing_port[s1]] <= 1;
+                reading_starting_batches[s1] == 0;
+                sending_trigger[s1] <= 1;
+            end else begin
+                ecc_decoder_enable[processing_port[s1]] <= 0;
+            end
+        end else if (reading_packet_batch[s1] > 0) begin
+            requesting_port[s1] <= requesting_port[s1] & ~(1 << processing_port[s1]);
+        end else begin
+            sending_trigger[s1] <= 0;
+        end
+    end
+end
+
+integer p4;
+always @(posedge clk) begin
+    for(p4 = 0; p4 < 16; p4 = p4 + 1) begin
+        if(sending_trigger[p4] == 1) begin
+            rd_vld[p4] <= 1;
+            if(reading_starting_batches[s1] && reading_packet_batch[s1] == 0) begin
+                reading_packet_length[s1] <= rd_buffer[p4] - 1;
+            end else begin
+                reading_packet_length[s1] <= reading_packet_length[s1] - 1;
+                rd_data[p4] <= rd_buffer[p4];
+            end
+            rd_buffer[p4] <= rd_buffer[p4] >> 16;
+        end else begin
+            if(rd_vld[p4] == 1) begin
+                rd_eop[p4] <= 1;
+            end
+            rd_vld[p4] <= 0;
         end
     end
 end
