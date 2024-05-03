@@ -154,8 +154,8 @@ integer p2;
 always @(posedge clk) begin
     for(p2 = 0; p2 < 16; p2 = p2 + 1) begin
         if(sop_trigger[p2]) begin
-            processing_sram[p2] <= queue_head[processing_priority[k]] >> 11;
-            processing_page[p2] <= queue_head[processing_priority[k]];
+            processing_sram[p2] <= queue_head[processing_priority[p2]] >> 11;
+            processing_page[p2] <= queue_head[processing_priority[p2]];
             rd_sop[p2] <= 1;
         end
     end
@@ -167,7 +167,7 @@ always @(negedge clk) begin
         if(sop_trigger[p3]) begin
             requesting_port[processing_sram[p3]] <= 
                 (16'b1 << p3) | requesting_port[processing_sram[p3]];
-            sop_trgger[p3] <= 0;
+            sop_trigger[p3] <= 0;
         end
     end
 end
@@ -183,7 +183,7 @@ integer s1;
 always @(posedge clk) begin
     for(s1 = 0; s1 < 32; s1 = s1 + 1) begin
         if(requesting_port[s1] != 0) begin
-            casex (sram_request[s1]) 
+            casex (requesting_port[s1]) 
                 16'b1xxxxxxxxxxxxxxx: processing_port[s1] <= 4'h0;
                 16'b01xxxxxxxxxxxxxx: processing_port[s1] <= 4'h1;
                 16'b001xxxxxxxxxxxxx: processing_port[s1] <= 4'h2;
@@ -201,7 +201,7 @@ always @(posedge clk) begin
                 16'b000000000000001x: processing_port[s1] <= 4'he;
                 16'b0000000000000001: processing_port[s1] <= 4'hf;
             endcase
-            starting_batches[s1] <= 1;
+            reading_starting_batches[s1] <= 1;
             sram_rd_en <= 1;
             sram_rd_addr <= {processing_page[processing_port[s1]], 3'b000};
         end
@@ -210,7 +210,7 @@ always @(posedge clk) begin
             rd_buffer[processing_port[s1]] <= rd_buffer[processing_port[s1]] << 16 + sram_dout[s1];
             if(reading_packet_batch[s1] == 7) begin
                 ecc_decoder_enable[processing_port[s1]] <= 1;
-                reading_starting_batches[s1] == 0;
+                reading_starting_batches[s1] <= 0;
                 sending_trigger[s1] <= 1;
             end else begin
                 ecc_decoder_enable[processing_port[s1]] <= 0;
