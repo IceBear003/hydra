@@ -1,4 +1,4 @@
-`include "./v3.0/fifo_null_pages.sv"
+`include "./IceBear003/v3.0/fifo_null_pages.sv"
 
 module sram_state
 #(
@@ -35,7 +35,7 @@ module sram_state
     output reg [10:0] free_space = 2047
 );
 
-reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
+(* ram_style = "block" *) reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
 reg [15:0][10:0] port_amount = 0;
 
 assign page_amount = port_amount[request_port];

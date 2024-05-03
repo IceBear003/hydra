@@ -156,7 +156,12 @@ always @(posedge clk) begin
         if(sop_trigger[p2]) begin
             processing_sram[p2] <= queue_head[processing_priority[p2]] >> 11;
             processing_page[p2] <= queue_head[processing_priority[p2]];
+            queue_head[processing_priority[p2]] <= jump_table[queue_head[processing_priority[p2]]];
             rd_sop[p2] <= 1;
+        end
+        if(reading_packet_batch[p2] == 7) begin
+            processing_page[p2] <= queue_head[processing_priority[p2]];
+            queue_head[processing_priority[p2]] <= jump_table[queue_head[processing_priority[p2]]];
         end
     end
 end
@@ -346,7 +351,7 @@ wire [31:0][10:0] page_amount;
 wire [31:0][10:0] null_ptr;
 wire [31:0][10:0] free_space;
 
-reg [65535:0][15:0] jump_table;
+(* ram_style = "block" *) reg [65535:0][15:0] jump_table;
 
 sram_state sram_state [31:0] 
 (
