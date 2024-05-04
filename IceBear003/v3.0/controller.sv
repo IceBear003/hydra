@@ -38,7 +38,7 @@ end
 always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         searching_sram_index[wr_p1] <= (cnt + wr_p1) % 32;
-        request_port[(cnt + wr_p1) % 32] <= wr_p1;
+        request_port[(cnt + wr_p1) % 32] <= cur_dest_port[wr_p1];
     end
 end
 
@@ -79,9 +79,9 @@ always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if((new_packet[wr_p1] == 1 || searching[wr_p1] == 1) 
             && !locking[searching_sram_index[wr_p1]]) begin
-            if(port_amount[searching_sram_index[cur_dest_port[wr_p1]]] >= max_amount[wr_p1]) begin
+            if(page_amount[searching_sram_index[wr_p1]] >= max_amount[wr_p1]) begin
                 //EXCHANGE
-                max_amount[wr_p1] <= port_amount[searching_sram_index[cur_dest_port[wr_p1]]];
+                max_amount[wr_p1] <= page_amount[searching_sram_index[cur_dest_port[wr_p1]]];
                 searching_distribution[wr_p1] <= searching_sram_index[wr_p1];
                 //LOCK UNLOCK
                 locking[searching_distribution[wr_p1]] <= 0;
@@ -99,10 +99,10 @@ always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if(batch[wr_p1] == 7 || start_of_packet[wr_p1]) begin
             wr_page[wr_p1] <= null_ptr[distribution[wr_p1]];
-            pop_head[distribution[wr_p1]] <= cur_length[wr_p1] > 0;
+            wr_op[distribution[wr_p1]] <= cur_length[wr_p1] > 0;
             //jump_table[queue_tail[last_queue[cnt % 16]]] <= wr_page[wr_p1];
         end else begin
-            pop_head[distribution[wr_p1]] <= 0;
+            wr_op[distribution[wr_p1]] <= 0;
         end
     end
 end
@@ -110,6 +110,7 @@ end
 always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if(port_data_vld[wr_p1] == 1) begin
+            batch[wr_p1] <= batch[wr_p1] + 1;
             sram_wr_en[distribution[wr_p1]] <= 1;
             sram_wr_addr[distribution[wr_p1]] <= {wr_page[wr_p1], batch[wr_p1]};
             sram_din[distribution[wr_p1]] <= port_data[wr_p1];
@@ -117,7 +118,65 @@ always @(posedge clk) begin
         end else if(cur_length[wr_p1] > 0) begin
             sram_wr_en[distribution[wr_p1]] <= 0;
         end else begin
-            last_queue[wr_p1] <= {cur_dest_port[wr_p1], cur_prior[wr_p1]};  //TODO
+            last_queue[wr_p1] <= {cur_dest_port[wr_p1], cur_prior[wr_p1]}; //TODO
+            //写完了数据包
+            locking[distribution[wr_p1]] <= 0;
+            batch[wr_p1] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
+        if(port_data_vld[wr_p1] == 1) begin
+            case(batch[wr_p1]) 
+                3'b000 : ecc_encoder_data_0[wr_p1] <= port_data[wr_p1];
+                3'b001 : ecc_encoder_data_1[wr_p1] <= port_data[wr_p1];
+                3'b010 : ecc_encoder_data_2[wr_p1] <= port_data[wr_p1];
+                3'b011 : ecc_encoder_data_3[wr_p1] <= port_data[wr_p1];
+                3'b100 : ecc_encoder_data_4[wr_p1] <= port_data[wr_p1];
+                3'b101 : ecc_encoder_data_5[wr_p1] <= port_data[wr_p1];
+                3'b110 : ecc_encoder_data_6[wr_p1] <= port_data[wr_p1];
+                3'b111 : ecc_encoder_data_7[wr_p1] <= port_data[wr_p1];
+            endcase
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
+        if(port_data_vld[wr_p1] == 1) begin
+            if(batch[wr_p1] == 0) begin
+                ecc_encoder_data_1[wr_p1] <= 0;
+                ecc_encoder_data_2[wr_p1] <= 0;
+                ecc_encoder_data_3[wr_p1] <= 0;
+                ecc_encoder_data_4[wr_p1] <= 0;
+                ecc_encoder_data_5[wr_p1] <= 0;
+                ecc_encoder_data_6[wr_p1] <= 0;
+                ecc_encoder_data_7[wr_p1] <= 0;
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
+        if(port_data_vld[wr_p1] == 1 && (batch[wr_p1] == 7 || cur_length[wr_p1] == 1)) begin
+            ecc_encoder_enable[wr_p1] <= 1;
+        end else begin
+            ecc_encoder_enable[wr_p1] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
+        if(ecc_encoder_enable[wr_p1] == 1) begin
+            ecc_wr_en[distribution[wr_p1]] <= 1;
+            ecc_wr_addr[distribution[wr_p1]] <= wr_page[wr_p1];
+            ecc_din[distribution[wr_p1]] <= ecc_encoder_code[wr_p1];
+        end else begin
+            ecc_wr_en[distribution[wr_p1]] <= 0;
         end
     end
 end
@@ -321,12 +380,29 @@ port port [15:0]
     // .unlock(port_unlock)
 );
 
-reg [15:0][127:0] ecc_encoder_data;
+reg [15:0] ecc_encoder_enable;
+reg [15:0][15:0] ecc_encoder_data_0;
+reg [15:0][15:0] ecc_encoder_data_1;
+reg [15:0][15:0] ecc_encoder_data_2;
+reg [15:0][15:0] ecc_encoder_data_3;
+reg [15:0][15:0] ecc_encoder_data_4;
+reg [15:0][15:0] ecc_encoder_data_5;
+reg [15:0][15:0] ecc_encoder_data_6;
+reg [15:0][15:0] ecc_encoder_data_7;
 wire [15:0][7:0] ecc_encoder_code;
 
 ecc_encoder ecc_encoder [15:0]
 (
-    .data(ecc_encoder_data),
+    .clk(clk),
+    .enable(ecc_encoder_enable),
+    .data_0(ecc_encoder_data_0),
+    .data_1(ecc_encoder_data_1),
+    .data_2(ecc_encoder_data_2),
+    .data_3(ecc_encoder_data_3),
+    .data_4(ecc_encoder_data_4),
+    .data_5(ecc_encoder_data_5),
+    .data_6(ecc_encoder_data_6),
+    .data_7(ecc_encoder_data_7),
     .code(ecc_encoder_code)
 );
 
@@ -384,8 +460,6 @@ wire [31:0][10:0] page_amount;
 
 wire [31:0][10:0] null_ptr;
 wire [31:0][10:0] free_space;
-
-(* ram_style = "block" *) reg [65535:0][15:0] jump_table;
 
 sram_state sram_state [31:0] 
 (

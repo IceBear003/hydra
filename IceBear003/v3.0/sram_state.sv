@@ -10,7 +10,7 @@ module sram_state
     input clk,
     input rst_n,
  
-    //ECC Storage
+    //ECC Storage 
     input ecc_wr_en,
     input [10:0] ecc_wr_addr,
     input [7:0] ecc_din,
@@ -18,6 +18,15 @@ module sram_state
     input ecc_rd_en,
     input [10:0] ecc_rd_addr,
     output reg [7:0] ecc_dout = 0,
+
+    //Jump Table Storage
+    input jt_wr_en,
+    input [10:0] jt_wr_addr,
+    input [15:0] jt_din,
+
+    input jt_rd_en,
+    input [10:0] jt_rd_addr,
+    output reg [15:0] jt_dout = 0,
 
     //SRAM Operations
     input wr_op,
@@ -36,6 +45,7 @@ module sram_state
 );
 
 (* ram_style = "block" *) reg [ECC_STORAGE_DATA_WIDTH-1:0] ecc_storage [ECC_STORAGE_DATA_DEPTH-1:0];
+(* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [15:0][10:0] port_amount = 0;
 
 assign page_amount = port_amount[request_port];
@@ -53,20 +63,30 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
+    if(jt_wr_en && rst_n) begin 
+        jump_table[jt_wr_addr] <= jt_din;
+    end
+end
+
+always @(posedge clk) begin
+    if(jt_rd_en && rst_n) begin
+        jt_dout <= jump_table[jt_rd_addr];
+    end
+end
+
+always @(posedge clk) begin
     if(!rst_n) begin 
         port_amount <= 0;
-    end else begin 
-        if(wr_op && !rd_op) begin
-            free_space <= free_space - 1;
+    end else if(wr_op && !rd_op) begin
+        free_space <= free_space - 1;
+        port_amount[wr_port] <= port_amount[wr_port] + 1;
+    end else if(rd_op && !wr_op) begin
+        free_space <= free_space + 1;
+        port_amount[rd_port] <= port_amount[rd_port] - 1;
+    end else if(rd_op && wr_op) begin
+        if(wr_port != rd_port) begin
             port_amount[wr_port] <= port_amount[wr_port] + 1;
-        end else if(rd_op && !wr_op) begin
-            free_space <= free_space + 1;
             port_amount[rd_port] <= port_amount[rd_port] - 1;
-        end else if(rd_op && wr_op) begin
-            if(wr_port != rd_port) begin
-                port_amount[wr_port] <= port_amount[wr_port] + 1;
-                port_amount[rd_port] <= port_amount[rd_port] - 1;
-            end
         end
     end
 end
