@@ -209,19 +209,20 @@ reg [15:0][6:0] processing_priority; //negedge update
 reg [15:0] sop_trigger; //negedge update | need reset
 
 reg [7:0] wrr_mask = 8'hFF;
-reg [2:0] mask_s = 7;
-reg [2:0] mask_e = 0;
+reg [2:0] mask_e = 7;
+reg [2:0] mask_s = 0;
 always @(negedge clk) begin
-    mask_e <= mask_e + 1;
-    if(mask_e == mask_s) begin
-        if(mask_s == 0) begin
+    if(mask_s == mask_e) begin
+        mask_e <= mask_e - 1;
+        mask_s <= 0;
+        if(mask_e == 0) begin
             wrr_mask <= 8'hFF;
-            mask_s <= 7;
         end else begin
-            wrr_mask[mask_e] <= 0;
-            mask_s <= mask_s - 1;
+            wrr_mask[mask_s] <= 0;
         end
-        mask_e <= 0;
+    end else begin 
+        wrr_mask[mask_s] <= 0;
+        mask_s <= mask_s + 1;
     end
 end
 
