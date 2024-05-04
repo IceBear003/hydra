@@ -19,7 +19,7 @@ always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         head_ptr <= 1;
         tail_ptr <= 0;
-        head_addr <= 0;
+        head_addr <= 1;
         fifo[0] <= 0;
         initialized <= 1;
     end else begin
@@ -27,6 +27,7 @@ always @(posedge clk or negedge rst_n) begin
             if(initialized) begin
                 if(head_addr < 2047) begin
                     head_addr <= head_addr + 1;
+                    $display("              head_addr = %d",head_addr);
                 end else begin 
                     initialized <= 0;
                     head_addr <= fifo[head_ptr];
