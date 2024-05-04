@@ -16,6 +16,8 @@ module controller(
     output reg [15:0] full = 0,
     output reg [15:0] almost_full = 0,
 
+    input [15:0] wrr_en,
+
     input [15:0] ready,
     output reg [15:0] rd_sop = 0,
     output reg [15:0] rd_eop = 0,
@@ -127,20 +129,50 @@ end
 reg [15:0][6:0] processing_priority; //negedge update
 reg [15:0] sop_trigger; //negedge update | need reset
 
+reg [7:0] wrr_mask = 8'hFF;
+reg [2:0] mask_s = 7;
+reg [2:0] mask_e = 0;
+always @(negedge clk) begin
+    mask_e <= mask_e + 1;
+    if(mask_e == mask_s) begin
+        if(mask_s == 0) begin
+            wrr_mask <= 8'hFF;
+            mask_s <= 7;
+        end else begin
+            wrr_mask[mask_e] <= 0;
+            mask_s <= mask_s - 1;
+        end
+        mask_e <= 0;
+    end
+end
+
 integer p1;
 always @(negedge clk) begin
     for(p1 = 0; p1 < 16; p1 = p1 + 1) begin
         if(ready[p1] == 1 && sop_trigger[p1] == 0) begin
-            casex (queue_empty[p1])
-                8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
-                8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
-                8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
-                8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
-                8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
-                8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
-                8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
-                8'b00000001: processing_priority[p1] <= {p1, 3'd7};
-            endcase
+            if(queue_empty[p1] & wrr_mask != 0) begin
+                casex (queue_empty[p1] & wrr_mask)
+                    8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
+                    8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
+                    8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
+                    8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
+                    8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
+                    8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
+                    8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
+                    8'b00000001: processing_priority[p1] <= {p1, 3'd7};
+                endcase
+            end else begin
+                casex (queue_empty[p1])
+                    8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
+                    8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
+                    8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
+                    8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
+                    8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
+                    8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
+                    8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
+                    8'b00000001: processing_priority[p1] <= {p1, 3'd7};
+                endcase
+            end
             sop_trigger[p1] <= queue_empty[p1] == 0;
         end
     end
