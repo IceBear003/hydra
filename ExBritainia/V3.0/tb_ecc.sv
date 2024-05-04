@@ -41,13 +41,22 @@ always@(posedge clk or negedge rst_n)
 
 ecc_encoder ecc_encoder_inst
 (
-    .data   (data   )   ,
-    .code   (code   )   
+    .clk     (clk            )   ,
+    .data_0  (data[15:0]     )   ,
+    .data_1  (data[31:16]    )   ,
+    .data_2  (data[47:32]    )   ,
+    .data_3  (data[63:48]    )   ,
+    .data_4  (data[79:64]    )   ,
+    .data_5  (data[95:80]    )   ,
+    .data_6  (data[111:96]   )   ,
+    .data_7  (data[127:112]  )   ,
+    .code    (code           )   
 
 );
 
 ecc_decoder ecc_decoder_inst
 (
+    .clk    (clk    )   ,
     .data   (data   )   ,
     .code   (code   )   ,
 
