@@ -52,7 +52,6 @@ always @(posedge clk) begin
 end
 
 reg [15:0][6:0] last_queue = 0;
-reg [15:0][4:0] last_distribution = 0;
 reg [15:0][3:0] cur_dest_port = 0;
 reg [15:0][2:0] cur_prior = 0;
 reg [15:0][8:0] cur_length = 0;
@@ -129,7 +128,6 @@ always @(posedge clk) begin
             sram_wr_en[distribution[wr_p1]] <= 0;
         end else begin
             last_queue[wr_p1] <= {cur_dest_port[wr_p1], cur_prior[wr_p1]};
-            last_distribution[wr_p1] <= distribution[wr_p1];
             packet_en[wr_p1] <= 1;
             locking[distribution[wr_p1]] <= 0;
             batch[wr_p1] <= 0;

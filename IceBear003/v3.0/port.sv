@@ -6,8 +6,6 @@ module port(
     input wr_vld,
     input [15:0] wr_data,
 
-    input xfer_stop,
-
     output reg [3:0] dest_port = 4'b0,
     output reg [2:0] prior = 0,
     output reg [8:0] length = 0,
