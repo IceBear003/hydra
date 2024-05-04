@@ -57,7 +57,10 @@ always @(posedge clk) begin
         if(wr_op && !rd_op) begin
             free_space <= free_space - 1;
             port_amount[wr_port] <= port_amount[wr_port] + 1;
-            //$display("          free_space = %d",free_space);
+            $display("          free_space = %d",free_space);
+            $display("wr_port = %d",wr_port);
+            $display("port_amount[wr_port] = %d",port_amount[wr_port]);
+            $display("page_amount = %d",page_amount);
         end else if(rd_op && !wr_op) begin
             free_space <= free_space + 1;
             port_amount[rd_port] <= port_amount[rd_port] - 1;

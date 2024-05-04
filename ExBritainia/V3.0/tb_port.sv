@@ -60,9 +60,16 @@ always@(posedge clk or  negedge rst_n)
                 state <= IDLE;
         endcase
 
-wire    [8:0]  data_up ;
+reg    [8:0]  data_up ;
 
-assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+//assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+
+always@(posedge clk or  negedge rst_n)
+    if(state == RD_CTRL) begin
+        data_up = $random;
+        if(data_up < 32)
+            data_up = 32;
+    end
 
 always@(posedge clk or  negedge rst_n)
     if(rst_n == 4'b0)
@@ -71,7 +78,7 @@ always@(posedge clk or  negedge rst_n)
         //wr_data <= $random % 65536;
         wr_data[15:7] <= data_up;
         wr_data[6:4] <= $random % 8;
-        wr_data[3:0] <= 1;
+        wr_data[3:0] <= $random;
     end
     else if(state == RD_DATA)
         wr_data <= cnt;
@@ -131,12 +138,10 @@ always@(posedge clk or  negedge rst_n)
         wr_sop <= 0;
     end
 
-wire [2:0] prior;
 wire [3:0] dest_port;
 wire [15:0] data;
 wire [8:0] length;
-wire writting;
-wire unlock;
+wire data_vld;
 
 port port_inst
 (
@@ -150,12 +155,11 @@ port port_inst
     
     .xfer_stop      (xfer_stop      )   ,
 
-    .prior          (prior          )   ,
     .dest_port      (dest_port      )   ,
     .data           (data           )   ,
-    .length         (length         )   ,
-    .writting        (writting       )   ,
-    .unlock          (unlock         )
+    .data_vld       (data_vld       )   ,
+    .length         (length         )   
+
 
 );
 

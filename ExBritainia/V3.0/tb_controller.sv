@@ -31,76 +31,81 @@ parameter   IDLE    =   2'b00   ,
             RD_BTW  =   2'b10   ,
             RD_DATA =   2'b11   ;
             
-reg     [1:0]   state   ;
-reg     [11:0]   cnt     ;
+reg     [15:0][1:0]   state   ;
+reg     [15:0][11:0]   cnt     ;
+
+integer k;
 
 always@(posedge clk or  negedge rst_n)
     if(rst_n == 4'b0)
         state <= IDLE;
     else
-        case(state)
-            IDLE:
-                if(wr_sop[0] == 1)
-                    state <= RD_CTRL;
-                else
-                    state <= IDLE;
-            RD_CTRL:
-                state <= RD_DATA;
-            RD_DATA:
-                if(wr_eop[0] == 1)
-                    state = IDLE;
-                else
-                    state <= RD_DATA;
-            default:
-                state <= IDLE;
-        endcase
+        for(k=0;k<16;k=k+1)
+            case(state[k])
+                IDLE:
+                    if(wr_sop[k] == 1)
+                        state[k] <= RD_CTRL;
+                    else
+                        state[k] <= IDLE;
+                RD_CTRL:
+                    state[k] <= RD_DATA;
+                RD_DATA:
+                    if(wr_eop[k] == 1)
+                        state[k] = IDLE;
+                    else
+                        state[k] <= RD_DATA;
+                default:
+                    state[k] <= IDLE;
+            endcase
 
-wire    [8:0]  data_up ;
+reg    [15:0][8:0]  data_up = 0;
 
-assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+integer i,j;
 
-integer i;
+always@(posedge clk or  negedge rst_n) begin
+    for(j=0;j<16;j=j+1)
+        if(wr_sop[j] == 1) begin
+            data_up[j] = $random;
+            if(data_up[j] < 32)
+                data_up[j] = data_up[j] + 32;
+        end
+end
 
 always@(posedge clk or  negedge rst_n)
+    for(i=0;i<16;i=i+1)
     if(rst_n == 4'b0)
         wr_data <= 0;
-    else if(state == RD_CTRL) begin
+    else if(state[i] == RD_CTRL) begin
         //wr_data <= $random % 65536;
-        for(i=0;i<16;i=i+1) begin
-            wr_data[i][15:7] <= data_up;
-            wr_data[i][6:4] <= $random % 8;
-            wr_data[i][3:0] <= 1;
-        end
+        wr_data[i][15:7] <= data_up[i];
+        wr_data[i][6:4] <= $random % 8;
+        wr_data[i][3:0] <= i;
     end
-    else if(state == RD_DATA)
-        for(i=0;i<16;i=i+1)
-            wr_data[i] <= cnt;
+    else if(state[i] == RD_DATA)
+            wr_data[i] <= cnt[i];
             
 always@(posedge clk or  negedge rst_n)
-    if(rst_n == 0 || state == IDLE)
+    for(i=0;i<16;i=i+1)
+    if(rst_n == 0 || state[i] == IDLE)
     begin
-        wr_vld = 0;
-        cnt <= 0;
+        wr_vld[i] = 0;
+        cnt[i] <= 0;
     end
-    else if(state == RD_CTRL)
+    else if(state[i] == RD_CTRL)
     begin
-        for(i=0;i<16;i=i+1)
-            wr_vld[i] <= 1;
-        cnt <= cnt + 1'b1;
+        wr_vld[i] <= 1;
+        cnt[i] <= cnt[i] + 1'b1;
     end
-    else if(state == RD_DATA && cnt < data_up)
+    else if(state[i] == RD_DATA && cnt[i] < data_up[i])
     begin
-        for(i=0;i<16;i=i+1)
-            wr_vld[i] <= 1;
-        cnt <= cnt + 1'b1;
+        wr_vld[i] <= 1;
+        cnt[i] <= cnt[i] + 1'b1;
     end
-    else if(cnt == data_up && state == RD_DATA)
+    else if(cnt[i] == data_up[i] && state[i] == RD_DATA)
     begin
-        cnt <= 0;
-        for(i=0;i<16;i=i+1) begin
-            wr_vld[i] <= 0;
-            wr_eop[i] <= 1;
-        end
+        cnt[i] <= 0;
+        wr_vld[i] <= 0;
+        wr_eop[i] <= 1;
     end
 
 reg     [15:0]   eop_t;
