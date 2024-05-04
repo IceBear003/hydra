@@ -67,8 +67,8 @@ reg    [8:0]  data_up ;
 always@(posedge clk or  negedge rst_n)
     if(state == RD_CTRL) begin
         data_up = $random;
-        if(data_up < 32)
-            data_up = 32;
+        if(data_up < 128)
+            data_up = 128;
     end
 
 always@(posedge clk or  negedge rst_n)
@@ -96,7 +96,10 @@ always@(posedge clk or  negedge rst_n)
     end
     else if(state == RD_DATA && cnt < data_up)
     begin
-        wr_vld <= 1;
+        if(cnt >= 32 && cnt <= 74)
+            wr_vld <= 0;
+        else
+            wr_vld <= 1;
         cnt <= cnt + 1'b1;
     end
     else if(cnt == data_up && state == RD_DATA)
