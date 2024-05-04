@@ -13,8 +13,8 @@ module port(
     output reg [8:0] length = 0,
     output reg data_vld = 0,
     output reg [15:0] data = 16'b0,
+    output reg start_of_packet = 0,
 
-    //Use to trigger the update of the persistent dest_port & length in controller.sv
     output reg new_packet = 0
 );
 
@@ -44,11 +44,22 @@ always @(posedge clk) begin
     end else if (xfer_ptr == end_ptr) begin
         xfer_en <= 0;
         end_ptr <= 1'bx;
+    end else if (wr_eop && xfer_ptr == wr_ptr - 1) begin
+        xfer_en <= 0;
+        end_ptr <= 1'bx;
     end
 end
 
 always @(posedge clk) begin
-    if(wr_eop) begin
+    if(delay_cnt == 32) begin
+        start_of_packet <= 1;
+    end else begin
+        start_of_packet <= 0;
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_eop && xfer_ptr != wr_ptr - 1) begin
         end_ptr <= wr_ptr - 1;
     end
 end
@@ -57,16 +68,10 @@ always @(posedge clk) begin
     if(wr_vld) begin
         buffer[wr_ptr] <= wr_data;
         wr_ptr <= wr_ptr + 1;
-        $display("wr_ptr = %d",wr_ptr);
-        $display("        wr_data = %d",wr_data);
     end
 end
 
 always @(posedge clk) begin
-    //is_ctrl_frame <= wr_sop;
-    //$display("            is_ctrl_frame = %d",is_ctrl_frame);
-    //$display("wr_vld = %d",wr_vld);
-    //$display("wr_sop = %d",wr_sop);
     if(wr_sop)
         is_ctrl_frame <= 1;
     else if(wr_vld)
@@ -79,14 +84,13 @@ always @(posedge clk) begin
         prior <= wr_data[6:4];
         length <= wr_data[15:7];
         new_packet <= 1;
-        $display("wr_data = %d",wr_data);
     end else begin
         new_packet <= 0;
     end
 end
 
 always @(posedge clk) begin
-    if(is_ctrl_frame) begin
+    if(is_ctrl_frame && wr_vld) begin
         delay_cnt_en <= 1;
     end
     if(delay_cnt == 32) begin
