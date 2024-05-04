@@ -60,9 +60,16 @@ always@(posedge clk or  negedge rst_n)
                 state <= IDLE;
         endcase
 
-wire    [8:0]  data_up ;
+reg    [8:0]  data_up ;
 
-assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+//assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+
+always@(posedge clk or  negedge rst_n)
+    if(state == RD_CTRL) begin
+        data_up = $random;
+        if(data_up < 32)
+            data_up = 32;
+    end
 
 always@(posedge clk or  negedge rst_n)
     if(rst_n == 4'b0)
@@ -71,7 +78,7 @@ always@(posedge clk or  negedge rst_n)
         //wr_data <= $random % 65536;
         wr_data[15:7] <= data_up;
         wr_data[6:4] <= $random % 8;
-        wr_data[3:0] <= 1;
+        wr_data[3:0] <= $random;
     end
     else if(state == RD_DATA)
         wr_data <= cnt;

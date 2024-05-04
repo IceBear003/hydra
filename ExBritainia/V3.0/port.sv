@@ -42,6 +42,7 @@ always @(posedge clk) begin
         xfer_en <= 1;
     end else if (xfer_ptr == end_ptr) begin
         xfer_en <= 0;
+        end_ptr <= 1'bx;
     end
 end
 
