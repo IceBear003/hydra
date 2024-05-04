@@ -145,6 +145,7 @@ wire [3:0] dest_port;
 wire [15:0] data;
 wire [8:0] length;
 wire data_vld;
+wire new_packet;
 
 port port_inst
 (
@@ -161,7 +162,8 @@ port port_inst
     .dest_port      (dest_port      )   ,
     .data           (data           )   ,
     .data_vld       (data_vld       )   ,
-    .length         (length         )   
+    .length         (length         )   ,
+    .new_packet     (new_packet     )   
 
 
 );

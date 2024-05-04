@@ -13,6 +13,7 @@ module port(
     output reg [8:0] length = 0,
     output reg data_vld = 0,
     output reg [15:0] data = 16'b0,
+    output reg xfer_en = 0,
 
     //Use to trigger the update of the persistent dest_port & length in controller.sv
     output reg new_packet = 0
@@ -23,7 +24,6 @@ reg [63:0][15:0] buffer = 0;
 reg delay_cnt_en = 0;
 reg [5:0] delay_cnt = 0;
 
-reg xfer_en = 0;
 reg [5:0] xfer_ptr = 0;
 
 reg is_ctrl_frame = 0;
