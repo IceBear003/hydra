@@ -72,7 +72,6 @@ reg [31:0] locking;
 reg [15:0][10:0] max_amount;
 reg [15:0][4:0] searching_distribution;
 reg [15:0][4:0] distribution;
-// reg [15:0][10:0] last_wr_page;
 reg [15:0][10:0] wr_page;
 
 reg [15:0][15:0] packet_en;
@@ -103,9 +102,14 @@ always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if(batch[wr_p1] == 7 || start_of_packet[wr_p1]) begin
             wr_page[wr_p1] <= null_ptr[distribution[wr_p1]];
-            wr_op[distribution[wr_p1]] <= cur_length[wr_p1] > 0;
-            if(cur_length[wr_p1] > 7) begin
-
+            wr_op[distribution[wr_p1]] <= cur_length[wr_p1] > 1;
+            if(cur_length[wr_p1] != 1) begin
+                jt_wr_en[distribution[wr_p1]] <= 1;
+                jt_wr_addr[distribution[wr_p1]] <= wr_page[wr_p1];
+                jt_din[distribution[wr_p1]] <= null_ptr[distribution[wr_p1]];
+            end
+            if(cur_length[wr_p1] <= 8) begin
+                packet_tail_addr[wr_p1] <= null_ptr[distribution[wr_p1]];
             end
         end else begin
             wr_op[distribution[wr_p1]] <= 0;
