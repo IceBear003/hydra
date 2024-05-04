@@ -131,12 +131,10 @@ always@(posedge clk or  negedge rst_n)
         wr_sop <= 0;
     end
 
-wire [2:0] prior;
 wire [3:0] dest_port;
 wire [15:0] data;
 wire [8:0] length;
-wire writting;
-wire unlock;
+wire data_vld;
 
 port port_inst
 (
@@ -150,12 +148,11 @@ port port_inst
     
     .xfer_stop      (xfer_stop      )   ,
 
-    .prior          (prior          )   ,
     .dest_port      (dest_port      )   ,
     .data           (data           )   ,
-    .length         (length         )   ,
-    .writting        (writting       )   ,
-    .unlock          (unlock         )
+    .data_vld       (data_vld       )   ,
+    .length         (length         )   
+
 
 );
 

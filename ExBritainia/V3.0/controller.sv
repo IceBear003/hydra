@@ -86,6 +86,8 @@ reg [31:0][13:0] sram_rd_addr;
 wire [31:0][15:0] sram_dout;
 wire [15:0] xfer_en;
 reg [15:0] xfer_s = 0;
+reg [15:0] xfer_stop = 0;
+reg [15:0] xfer_stop_out = 0;
 
 always @(posedge clk) begin
     if(rst_n == 1) begin
@@ -97,9 +99,14 @@ always @(posedge clk) begin
                     search_tag[i] <= 1;//æ›´æ¢å†™å…¥çš„SRAM
                     request_port[(cnt+i)%32 + 1] <= port_dest_port[i];
                     $display("port_dest_port[i] = %d, i = %d",port_dest_port[i],i);
+                    $display("free _space[distribution[i]] = %d",free_space[distribution[i]]);
+                    if(free_space[distribution[i]] < port_length[i])
+                        xfer_stop[i] <= 1;
                 end
             end
         end
+        if(xfer_stop_out[i] == 1)
+            xfer_stop[i] <= 0;
         $display("cnt = %d",cnt);
         //$display("port_new_packet[i] = %d", port_new_packet[i]);
         //$display("port_writting[i] = %d", port_writting[i]);
@@ -111,7 +118,6 @@ always @(posedge clk) begin
         if(left[i] == 0) begin
             end_[i] <= 0;
         end
-
         if(xfer_en[i] == 1 && port_data_vld[i] == 0) begin
             page[i] <= null_ptr[distribution[i]];
             search_tag[i] <= 0;
@@ -124,7 +130,10 @@ always @(posedge clk) begin
                 left[i] <= port_length[i];
                 dest_port_[i] <= port_dest_port[i];
                 prior_[i] <= port_prior[i];
-                wr_op[distribution[i]] <= 0;
+                wr_op[distribution[i]] <= 1;
+                wr_port[distribution[i]] <= dest_port_[i];
+                //request_port[distribution[i]] <= port_dest_port[i];
+                $display("       distribution[i] = %d",distribution[i]);
                 //search_tag[i] <= 0;
             end else begin 
                 if(left[i] == 1) begin
@@ -151,15 +160,26 @@ always @(posedge clk) begin
                     ecc_wr_en[distribution[i]] <= 0;
                     ecc_wr_addr[distribution[i]] <= page[i];
                     ecc_din[distribution[i]] <= ecc_encoder_code[i];
+
+                    jump_table[queue_tail[{dest_port_[i],port_prior}]] <= null_ptr[distribution[i]];
+                    queue_tail[{dest_port_[i],port_prior}] <= null_ptr[distribution[i]];
+
+                    //wr_op[distribution[i]] <= 1;//SRAMæ­£åœ¨å†™å…¥
+                    //wr_port[distribution[i]] <= dest_port_[i];
                 end
-                wr_op[distribution[i]] <= 0;
+                else wr_op[distribution[i]] <= 0;
             end
             batch[i] <= batch[i] + 1;
             sram_wr_en[distribution[i]] <= 1;
             sram_wr_addr[distribution[i]] <= {page[i], batch[i]};
+            $display("batch[i] = %d",batch[i]);
+            $display("page[i] = %d",page[i]);
+            $display("sram_wr_addr[distribution[i]] = %d",sram_wr_addr[distribution[i]]);
+            $display("free_space[distribution[i]] = %d",free_space[distribution[i]]);
             sram_din[distribution[i]] <= port_data[i];
             ecc_encoder_data[i] <= (port_data[i] << (batch[i] << 4)) + ecc_encoder_data[i];
         end
+        else wr_op[distribution[i]] <= 0;
         
         if(search_tag[i] && xfer_en[i] == 0) begin
             if(locking[(cnt+i)%32] != 1) begin
@@ -202,7 +222,9 @@ port port [15:0]
     .length(port_length),
     .writting(port_writting),
     .new_packet(port_new_packet),
-    .xfer_en(xfer_en)
+    .xfer_en(xfer_en),
+    .xfer_stop(xfer_stop),
+    .xfer_stop_out(xfer_stop_out)
     // .unlock(port_unlock)
 );
 
