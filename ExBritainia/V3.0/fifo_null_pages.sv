@@ -19,7 +19,7 @@ always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         head_ptr <= 1;
         tail_ptr <= 0;
-        head_addr <= 1;
+        head_addr <= 0;
         fifo[0] <= 0;
         initialized <= 1;
     end else begin
