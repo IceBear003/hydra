@@ -52,7 +52,6 @@ always @(posedge clk) begin
 end
 
 reg [15:0][6:0] last_queue = 0;
-reg [15:0][4:0] last_distribution = 0;
 reg [15:0][3:0] cur_dest_port = 0;
 reg [15:0][2:0] cur_prior = 0;
 reg [15:0][8:0] cur_length = 0;
@@ -129,7 +128,6 @@ always @(posedge clk) begin
             sram_wr_en[distribution[wr_p1]] <= 0;
         end else begin
             last_queue[wr_p1] <= {cur_dest_port[wr_p1], cur_prior[wr_p1]};
-            last_distribution[wr_p1] <= distribution[wr_p1];
             packet_en[wr_p1] <= 1;
             locking[distribution[wr_p1]] <= 0;
             batch[wr_p1] <= 0;
@@ -211,19 +209,20 @@ reg [15:0][6:0] processing_priority; //negedge update
 reg [15:0] sop_trigger; //negedge update | need reset
 
 reg [7:0] wrr_mask = 8'hFF;
-reg [2:0] mask_s = 7;
-reg [2:0] mask_e = 0;
+reg [2:0] mask_e = 7;
+reg [2:0] mask_s = 0;
 always @(negedge clk) begin
-    mask_e <= mask_e + 1;
-    if(mask_e == mask_s) begin
-        if(mask_s == 0) begin
+    if(mask_s == mask_e) begin
+        mask_e <= mask_e - 1;
+        mask_s <= 0;
+        if(mask_e == 0) begin
             wrr_mask <= 8'hFF;
-            mask_s <= 7;
         end else begin
-            wrr_mask[mask_e] <= 0;
-            mask_s <= mask_s - 1;
+            wrr_mask[mask_s] <= 0;
         end
-        mask_e <= 0;
+    end else begin 
+        wrr_mask[mask_s] <= 0;
+        mask_s <= mask_s + 1;
     end
 end
 
