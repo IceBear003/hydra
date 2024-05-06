@@ -205,12 +205,15 @@ end
 
 //Read Mechanism
 
-reg [15:0][6:0] processing_priority; //negedge update
-reg [15:0] sop_trigger; //negedge update | need reset
+integer rd_p1;
+
+reg [15:0][6:0] processing_priority;
+reg [15:0] sop_trigger;
 
 reg [7:0] wrr_mask = 8'hFF;
 reg [2:0] mask_e = 7;
 reg [2:0] mask_s = 0;
+
 always @(negedge clk) begin
     if(mask_s == mask_e) begin
         mask_e <= mask_e - 1;
@@ -226,37 +229,64 @@ always @(negedge clk) begin
     end
 end
 
-integer p1;
-always @(negedge clk) begin
-    for(p1 = 0; p1 < 16; p1 = p1 + 1) begin
-        if(ready[p1] == 1 && sop_trigger[p1] == 0) begin
-            if(queue_empty[p1] & wrr_mask != 0) begin
-                casex (queue_empty[p1] & wrr_mask)
-                    8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
-                    8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
-                    8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
-                    8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
-                    8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
-                    8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
-                    8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
-                    8'b00000001: processing_priority[p1] <= {p1, 3'd7};
-                endcase
-            end else begin
-                casex (queue_empty[p1])
-                    8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
-                    8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
-                    8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
-                    8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
-                    8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
-                    8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
-                    8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
-                    8'b00000001: processing_priority[p1] <= {p1, 3'd7};
-                endcase
-            end
-            sop_trigger[p1] <= queue_empty[p1] == 0;
+reg [7:0] queue_not_empty_wrr_masked [15:0];
+reg [2:0] queue_first [15:0];
+always @(wrr_mask) begin
+    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
+        queue_not_empty_wrr_masked[rd_p1] = queue_not_empty[rd_p1] & wrr_mask;
+    end
+end
+
+always @(posedge clk) begin
+    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
+        if(queue_not_empty_wrr_masked[rd_p1] != 0) begin
+            queue_first[rd_p1] <= queue_not_empty_wrr_masked[rd_p1];
+        end else begin
+            queue_first[rd_p1] <= queue_not_empty[rd_p1];
         end
     end
 end
+
+
+
+
+reg [4:0] queue_head_sram [127:0];
+reg [10:0] queue_head_page [127:0];
+reg [4:0] queue_tail_sram [127:0];
+reg [10:0] queue_tail_page [127:0];
+reg [7:0] queue_not_empty [15:0];   //1-not empty 0-empty
+
+// integer p1;
+// always @(negedge clk) begin
+//     for(p1 = 0; p1 < 16; p1 = p1 + 1) begin
+//         if(ready[p1] == 1 && sop_trigger[p1] == 0) begin
+//             if(queue_empty[p1] & wrr_mask != 0) begin
+//                 casex (queue_empty[p1] & wrr_mask)
+//                     8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
+//                     8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
+//                     8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
+//                     8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
+//                     8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
+//                     8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
+//                     8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
+//                     8'b00000001: processing_priority[p1] <= {p1, 3'd7};
+//                 endcase
+//             end else begin
+//                 casex (queue_empty[p1])
+//                     8'b1xxxxxxx: processing_priority[p1] <= {p1, 3'd0};
+//                     8'b01xxxxxx: processing_priority[p1] <= {p1, 3'd1};
+//                     8'b001xxxxx: processing_priority[p1] <= {p1, 3'd2};
+//                     8'b0001xxxx: processing_priority[p1] <= {p1, 3'd3};
+//                     8'b00001xxx: processing_priority[p1] <= {p1, 3'd4};
+//                     8'b000001xx: processing_priority[p1] <= {p1, 3'd5};
+//                     8'b0000001x: processing_priority[p1] <= {p1, 3'd6};
+//                     8'b00000001: processing_priority[p1] <= {p1, 3'd7};
+//                 endcase
+//             end
+//             sop_trigger[p1] <= queue_empty[p1] == 0;
+//         end
+//     end
+// end
 
 // reg [15:0][4:0] processing_sram; //posedge update
 // reg [15:0][10:0] processing_page; //posedge update
@@ -360,12 +390,6 @@ end
 //         end
 //     end
 // end
-
-reg [127:0][4:0] queue_head_sram;
-reg [127:0][10:0] queue_head_page;
-reg [127:0][4:0] queue_tail_sram;
-reg [127:0][10:0] queue_tail_page;
-reg [15:0][7:0] queue_empty;
 
 always @(negedge rst_n) begin
     // queue_head = 'b0;
