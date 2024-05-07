@@ -231,23 +231,14 @@ always @(posedge clk) begin
             if(mask_s[rd_p1] == mask_e[rd_p1] && mask_e[rd_p1] == 0) begin
                 wrr_mask[rd_p1] <= 8'hFF;
             end else begin 
-                case(mask_s[rd_p1]) 
-                    3'd0: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11111110;
-                    3'd1: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11111101;
-                    3'd2: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11111011;
-                    3'd3: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11110111;
-                    3'd4: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11101111;
-                    3'd5: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b11011111;
-                    3'd6: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b10111111;
-                    3'd7: wrr_mask[rd_p1] <= wrr_mask[rd_p1] & 8'b01111111;
-                endcase
+                wrr_mask[rd_p1][mask_s[rd_p1]] <= 0;
             end
         end
     end
 end
 
 reg [15:0] reading_packet;
-reg [15:0] reading_over;
+reg [15:0] reading_over; //Set in backend
 
 reg [7:0] queue_not_empty_masked [15:0];
 
@@ -255,7 +246,7 @@ always @(negedge clk) begin
     for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
         if(ready[rd_p1] && !reading_packet[rd_p1]) begin
             rd_sop[rd_p1] <= 1;
-            reading_over[rd_p1] <= 0;
+            reading_packet[rd_p1] <= 1;
             if(queue_not_empty[rd_p1] != 0) begin
                 wrr_next[rd_p1] <= 1;
                 queue_not_empty_masked[rd_p1] <= queue_not_empty[rd_p1] & wrr_mask[rd_p1];
@@ -275,36 +266,156 @@ end
 
 always @(negedge clk) begin
     for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(wr_sop[rd_p1]) begin
+        if(ready[rd_p1]) begin
+            //WRR
             if(queue_not_empty_masked[rd_p1] == 0) begin
                 casex(queue_not_empty[rd_p1])
-                    8'b1xxxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd0}]] <= 16'b1000000000000000; end
-                    8'b01xxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd1}]] <= 16'b0100000000000000; end
-                    8'b001xxxxx: begin read_request[queue_head_sram[{rd_p1,3'd2}]] <= 16'b0010000000000000; end
-                    8'b0001xxxx: begin read_request[queue_head_sram[{rd_p1,3'd3}]] <= 16'b0001000000000000; end
-                    8'b00001xxx: begin read_request[queue_head_sram[{rd_p1,3'd4}]] <= 16'b0000100000000000; end
-                    8'b000001xx: begin read_request[queue_head_sram[{rd_p1,3'd5}]] <= 16'b0000010000000000; end
-                    8'b0000001x: begin read_request[queue_head_sram[{rd_p1,3'd6}]] <= 16'b0000001000000000; end
-                    8'b00000001: begin read_request[queue_head_sram[{rd_p1,3'd7}]] <= 16'b0000000100000000; end
+                    8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
+                    8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
+                    8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
+                    8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
+                    8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
+                    8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
+                    8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
+                    8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
                 endcase
             end else begin
                 casex(queue_not_empty_masked[rd_p1])
-                
+                    8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
+                    8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
+                    8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
+                    8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
+                    8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
+                    8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
+                    8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
+                    8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
                 endcase
             end
+
+            /* QOS
+            casex(queue_not_empty[rd_p1])
+                8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
+                8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
+                8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
+                8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
+                8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
+                8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
+                8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
+                8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
+            endcase
+            */
         end
     end
 end
 
 reg [15:0] read_request [31:0];
 reg [15:0] read_request_mask [31:0];
-reg [15:0] read_request_mask_s [31:0];
+reg [3:0] read_request_mask_s [31:0];
+wire [15:0] read_request_masked [31:0];
+
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+
+reg [3:0] processing_request [31:0];
+reg  processing [31:0];
 
 integer rd_s1;
-always @(negedge clk) begin
+always @(posedge clk) begin
     for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        read_request_mask[rd_s1] <= read_request_mask[rd_s1] << 1;
-        //这里处理SRAM选择哪个开始读取
+        read_request_mask[rd_s1][read_request_mask_s[rd_s1]] <= 0;
+        read_request_mask_s[rd_s1] <= read_request_mask_s[rd_s1] + 1;
+        if(read_request_mask_s[rd_s1] == 15) begin
+            read_request_mask[rd_s1] <= 16'hFFFF;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
+        if(read_request_mask[rd_s1] & read_request[rd_s1] != 0) begin
+            casex(read_request_mask[rd_s1] & read_request[rd_s1])
+                16'b1xxxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hF;
+                16'b01xxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hE;
+                16'b001xxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hD;
+                16'b0001xxxxxxxxxxxx: processing_request[rd_s1] <= 4'hC;
+                16'b00001xxxxxxxxxxx: processing_request[rd_s1] <= 4'hB;
+                16'b000001xxxxxxxxxx: processing_request[rd_s1] <= 4'hA;
+                16'b0000001xxxxxxxxx: processing_request[rd_s1] <= 4'h9;
+                16'b00000001xxxxxxxx: processing_request[rd_s1] <= 4'h8;
+                16'b000000001xxxxxxx: processing_request[rd_s1] <= 4'h7;
+                16'b0000000001xxxxxx: processing_request[rd_s1] <= 4'h6;
+                16'b00000000001xxxxx: processing_request[rd_s1] <= 4'h5;
+                16'b000000000001xxxx: processing_request[rd_s1] <= 4'h4;
+                16'b0000000000001xxx: processing_request[rd_s1] <= 4'h3;
+                16'b00000000000001xx: processing_request[rd_s1] <= 4'h2;
+                16'b000000000000001x: processing_request[rd_s1] <= 4'h1;
+                16'b0000000000000001: processing_request[rd_s1] <= 4'h0;
+            endcase
+        end else begin
+            casex(read_request[rd_s1])
+                16'b1xxxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hF;
+                16'b01xxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hE;
+                16'b001xxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hD;
+                16'b0001xxxxxxxxxxxx: processing_request[rd_s1] <= 4'hC;
+                16'b00001xxxxxxxxxxx: processing_request[rd_s1] <= 4'hB;
+                16'b000001xxxxxxxxxx: processing_request[rd_s1] <= 4'hA;
+                16'b0000001xxxxxxxxx: processing_request[rd_s1] <= 4'h9;
+                16'b00000001xxxxxxxx: processing_request[rd_s1] <= 4'h8;
+                16'b000000001xxxxxxx: processing_request[rd_s1] <= 4'h7;
+                16'b0000000001xxxxxx: processing_request[rd_s1] <= 4'h6;
+                16'b00000000001xxxxx: processing_request[rd_s1] <= 4'h5;
+                16'b000000000001xxxx: processing_request[rd_s1] <= 4'h4;
+                16'b0000000000001xxx: processing_request[rd_s1] <= 4'h3;
+                16'b00000000000001xx: processing_request[rd_s1] <= 4'h2;
+                16'b000000000000001x: processing_request[rd_s1] <= 4'h1;
+                16'b0000000000000001: processing_request[rd_s1] <= 4'h0;
+                default: processing[rd_s1] <= 0; //FIXME    
+            endcase
+        end
+    end
+end
+
+reg [3:0] processing_page [31:0];
+reg [2:0] processing_batch [31:0];
+
+always @(posedge clk) begin
+    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
+        if(processing_request[rd_s1][4]) begin
+
+        end
+    end
+end
+
+reg [3:0] handshake_length [15:0];
+reg [2:0] rd_batch [15:0];
+
+always @(posedge clk) begin
+    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
+        if(handshake_length[rd_p1] != rd_batch[rd_p1] + 1) begin
+            rd_batch[rd_p1] <= rd_batch[rd_p1] + 1;
+            rd_vld[rd_p1] <= 1;
+            case(rd_batch[rd_p1])
+                4'd0: rd_data[rd_p1] <= ecc_decoder_cr_data_0[rd_p1];
+                4'd1: rd_data[rd_p1] <= ecc_decoder_cr_data_1[rd_p1];
+                4'd2: rd_data[rd_p1] <= ecc_decoder_cr_data_2[rd_p1];
+                4'd3: rd_data[rd_p1] <= ecc_decoder_cr_data_3[rd_p1];
+                4'd4: rd_data[rd_p1] <= ecc_decoder_cr_data_4[rd_p1];
+                4'd5: rd_data[rd_p1] <= ecc_decoder_cr_data_5[rd_p1];
+                4'd6: rd_data[rd_p1] <= ecc_decoder_cr_data_6[rd_p1];
+                4'd7: rd_data[rd_p1] <= ecc_decoder_cr_data_7[rd_p1];
+            endcase
+        end else begin  //相等了
+            rd_vld[rd_p1] <= 0;
+            rd_batch[rd_p1] <= 0;
+        end
     end
 end
 
@@ -367,17 +478,45 @@ ecc_encoder ecc_encoder [15:0]
     .code(ecc_encoder_code)
 );
 
-reg [15:0][127:0] rd_buffer;
-reg [15:0][7:0] ecc_decoder_code;
 reg [15:0] ecc_decoder_enable;
-wire [15:0][127:0] cr_rd_buffer;
+reg [15:0][15:0] ecc_decoder_data_0;
+reg [15:0][15:0] ecc_decoder_data_1;
+reg [15:0][15:0] ecc_decoder_data_2;
+reg [15:0][15:0] ecc_decoder_data_3;
+reg [15:0][15:0] ecc_decoder_data_4;
+reg [15:0][15:0] ecc_decoder_data_5;
+reg [15:0][15:0] ecc_decoder_data_6;
+reg [15:0][15:0] ecc_decoder_data_7;
+reg [15:0][7:0] ecc_decoder_code;
+wire [15:0][15:0] ecc_decoder_cr_data_0;
+wire [15:0][15:0] ecc_decoder_cr_data_1;
+wire [15:0][15:0] ecc_decoder_cr_data_2;
+wire [15:0][15:0] ecc_decoder_cr_data_3;
+wire [15:0][15:0] ecc_decoder_cr_data_4;
+wire [15:0][15:0] ecc_decoder_cr_data_5;
+wire [15:0][15:0] ecc_decoder_cr_data_6;
+wire [15:0][15:0] ecc_decoder_cr_data_7;
 
 ecc_decoder ecc_decoder [15:0]
 (
-    .data(rd_buffer),
-    .code(ecc_decoder_code),
     .enable(ecc_decoder_enable),
-    .cr_data(cr_rd_buffer)
+    .data_0(ecc_encoder_data_0),
+    .data_1(ecc_encoder_data_1),
+    .data_2(ecc_encoder_data_2),
+    .data_3(ecc_encoder_data_3),
+    .data_4(ecc_encoder_data_4),
+    .data_5(ecc_encoder_data_5),
+    .data_6(ecc_encoder_data_6),
+    .data_7(ecc_encoder_data_7),
+    .code(ecc_decoder_code),
+    .cr_data_0(ecc_decoder_cr_data_0),
+    .cr_data_1(ecc_decoder_cr_data_1),
+    .cr_data_2(ecc_decoder_cr_data_2),
+    .cr_data_3(ecc_decoder_cr_data_3),
+    .cr_data_4(ecc_decoder_cr_data_4),
+    .cr_data_5(ecc_decoder_cr_data_5),
+    .cr_data_6(ecc_decoder_cr_data_6),
+    .cr_data_7(ecc_decoder_cr_data_7)
 );
 
 reg [31:0] sram_wr_en;
