@@ -423,6 +423,12 @@ always @(posedge clk) begin
     for(s = 0; s < 32; s = s + 1) begin
         if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
             sram_reading[s] <= 1;
+            //重置为0
+            //读page
+            //读SRAM内容
+            //切换跳转表
+            //数据包长度对接
+            //ECC校验器
         end
     end
 end
