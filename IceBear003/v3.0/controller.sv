@@ -290,7 +290,7 @@ reg [5:0] port_read_packet_over [15:0];
 
 always @(posedge clk) begin
     for(p = 0; p < 16; p = p + 1) begin
-        if(ready[p] && port_queue_waiting[p] != 0) begin
+        if(rd_sop[p] == 1) begin
             sram_read_request[queue_head_sram[{p,port_priority_reading[p]}]][p] <= 1;
         end
         if(port_read_packet_over[p][5] == 1) begin
