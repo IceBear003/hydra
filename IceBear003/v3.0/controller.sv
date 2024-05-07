@@ -8,6 +8,9 @@ module controller(
     input clk,
     input rst_n,
 
+    //Config
+    input wrr_en,
+
     //16 Ports
     input [15:0] wr_sop,
     input [15:0] wr_eop,
@@ -15,8 +18,6 @@ module controller(
     input [15:0] [15:0] wr_data,
     output reg [15:0] full = 0,
     output reg [15:0] almost_full = 0,
-
-    input [15:0] wrr_en,
 
     input [15:0] ready,
     output reg [15:0] rd_sop = 0,
@@ -205,230 +206,223 @@ end
 
 //Read Mechanism
 
-integer rd_p1;
+integer p,s;
 
-reg [15:0] wrr_next;
+reg wrr_next [15:0];
 reg [7:0] wrr_mask [15:0];
 reg [2:0] mask_e [15:0];
 reg [2:0] mask_s [15:0];
 
 always @(posedge clk) begin
-    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(wrr_next) begin
-            if(mask_s[rd_p1] == mask_e[rd_p1]) begin
-                mask_e[rd_p1] <= mask_e[rd_p1] - 1;
-                mask_s[rd_p1] <= 0;
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_next[p]) begin
+            if(mask_s[p] + mask_e[p] == 7 && mask_e[p] != 7) begin
+                mask_e[p] <= mask_e[p] + 1;
+                mask_s[p] <= 0;
+            end else if(mask_e[p] == 7) begin
+                mask_e[p] <= 0;
+                mask_s[p] <= 0;
             end else begin 
-                mask_s[rd_p1] <= mask_s[rd_p1] + 1;
+                mask_s[p] <= mask_s[p] + 1;
             end
         end
     end
 end
 
 always @(posedge clk) begin
-    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(wrr_next) begin
-            if(mask_s[rd_p1] == mask_e[rd_p1] && mask_e[rd_p1] == 0) begin
-                wrr_mask[rd_p1] <= 8'hFF;
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_next[p]) begin
+            if(mask_s[p] + mask_e[p] == 7 && mask_e[p] != 7) begin
+                wrr_mask[p] <= 8'hFF << mask_e[p];
+            end else if(mask_e[p] == 7) begin
+                wrr_mask[p] <= 8'hFF;
             end else begin 
-                wrr_mask[rd_p1][mask_s[rd_p1]] <= 0;
+                wrr_mask[p][mask_s[p]] <= 0;
             end
         end
     end
 end
 
-reg [15:0] reading_packet;
-reg [15:0] reading_over; //Set in backend
+//updated every clk
+reg [7:0] port_queue_waiting [15:0];
+reg [2:0] port_priority_reading [15:0];
 
-reg [7:0] queue_not_empty_masked [15:0];
-
-always @(negedge clk) begin
-    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(ready[rd_p1] && !reading_packet[rd_p1]) begin
-            rd_sop[rd_p1] <= 1;
-            reading_packet[rd_p1] <= 1;
-            if(queue_not_empty[rd_p1] != 0) begin
-                wrr_next[rd_p1] <= 1;
-                queue_not_empty_masked[rd_p1] <= queue_not_empty[rd_p1] & wrr_mask[rd_p1];
-            end
-        end else begin
-            rd_sop[rd_p1] <= 0;
-            wrr_next[rd_p1] <= 0;
-        end
-        if(reading_over[rd_p1] && reading_packet[rd_p1]) begin
-            rd_eop[rd_p1] <= 1;
-            reading_packet[rd_p1] <= 0;
-        end else begin
-            rd_eop[rd_p1] <= 0;
-        end
-    end
-end
-
-always @(negedge clk) begin
-    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(ready[rd_p1]) begin
-            //WRR
-            if(queue_not_empty_masked[rd_p1] == 0) begin
-                casex(queue_not_empty[rd_p1])
-                    8'b1xxxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1; processing_queue[rd_p1] <= 0; end
-                    8'b01xxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1; processing_queue[rd_p1] <= 1; end
-                    8'b001xxxxx: begin read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1; processing_queue[rd_p1] <= 2; end
-                    8'b0001xxxx: begin read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1; processing_queue[rd_p1] <= 3; end
-                    8'b00001xxx: begin read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1; processing_queue[rd_p1] <= 4; end
-                    8'b000001xx: begin read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1; processing_queue[rd_p1] <= 5; end
-                    8'b0000001x: begin read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1; processing_queue[rd_p1] <= 6; end
-                    8'b00000001: begin read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1; processing_queue[rd_p1] <= 7; end
-                endcase
-            end else begin
-                casex(queue_not_empty_masked[rd_p1])
-                    8'b1xxxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1; processing_queue[rd_p1] <= 0; end
-                    8'b01xxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1; processing_queue[rd_p1] <= 1; end
-                    8'b001xxxxx: begin read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1; processing_queue[rd_p1] <= 2; end
-                    8'b0001xxxx: begin read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1; processing_queue[rd_p1] <= 3; end
-                    8'b00001xxx: begin read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1; processing_queue[rd_p1] <= 4; end
-                    8'b000001xx: begin read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1; processing_queue[rd_p1] <= 5; end
-                    8'b0000001x: begin read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1; processing_queue[rd_p1] <= 6; end
-                    8'b00000001: begin read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1; processing_queue[rd_p1] <= 7; end
-                endcase
-            end
-
-            /* QOS
-            casex(queue_not_empty[rd_p1])
-                8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
-                8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
-                8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
-                8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
-                8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
-                8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
-                8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
-                8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
-            endcase
-            */
-        end
-    end
-end
-
-reg [15:0] read_request [31:0];
-reg [15:0] read_request_mask [31:0];
-reg [3:0] read_request_mask_s [31:0];
-wire [15:0] read_request_masked [31:0];
-
-assign read_request_masked[0] = read_request[0] & read_request_mask[0]; //TODO GENERATE THIS
-
-reg [3:0] processing_request [31:0];
-reg  processing [31:0];
-
-integer rd_s1;
 always @(posedge clk) begin
-    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        read_request_mask[rd_s1][read_request_mask_s[rd_s1]] <= 0;
-        read_request_mask_s[rd_s1] <= read_request_mask_s[rd_s1] + 1;
-        if(read_request_mask_s[rd_s1] == 15) begin
-            read_request_mask[rd_s1] <= 16'hFFFF;
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_en == 1 && queue_not_empty[p] & wrr_mask[p] != 0) begin
+            port_queue_waiting[p] <= queue_not_empty[p] & wrr_mask[p];
+        end else begin
+            port_queue_waiting[p] <= queue_not_empty[p];
         end
     end
 end
 
 always @(posedge clk) begin
-    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        if(read_request_mask[rd_s1] & read_request[rd_s1] != 0) begin
-            casex(read_request_mask[rd_s1] & read_request[rd_s1])
-                16'b1xxxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hF;
-                16'b01xxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hE;
-                16'b001xxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hD;
-                16'b0001xxxxxxxxxxxx: processing_request[rd_s1] <= 4'hC;
-                16'b00001xxxxxxxxxxx: processing_request[rd_s1] <= 4'hB;
-                16'b000001xxxxxxxxxx: processing_request[rd_s1] <= 4'hA;
-                16'b0000001xxxxxxxxx: processing_request[rd_s1] <= 4'h9;
-                16'b00000001xxxxxxxx: processing_request[rd_s1] <= 4'h8;
-                16'b000000001xxxxxxx: processing_request[rd_s1] <= 4'h7;
-                16'b0000000001xxxxxx: processing_request[rd_s1] <= 4'h6;
-                16'b00000000001xxxxx: processing_request[rd_s1] <= 4'h5;
-                16'b000000000001xxxx: processing_request[rd_s1] <= 4'h4;
-                16'b0000000000001xxx: processing_request[rd_s1] <= 4'h3;
-                16'b00000000000001xx: processing_request[rd_s1] <= 4'h2;
-                16'b000000000000001x: processing_request[rd_s1] <= 4'h1;
-                16'b0000000000000001: processing_request[rd_s1] <= 4'h0;
-            endcase
-        end else begin
-            casex(read_request[rd_s1])
-                16'b1xxxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hF;
-                16'b01xxxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hE;
-                16'b001xxxxxxxxxxxxx: processing_request[rd_s1] <= 4'hD;
-                16'b0001xxxxxxxxxxxx: processing_request[rd_s1] <= 4'hC;
-                16'b00001xxxxxxxxxxx: processing_request[rd_s1] <= 4'hB;
-                16'b000001xxxxxxxxxx: processing_request[rd_s1] <= 4'hA;
-                16'b0000001xxxxxxxxx: processing_request[rd_s1] <= 4'h9;
-                16'b00000001xxxxxxxx: processing_request[rd_s1] <= 4'h8;
-                16'b000000001xxxxxxx: processing_request[rd_s1] <= 4'h7;
-                16'b0000000001xxxxxx: processing_request[rd_s1] <= 4'h6;
-                16'b00000000001xxxxx: processing_request[rd_s1] <= 4'h5;
-                16'b000000000001xxxx: processing_request[rd_s1] <= 4'h4;
-                16'b0000000000001xxx: processing_request[rd_s1] <= 4'h3;
-                16'b00000000000001xx: processing_request[rd_s1] <= 4'h2;
-                16'b000000000000001x: processing_request[rd_s1] <= 4'h1;
-                16'b0000000000000001: processing_request[rd_s1] <= 4'h0;
-                default: processing[rd_s1] <= 0; //FIXME    
+    for(p = 0; p < 16; p = p + 1) begin
+        if(ready[p]) begin
+            casex(port_queue_waiting[p])
+                8'bxxxxxxx1: port_priority_reading[p] <= 3'd0;
+                8'bxxxxxx10: port_priority_reading[p] <= 3'd1;
+                8'bxxxxx100: port_priority_reading[p] <= 3'd2;
+                8'bxxxx1000: port_priority_reading[p] <= 3'd3;
+                8'bxxx10000: port_priority_reading[p] <= 3'd4;
+                8'bxx100000: port_priority_reading[p] <= 3'd5;
+                8'bx1000000: port_priority_reading[p] <= 3'd6;
+                8'b10000000: port_priority_reading[p] <= 3'd7;
+                default: begin end
             endcase
         end
     end
 end
 
+//turn on right after "ready"
+reg ready_delay [15:0];
+
 always @(posedge clk) begin
-    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        if(read_request[rd_s1] != 0) begin
-            processing[rd_s1] <= 1;
-            if(processing_batch[rd_s1] == 0) begin
-                processing_page[rd_s1] <=queue_head_page[{processing_request[rd_s1],3'd0}];
-                
-            end
+    for(p = 0; p < 16; p = p + 1) begin
+        rd_sop[p] <= ready[p] && port_queue_waiting[p] != 0;
+    end
+end
+
+reg [15:0] sram_read_request [31:0];
+//Use to disable request after finishing read packet
+reg [5:0] port_read_packet_over [15:0];
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(ready[p] && port_queue_waiting[p] != 0) begin
+            sram_read_request[queue_head_sram[{p,port_priority_reading[p]}]][p] <= 1;
+        end
+        if(port_read_packet_over[p][5] == 1) begin
+            sram_read_request[port_read_packet_over[p][4:0]][p] <= 0;
         end
     end
 end
 
-reg [2:0] processing_queue [15:0];
-reg [3:0] processing_page [31:0];
-reg [2:0] processing_batch [31:0];
-
 always @(posedge clk) begin
-    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        if(processing[rd_s1]) begin
-            processing_batch[rd_s1] <= processing_batch[rd_s1] + 1;
-            if(processing_batch[rd_s1] == 0) begin
-                processing_page[rd_s1] = queue_head_page[{processing_request[rd_s1],processing_queue[processing_request[rd_s1]]}];
-                rd_addr[rd_s1] <= queue_head_page[{processing_request[rd_s1],processing_queue[processing_request[rd_s1]]}];
-                rd_port[rd_s1] <= processing_request[rd_s1];
-                rd_op[rd_s1] <= 1;
-                
-                //jumptable update
-            end else begin
-                rd_op[rd_s1] <= 0;
-            end
-        end
+    for(p = 0; p < 16; p = p + 1) begin
+        rd_eop[p] <= port_read_packet_over[p][5];
     end
 end
 
-reg [3:0] handshake_length [15:0];
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        wrr_next[p] <= port_read_packet_over[p][5];
+    end
+end
+
+reg [3:0] handshake_reset [15:0];
+reg [2:0] handshake [15:0];
 reg [2:0] rd_batch [15:0];
 
-always @(posedge clk) begin
-    for(rd_p1 = 0; rd_p1 < 16; rd_p1 = rd_p1 + 1) begin
-        if(handshake_length[rd_p1] != rd_batch[rd_p1] + 1) begin
-            rd_batch[rd_p1] <= rd_batch[rd_p1] + 1;
-            rd_vld[rd_p1] <= 1;
-            case(rd_batch[rd_p1])
-                4'd0: rd_data[rd_p1] <= ecc_decoder_cr_data_0[rd_p1];
-                4'd1: rd_data[rd_p1] <= ecc_decoder_cr_data_1[rd_p1];
-                4'd2: rd_data[rd_p1] <= ecc_decoder_cr_data_2[rd_p1];
-                4'd3: rd_data[rd_p1] <= ecc_decoder_cr_data_3[rd_p1];
-                4'd4: rd_data[rd_p1] <= ecc_decoder_cr_data_4[rd_p1];
-                4'd5: rd_data[rd_p1] <= ecc_decoder_cr_data_5[rd_p1];
-                4'd6: rd_data[rd_p1] <= ecc_decoder_cr_data_6[rd_p1];
-                4'd7: rd_data[rd_p1] <= ecc_decoder_cr_data_7[rd_p1];
+//reset batch at page beginning
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake_reset[p] == 0) begin
+            rd_batch[p] <= 0;
+        end else if(handshake[p] != rd_batch[p]) begin
+            rd_batch[p] <= rd_batch[p] + 1;
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake_reset[p] == 0 || handshake[p] != rd_batch[p]) begin
+            rd_vld[p] <= 1;
+        end else begin
+            rd_vld[p] <= 0;
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake_reset[p] == 0 || handshake[p] != rd_batch[p]) begin
+            case(rd_batch[p])
+                4'd0: rd_data[p] <= ecc_decoder_cr_data_0[p];
+                4'd1: rd_data[p] <= ecc_decoder_cr_data_1[p];
+                4'd2: rd_data[p] <= ecc_decoder_cr_data_2[p];
+                4'd3: rd_data[p] <= ecc_decoder_cr_data_3[p];
+                4'd4: rd_data[p] <= ecc_decoder_cr_data_4[p];
+                4'd5: rd_data[p] <= ecc_decoder_cr_data_5[p];
+                4'd6: rd_data[p] <= ecc_decoder_cr_data_6[p];
+                4'd7: rd_data[p] <= ecc_decoder_cr_data_7[p];
             endcase
-        end else begin  //相等了
-            rd_vld[rd_p1] <= 0;
-            rd_batch[rd_p1] <= 0;
+        end
+    end
+end
+
+reg sram_read_request_next [31:0];
+reg [3:0] sram_read_request_mask_e [31:0];
+reg [15:0] sram_read_request_mask [31:0];
+reg [15:0] sram_read_request_masked [31:0];
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            sram_read_request_mask_e[s] = sram_read_request_mask_e[s] + 1;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            if(sram_read_request_mask_e[s] == 15) begin
+                sram_read_request_mask[s] <= 16'hFFFF;
+            end else begin
+                sram_read_request_mask[s][sram_read_request_mask_e[s]] <= 0;
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            if(sram_read_request_mask[s] & sram_read_request[s] != 0) begin
+                sram_read_request_masked[s] <= sram_read_request_mask[s] & sram_read_request[s];
+            end else begin
+                sram_read_request_masked[s] <= sram_read_request[s];
+            end
+        end
+    end
+end
+
+reg [3:0] sram_reading_request [31:0];
+reg sram_reading [31:0];
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
+            casex(sram_read_request_masked[s]) 
+                16'bxxxxxxxxxxxxxxx1: sram_reading_request[s] <= 4'h0;
+                16'bxxxxxxxxxxxxxx10: sram_reading_request[s] <= 4'h1;
+                16'bxxxxxxxxxxxxx100: sram_reading_request[s] <= 4'h2;
+                16'bxxxxxxxxxxxx1000: sram_reading_request[s] <= 4'h3;
+                16'bxxxxxxxxxxx10000: sram_reading_request[s] <= 4'h4;
+                16'bxxxxxxxxxx100000: sram_reading_request[s] <= 4'h5;
+                16'bxxxxxxxxx1000000: sram_reading_request[s] <= 4'h6;
+                16'bxxxxxxxx10000000: sram_reading_request[s] <= 4'h7;
+                16'bxxxxxxx100000000: sram_reading_request[s] <= 4'h8;
+                16'bxxxxxx1000000000: sram_reading_request[s] <= 4'h9;
+                16'bxxxxx10000000000: sram_reading_request[s] <= 4'ha;
+                16'bxxxx100000000000: sram_reading_request[s] <= 4'hb;
+                16'bxxx1000000000000: sram_reading_request[s] <= 4'hc;
+                16'bxx10000000000000: sram_reading_request[s] <= 4'hd;
+                16'bx100000000000000: sram_reading_request[s] <= 4'he;
+                16'b1000000000000000: sram_reading_request[s] <= 4'hf;
+                default: begin end
+            endcase
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
+            sram_reading[s] <= 1;
         end
     end
 end
