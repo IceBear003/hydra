@@ -270,25 +270,25 @@ always @(negedge clk) begin
             //WRR
             if(queue_not_empty_masked[rd_p1] == 0) begin
                 casex(queue_not_empty[rd_p1])
-                    8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
-                    8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
-                    8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
-                    8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
-                    8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
-                    8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
-                    8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
-                    8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
+                    8'b1xxxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1; processing_queue[rd_p1] <= 0; end
+                    8'b01xxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1; processing_queue[rd_p1] <= 1; end
+                    8'b001xxxxx: begin read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1; processing_queue[rd_p1] <= 2; end
+                    8'b0001xxxx: begin read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1; processing_queue[rd_p1] <= 3; end
+                    8'b00001xxx: begin read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1; processing_queue[rd_p1] <= 4; end
+                    8'b000001xx: begin read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1; processing_queue[rd_p1] <= 5; end
+                    8'b0000001x: begin read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1; processing_queue[rd_p1] <= 6; end
+                    8'b00000001: begin read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1; processing_queue[rd_p1] <= 7; end
                 endcase
             end else begin
                 casex(queue_not_empty_masked[rd_p1])
-                    8'b1xxxxxxx: read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1;
-                    8'b01xxxxxx: read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1;
-                    8'b001xxxxx: read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1;
-                    8'b0001xxxx: read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1;
-                    8'b00001xxx: read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1;
-                    8'b000001xx: read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1;
-                    8'b0000001x: read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1;
-                    8'b00000001: read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1;
+                    8'b1xxxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd0}]][0] <= 1; processing_queue[rd_p1] <= 0; end
+                    8'b01xxxxxx: begin read_request[queue_head_sram[{rd_p1,3'd1}]][1] <= 1; processing_queue[rd_p1] <= 1; end
+                    8'b001xxxxx: begin read_request[queue_head_sram[{rd_p1,3'd2}]][2] <= 1; processing_queue[rd_p1] <= 2; end
+                    8'b0001xxxx: begin read_request[queue_head_sram[{rd_p1,3'd3}]][3] <= 1; processing_queue[rd_p1] <= 3; end
+                    8'b00001xxx: begin read_request[queue_head_sram[{rd_p1,3'd4}]][4] <= 1; processing_queue[rd_p1] <= 4; end
+                    8'b000001xx: begin read_request[queue_head_sram[{rd_p1,3'd5}]][5] <= 1; processing_queue[rd_p1] <= 5; end
+                    8'b0000001x: begin read_request[queue_head_sram[{rd_p1,3'd6}]][6] <= 1; processing_queue[rd_p1] <= 6; end
+                    8'b00000001: begin read_request[queue_head_sram[{rd_p1,3'd7}]][7] <= 1; processing_queue[rd_p1] <= 7; end
                 endcase
             end
 
@@ -313,16 +313,7 @@ reg [15:0] read_request_mask [31:0];
 reg [3:0] read_request_mask_s [31:0];
 wire [15:0] read_request_masked [31:0];
 
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
-assign read_request_masked[0] = read_request[0] & read_request_mask[0];
+assign read_request_masked[0] = read_request[0] & read_request_mask[0]; //TODO GENERATE THIS
 
 reg [3:0] processing_request [31:0];
 reg  processing [31:0];
@@ -383,13 +374,36 @@ always @(posedge clk) begin
     end
 end
 
+always @(posedge clk) begin
+    for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
+        if(read_request[rd_s1] != 0) begin
+            processing[rd_s1] <= 1;
+            if(processing_batch[rd_s1] == 0) begin
+                processing_page[rd_s1] <=queue_head_page[{processing_request[rd_s1],3'd0}];
+                
+            end
+        end
+    end
+end
+
+reg [2:0] processing_queue [15:0];
 reg [3:0] processing_page [31:0];
 reg [2:0] processing_batch [31:0];
 
 always @(posedge clk) begin
     for(rd_s1 = 0; rd_s1 < 32; rd_s1 = rd_s1 + 1) begin
-        if(processing_request[rd_s1][4]) begin
-
+        if(processing[rd_s1]) begin
+            processing_batch[rd_s1] <= processing_batch[rd_s1] + 1;
+            if(processing_batch[rd_s1] == 0) begin
+                processing_page[rd_s1] = queue_head_page[{processing_request[rd_s1],processing_queue[processing_request[rd_s1]]}];
+                rd_addr[rd_s1] <= queue_head_page[{processing_request[rd_s1],processing_queue[processing_request[rd_s1]]}];
+                rd_port[rd_s1] <= processing_request[rd_s1];
+                rd_op[rd_s1] <= 1;
+                
+                //jumptable update
+            end else begin
+                rd_op[rd_s1] <= 0;
+            end
         end
     end
 end
@@ -423,7 +437,7 @@ reg [4:0] queue_head_sram [127:0];
 reg [10:0] queue_head_page [127:0];
 reg [4:0] queue_tail_sram [127:0];
 reg [10:0] queue_tail_page [127:0];
-reg [7:0] queue_not_empty [15:0];   //1-not empty 0-empty
+reg [7:0] queue_not_empty [15:0];
 
 wire [15:0] [3:0] port_dest_port;
 wire [15:0] [2:0] port_prior;
@@ -449,7 +463,6 @@ port port [15:0]
     .data(port_data),
     .start_of_packet(start_of_packet),
     .new_packet(port_new_packet)
-    // .unlock(port_unlock)
 );
 
 reg [15:0] ecc_encoder_enable;
