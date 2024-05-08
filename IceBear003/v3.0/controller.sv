@@ -259,7 +259,7 @@ end
 
 always @(posedge clk) begin
     for(p = 0; p < 16; p = p + 1) begin
-        if(ready[p]) begin
+        if(ready[p] == 1) begin
             casex(port_queue_waiting[p])
                 8'bxxxxxxx1: port_priority_reading[p] <= 3'd0;
                 8'bxxxxxx10: port_priority_reading[p] <= 3'd1;
@@ -280,7 +280,7 @@ reg ready_delay [15:0];
 
 always @(posedge clk) begin
     for(p = 0; p < 16; p = p + 1) begin
-        rd_sop[p] <= ready[p] && port_queue_waiting[p] != 0;
+        rd_sop[p] <= ready[p] == 1 && port_queue_waiting[p] != 0;
     end
 end
 
@@ -340,14 +340,14 @@ always @(negedge clk) begin
     for(p = 0; p < 16; p = p + 1) begin
         if(handshake_reset[p] == 0 || handshake[p] != rd_batch[p]) begin
             case(rd_batch[p])
-                4'd0: rd_data[p] <= ecc_decoder_cr_data_0[p];
-                4'd1: rd_data[p] <= ecc_decoder_cr_data_1[p];
-                4'd2: rd_data[p] <= ecc_decoder_cr_data_2[p];
-                4'd3: rd_data[p] <= ecc_decoder_cr_data_3[p];
-                4'd4: rd_data[p] <= ecc_decoder_cr_data_4[p];
-                4'd5: rd_data[p] <= ecc_decoder_cr_data_5[p];
-                4'd6: rd_data[p] <= ecc_decoder_cr_data_6[p];
-                4'd7: rd_data[p] <= ecc_decoder_cr_data_7[p];
+                3'd0: rd_data[p] <= ecc_decoder_cr_data_0[p];
+                3'd1: rd_data[p] <= ecc_decoder_cr_data_1[p];
+                3'd2: rd_data[p] <= ecc_decoder_cr_data_2[p];
+                3'd3: rd_data[p] <= ecc_decoder_cr_data_3[p];
+                3'd4: rd_data[p] <= ecc_decoder_cr_data_4[p];
+                3'd5: rd_data[p] <= ecc_decoder_cr_data_5[p];
+                3'd6: rd_data[p] <= ecc_decoder_cr_data_6[p];
+                3'd7: rd_data[p] <= ecc_decoder_cr_data_7[p];
             endcase
         end
     end
@@ -419,16 +419,89 @@ always @(posedge clk) begin
     end
 end
 
+reg [10:0] sram_rd_page[31:0];
+reg [2:0] sram_rd_batch[31:0];
+reg sram_got_data[31:0];
+
 always @(posedge clk) begin
     for(s = 0; s < 32; s = s + 1) begin
         if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
             sram_reading[s] <= 1;
-            //重置为0
-            //读page
-            //读SRAM内容
-            //切换跳转表
-            //数据包长度对接
-            //ECC校验器
+        end
+        //中途断开，需要重置
+        if(sram_rd_batch[s] == 7) begin
+            sram_reading[s] <= 0;
+
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_got_data[s] <= 1;
+        end else begin
+            sram_got_data[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_rd_batch[s] <= sram_rd_batch[s] + 1;
+        end else begin
+            sram_rd_batch[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_rd_en[s] <= 1;
+            sram_rd_addr[s] <= {sram_rd_page[s], sram_rd_batch[s]};
+        end else begin
+            sram_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1) begin
+            case(sram_rd_batch[s])
+                3'd0: ecc_decoder_data_7[sram_reading_request[s]] <= sram_dout[s];
+                3'd1: ecc_decoder_data_0[sram_reading_request[s]] <= sram_dout[s];
+                3'd2: ecc_decoder_data_1[sram_reading_request[s]] <= sram_dout[s];
+                3'd3: ecc_decoder_data_2[sram_reading_request[s]] <= sram_dout[s];
+                3'd4: ecc_decoder_data_3[sram_reading_request[s]] <= sram_dout[s];
+                3'd5: ecc_decoder_data_4[sram_reading_request[s]] <= sram_dout[s];
+                3'd6: ecc_decoder_data_5[sram_reading_request[s]] <= sram_dout[s];
+                3'd7: ecc_decoder_data_6[sram_reading_request[s]] <= sram_dout[s];
+            endcase
+        end else begin
+            sram_rd_en[s] <= 0;
+        end
+    end
+end
+
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1 && sram_rd_batch[s] == 0) begin
+            ecc_rd_en[s] <= 1;
+            ecc_rd_addr[s] <= sram_rd_page[s];
+        end else begin
+            ecc_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1 && sram_rd_batch[s] == 1) begin
+            ecc_decoder_code[sram_reading_request[s]] <= ecc_dout[s];
         end
     end
 end
