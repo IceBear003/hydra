@@ -22,6 +22,8 @@ initial
         rst_n   <=  1'b1;
       #40
         wr_sop  <= 16'hFFFF;
+      #400
+        wr_sop  <= 16'hFFFF;
     end
 
 always #2 clk =   ~clk;
@@ -65,9 +67,7 @@ integer i,j;
 always@(posedge clk or  negedge rst_n) begin
     for(j=0;j<16;j=j+1)
         if(wr_sop[j] == 1) begin
-            data_up[j] = $random;
-            if(data_up[j] < 32)
-                data_up[j] = data_up[j] + 32;
+            data_up[j] = 33;
         end
 end
 
@@ -78,8 +78,8 @@ always@(posedge clk or  negedge rst_n)
     else if(state[i] == RD_CTRL) begin
         //wr_data <= $random % 65536;
         wr_data[i][15:7] <= data_up[i];
-        wr_data[i][6:4] <= $random % 8;
-        wr_data[i][3:0] <= i;
+        wr_data[i][6:4] <= 1;
+        wr_data[i][3:0] <= 1;
     end
     else if(state[i] == RD_DATA)
             wr_data[i] <= cnt[i];
@@ -133,7 +133,7 @@ always@(posedge clk or  negedge rst_n)
             else if(eop_ti[i] == 1)
                 begin
                     eop_ti[i] <= 0;
-                    wr_sop[i] <= 1;
+                    //wr_sop[i] <= 1;
                 end
         end
    

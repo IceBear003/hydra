@@ -28,7 +28,10 @@ module sram_state
 
     //SRAM Operations
     input wr_op,
+    input wr_or,
     input [3:0] wr_port,
+    input [11:0] delta_free_space,
+    input [11:0] delta_page_amount,
     input rd_op,
     input [3:0] rd_port,
     input [10:0] rd_addr,
@@ -63,6 +66,8 @@ end
 always @(posedge clk) begin
     if(jt_wr_en && rst_n) begin 
         jump_table[jt_wr_addr] <= jt_din;
+        $display("jt_wr_addr = %d",jt_wr_addr);
+        $display("jt_din = %d",jt_din);
     end
 end
 
@@ -76,8 +81,8 @@ always @(posedge clk) begin
     if(!rst_n) begin 
         port_amount <= 0;
     end else if(wr_op && !rd_op) begin
-        free_space <= free_space - 1;
-        port_amount[wr_port] <= port_amount[wr_port] + 1;
+        free_space <= free_space - delta_free_space;
+        port_amount[wr_port] <= port_amount[wr_port] + delta_page_amount;
     end else if(rd_op && !wr_op) begin
         free_space <= free_space + 1;
         port_amount[rd_port] <= port_amount[rd_port] - 1;
@@ -93,7 +98,7 @@ fifo_null_pages null_pages
 (
     .clk(clk),
     .rst_n(rst_n),
-    .pop_head(wr_op),
+    .pop_head(wr_or),
     .head_addr(null_ptr),
     .push_tail(rd_op),
     .tail_addr(rd_addr)

@@ -23,6 +23,14 @@ always @(posedge clk) begin
         code[5] <= (((((data_1[15] ^ data_2[0]) ^ (data_2[1] ^ data_2[2])) ^ ((data_2[3] ^ data_2[4]) ^ (data_2[5] ^ data_2[6]))) ^ (((data_2[7] ^ data_2[8]) ^ (data_2[9] ^ data_2[10])) ^ ((data_2[11] ^ data_2[12]) ^ (data_2[13] ^ data_2[14])))) ^ ((((data_2[15] ^ data_3[0]) ^ (data_3[1] ^ data_3[2])) ^ ((data_3[3] ^ data_3[4]) ^ (data_3[5] ^ data_3[6]))) ^ (((data_3[7] ^ data_3[8]) ^ (data_3[9] ^ data_3[10])) ^ ((data_3[11] ^ data_3[12]) ^ (data_3[13] ^ data_3[14]))))) ^ (((((data_5[15] ^ data_6[0]) ^ (data_6[1] ^ data_6[2])) ^ ((data_6[3] ^ data_6[4]) ^ (data_6[5] ^ data_6[6]))) ^ (((data_6[7] ^ data_6[8]) ^ (data_6[9] ^ data_6[10])) ^ ((data_6[11] ^ data_6[12]) ^ (data_6[13] ^ data_6[14])))) ^ ((((data_6[15] ^ data_7[0]) ^ (data_7[1] ^ data_7[2])) ^ ((data_7[3] ^ data_7[4]) ^ (data_7[5] ^ data_7[6]))) ^ (((data_7[7] ^ data_7[8]) ^ (data_7[9] ^ data_7[10])) ^ ((data_7[11] ^ data_7[12]) ^ (data_7[13] ^ data_7[14])))));
         code[6] <= (((((data_3[15] ^ data_4[0]) ^ (data_4[1] ^ data_4[2])) ^ ((data_4[3] ^ data_4[4]) ^ (data_4[5] ^ data_4[6]))) ^ (((data_4[7] ^ data_4[8]) ^ (data_4[9] ^ data_4[10])) ^ ((data_4[11] ^ data_4[12]) ^ (data_4[13] ^ data_4[14])))) ^ ((((data_4[15] ^ data_5[0]) ^ (data_5[1] ^ data_5[2])) ^ ((data_5[3] ^ data_5[4]) ^ (data_5[5] ^ data_5[6]))) ^ (((data_5[7] ^ data_5[8]) ^ (data_5[9] ^ data_5[10])) ^ ((data_5[11] ^ data_5[12]) ^ (data_5[13] ^ data_5[14]))))) ^ (((((data_5[15] ^ data_6[0]) ^ (data_6[1] ^ data_6[2])) ^ ((data_6[3] ^ data_6[4]) ^ (data_6[5] ^ data_6[6]))) ^ (((data_6[7] ^ data_6[8]) ^ (data_6[9] ^ data_6[10])) ^ ((data_6[11] ^ data_6[12]) ^ (data_6[13] ^ data_6[14])))) ^ ((((data_6[15] ^ data_7[0]) ^ (data_7[1] ^ data_7[2])) ^ ((data_7[3] ^ data_7[4]) ^ (data_7[5] ^ data_7[6]))) ^ (((data_7[7] ^ data_7[8]) ^ (data_7[9] ^ data_7[10])) ^ ((data_7[11] ^ data_7[12]) ^ (data_7[13] ^ data_7[14])))));
         code[7] <= data_7[15];
+        $display("d0 = %d",data_0);
+        $display("d1 = %d",data_1);
+        $display("d2 = %d",data_2);
+        $display("d3 = %d",data_3);
+        $display("d4 = %d",data_4);
+        $display("d5 = %d",data_5);
+        $display("d6 = %d",data_6);
+        $display("d7 = %d",data_7);
     end
 end
 
