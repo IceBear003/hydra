@@ -188,18 +188,6 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
-        if(!rst_n) begin
-            search_get[wr_p1] <= 1;
-        end
-        else if(begin_of_packet[wr_p1] == 1) begin
-            searching[wr_p1] <= 0;
-            //$display("searching_distribution[wr_p1] = %d, %d",searching_distribution[wr_p1],wr_p1);
-        end
-    end
-end
-
-always @(posedge clk) begin
     if(!rst_n)
         for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
             searching_distribution[wr_p1] <= wr_p1;
