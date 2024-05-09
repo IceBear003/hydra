@@ -106,7 +106,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(port_new_packet[port] == 1) begin
+        if(port_new_packet_into_buf[port] == 1) begin
             searching[port] <= 1;
         end else if(search_cnt[port] == 31) begin
             searching[port] <= 0;
@@ -344,8 +344,17 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(searching[port]) begin
-            sram_addr[cur_distribution[port]] <= port_addr[port];
+        if(new_packet_into_buf[port]) begin
+            max_amount[port] <= 0;
+        end else if (searching[port] == 1) begin 
+        end else if (locking[searching_sram_index[port]] == 1) begin 
+        end else if (max_amount[port] >= page_amount[searching_sram_index[port]]) begin  
+        end else if (free_space[searching_sram_index[port]] < port_length[port]) begin  
+        end else begin
+            max_amount[port] <= page_amount[searching_sram_index[port]];
+            searching_distribution[port] <= searching_sram_index[port];
+            locking[searching_sram_index[port]] <= 1;
+            locking[searching_distribution[port]] <= 1;
         end
     end
     
