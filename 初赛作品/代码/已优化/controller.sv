@@ -80,6 +80,12 @@ reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
 
+reg packet_over [15:0];
+reg [15:0] packet_head_addr [15:0];
+reg [15:0] packet_tail_addr [15:0];
+reg [8:0] packet_length [15:0];
+reg [2:0] packet_batch [15:0];
+
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
@@ -137,6 +143,51 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             search_get[port] <= 0;
         end else begin
             //搜到了置1
+        end
+    end
+
+    always @(posedge clk) begin
+        if(search_cnt[port] == 32) begin
+            search_cnt[port] <= 0;
+        end else begin
+            search_cnt[port] <= search_cnt[port] + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(search_cnt[port] == 32) begin
+            packet_head_addr[port]; //头地址刷新
+
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            packet_batch[port] <= packet_batch[port] + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            packet_length[port] <= packet_length[port] + 1;
+        end
+        //重置
+    end
+
+    always @(posedge clk) begin
+        //预设置
+        if(port_data_vld[port] && packet_batch[port] == 7) begin
+
+        end else begin
+            
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 0) begin
+            wr_op[cur_distribution[port]] <= 1;
+        end else begin
+            wr_op[cur_distribution[port]] <= 0;
         end
     end
     
@@ -256,7 +307,7 @@ generate for(sram = 0; sram < 16; sram = sram + 1) begin : SRAMs
         .dout(sram_dout[sram])
     );
 
-    sram_state sram_state [31:0] 
+    sram_state sram_state
     (
         .clk(clk),
 
