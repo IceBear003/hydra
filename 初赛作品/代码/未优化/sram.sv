@@ -17,15 +17,17 @@ module sram
     output reg [DATA_WIDTH-1:0] dout
 );
 
-(* ram_style = "block" *) reg [DATA_WIDTH-1:0] d_latches [DATA_DEPTH-1:0];
+reg [DATA_WIDTH-1:0] d_latches [DATA_DEPTH-1:0];
 
-always @(negedge clk) begin
+always @(posedge clk) begin
     if(wr_en && rst_n) begin 
         d_latches[wr_addr] <= din;
+        $display("wr_addr = %d",wr_addr);
+        $display("din = %d",din);
     end
 end
 
-always @(negedge clk) begin
+always @(posedge clk) begin
     if(rd_en && rst_n) begin
         dout <= d_latches[rd_addr];
     end
