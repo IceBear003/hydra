@@ -1,5 +1,3 @@
-`include "./初赛作品/代码/未优化/fifo_null_pages.sv"
-
 module sram_state
 #(
     parameter ECC_STORAGE_ADDR_WIDTH = 11,
@@ -7,7 +5,7 @@ module sram_state
     parameter ECC_STORAGE_DATA_DEPTH = 2048
 )
 (
-    input clk, 
+    input clk,
     input rst_n,
  
     //ECC Storage 

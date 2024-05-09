@@ -45,8 +45,40 @@ reg [15:0][15:0] packet_tail_addr = 0;
 
 reg [15:0][2:0] batch = 0;
 
+reg [127:0][4:0] queue_head_sram = 0;
+reg [127:0][10:0] queue_head_page = 0;
+reg [127:0][4:0] queue_tail_sram = 0;
+reg [127:0][10:0] queue_tail_page = 0;
+reg [15:0][7:0] queue_empty = 0;
+
+wire [15:0] [3:0] port_dest_port;
+wire [15:0] [2:0] port_prior;
+wire [15:0] [8:0] port_length;
+wire [15:0] port_data_vld;
+wire [15:0] [15:0] port_data;
+wire [15:0] start_of_packet;
+wire [15:0] port_new_packet;
 wire [15:0] begin_of_packet;
 
+reg [15:0] ecc_encoder_enable = 0;
+reg [15:0][15:0] ecc_encoder_data_0 = 0;
+reg [15:0][15:0] ecc_encoder_data_1 = 0;
+reg [15:0][15:0] ecc_encoder_data_2 = 0;
+reg [15:0][15:0] ecc_encoder_data_3 = 0;
+reg [15:0][15:0] ecc_encoder_data_4 = 0;
+reg [15:0][15:0] ecc_encoder_data_5 = 0;
+reg [15:0][15:0] ecc_encoder_data_6 = 0;
+reg [15:0][15:0] ecc_encoder_data_7 = 0;
+wire [15:0][7:0] ecc_encoder_code;
+
+reg [15:0][127:0] rd_buffer = 0;
+reg [15:0][7:0] ecc_decoder_code = 0;
+reg [15:0] ecc_decoder_enable = 0;
+wire [15:0][127:0] cr_rd_buffer;
+
+reg [31:0] sram_wr_en = 0;
+reg [31:0][13:0] sram_wr_addr = 0;
+reg [31:0][15:0] sram_din = 0;
 reg [31:0][11:0] delta_free_space = 0;
 reg [31:0][11:0] delta_page_amount = 0;
 
@@ -83,50 +115,70 @@ wire [31:0][10:0] page_amount;
 wire [31:0][10:0] null_ptr;
 wire [31:0][10:0] free_space;
 
-reg [31:0] accessible;
-reg [15:0] search_get;
+reg [31:0] accessible = 0;
+reg [15:0] search_get = 0;
 
-always @(posedge clk) begin
-    cnt <= cnt + 1;
-end
+integer p,s;
 
-integer i;
+reg [15:0]wrr_next = 0 ;
+reg [7:0][15:0] wrr_mask = 0 ;
+reg [2:0][15:0] mask_e = 0 ;
+reg [2:0][15:0] mask_s = 0 ;
 
-always @(posedge clk) begin
-    for(i = 0; i < 31; i = i + 1) begin
-        accessible[i] <= (~locking[i] | (free_space[i] >= 32));
-    end
-end
+//updated every clk
+reg [7:0][15:0] port_queue_waiting = 0 ;
+reg [2:0][15:0] port_priority_reading = 0 ;
 
-always @(posedge clk) begin
-    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
-        full[wr_p1] <= (accessible == 0);
-    end
-end
+//turn on right after "ready"
+reg [15:0]ready_delay = 0 ;
 
-always @(posedge clk) begin
-    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
-        searching_sram_index[wr_p1] <= (cnt + wr_p1) % 32;
-        request_port[(cnt + wr_p1) % 32] <= port_dest_port[wr_p1];
-    end
-end
+reg [15:0]handshake_reset = 0 ;
+reg [2:0][15:0] handshake = 0 ;
+reg [2:0][15:0] rd_batch = 0 ;
 
-always @(posedge clk) begin
-    for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
-        if(port_new_packet[wr_p1] == 1) begin
-            searching[wr_p1] <= 1;
-        end
-    end
-end
+reg [31:0]sram_read_request_next = 0 ;
+reg [3:0][31:0] sram_read_request_mask_e = 0 ;
+reg [15:0][31:0] sram_read_request_mask = 0 ;
+reg [15:0][31:0] sram_read_request_masked = 0 ;
+
+reg [3:0][31:0] sram_reading_request = 0 ;
+reg [31:0]sram_reading = 0;
+
+reg [8:0][15:0] port_reading_packet_length = 0 ;
+reg [8:0][15:0] sram_reading_packet_length = 0 ;
+
+reg [7:0][15:0] queue_not_empty = 0;
+
+reg [15:0]end_of_packet = 0;
+
+reg [10:0][31:0] sram_rd_page = 0;
+reg [2:0][31:0] sram_rd_batch = 0;
+reg [31:0]sram_got_data = 0;
+
+reg [15:0][31:0] sram_read_request = 0;
+//Use to disable request after finishing read packet
+reg [4:0][15:0] port_reading_sram = 0;
+
+reg [15:0][15:0] ecc_decoder_data_0;
+reg [15:0][15:0] ecc_decoder_data_1;
+reg [15:0][15:0] ecc_decoder_data_2;
+reg [15:0][15:0] ecc_decoder_data_3;
+reg [15:0][15:0] ecc_decoder_data_4;
+reg [15:0][15:0] ecc_decoder_data_5;
+reg [15:0][15:0] ecc_decoder_data_6;
+reg [15:0][15:0] ecc_decoder_data_7;
+wire [15:0][15:0] ecc_decoder_cr_data_0;
+wire [15:0][15:0] ecc_decoder_cr_data_1;
+wire [15:0][15:0] ecc_decoder_cr_data_2;
+wire [15:0][15:0] ecc_decoder_cr_data_3;
+wire [15:0][15:0] ecc_decoder_cr_data_4;
+wire [15:0][15:0] ecc_decoder_cr_data_5;
+wire [15:0][15:0] ecc_decoder_cr_data_6;
+wire [15:0][15:0] ecc_decoder_cr_data_7;
 
 always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if(start_of_packet[wr_p1] == 1) begin
-            cur_dest_port[wr_p1] <= port_dest_port[wr_p1];
-            cur_prior[wr_p1] <= port_prior[wr_p1];
-            cur_length[wr_p1] <= port_length[wr_p1];
-            distribution[wr_p1] <= searching_distribution[wr_p1];
-            searching[wr_p1] <= 0;
             search_get[wr_p1] <= 0;
             packet_en[wr_p1] <= 0;
             packet_head_addr[wr_p1] <= {searching_distribution[wr_p1],null_ptr[searching_distribution[wr_p1]]};
@@ -168,7 +220,7 @@ always @(posedge clk) begin
             if(page_amount[searching_sram_index[wr_p1]] >= max_amount[wr_p1] 
             && free_space[searching_sram_index[wr_p1]] >= ((port_length[wr_p1] - 1) >> 3) + 1) begin
                 //EXCHANGE
-                max_amount[wr_p1] <= page_amount[searching_sram_index[cur_dest_port[wr_p1]]];
+                max_amount[wr_p1] <= page_amount[searching_sram_index[wr_p1]];
                 searching_distribution[wr_p1] <= searching_sram_index[wr_p1];
                 //LOCK UNLOCK
                 if(!(searching_distribution[wr_p1] == distribution[wr_p1] && cur_length[wr_p1] > 0))
@@ -216,6 +268,7 @@ always @(posedge clk) begin
                 delta_page_amount[searching_distribution[wr_p1]] <= ((port_length[wr_p1] - 1) >> 3) + 1;
                 wr_page[wr_p1] <= null_ptr[searching_distribution[wr_p1]];
                 wr_port[searching_distribution[wr_p1]] <= port_dest_port[wr_p1];
+                max_amount[wr_p1] <= 0;
             end else begin
                 //wr_op[distribution[wr_p1]] <= (cur_length[wr_p1] > 1);
                 wr_or[distribution[wr_p1]] <= (cur_length[wr_p1] > 1);
@@ -278,7 +331,7 @@ always @(posedge clk) begin
         end
     end
 end
-
+//update queue_not_empty
 always @(posedge clk) begin
     for(wr_p1 = 0; wr_p1 < 16; wr_p1 = wr_p1 + 1) begin
         if(port_data_vld[wr_p1] == 1) begin
@@ -352,11 +405,333 @@ always @(posedge clk) begin
         end
     end
 end
-reg [4:0] queue_head_sram [127:0];
-reg [10:0] queue_head_page [127:0];
-reg [4:0] queue_tail_sram [127:0];
-reg [10:0] queue_tail_page [127:0];
-reg [7:0] queue_not_empty [15:0];
+
+//Read Mechanism
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_next[p]) begin
+            if(mask_s[p] + mask_e[p] == 7 && mask_e[p] != 7) begin
+                mask_e[p] <= mask_e[p] + 1;
+                mask_s[p] <= 0;
+            end else if(mask_e[p] == 7) begin
+                mask_e[p] <= 0;
+                mask_s[p] <= 0;
+            end else begin 
+                mask_s[p] <= mask_s[p] + 1;
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_next[p]) begin
+            if(mask_s[p] + mask_e[p] == 7 && mask_e[p] != 7) begin
+                wrr_mask[p] <= 8'hFF << mask_e[p];
+            end else if(mask_e[p] == 7) begin
+                wrr_mask[p] <= 8'hFF;
+            end else begin 
+                wrr_mask[p][mask_s[p]] <= 0;
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(wrr_en == 1 && queue_not_empty[p] & wrr_mask[p] != 0) begin
+            port_queue_waiting[p] <= queue_not_empty[p] & wrr_mask[p];
+        end else begin
+            port_queue_waiting[p] <= queue_not_empty[p];
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(ready[p] == 1) begin
+            casex(port_queue_waiting[p])
+                8'bxxxxxxx1: port_priority_reading[p] <= 3'd0;
+                8'bxxxxxx10: port_priority_reading[p] <= 3'd1;
+                8'bxxxxx100: port_priority_reading[p] <= 3'd2;
+                8'bxxxx1000: port_priority_reading[p] <= 3'd3;
+                8'bxxx10000: port_priority_reading[p] <= 3'd4;
+                8'bxx100000: port_priority_reading[p] <= 3'd5;
+                8'bx1000000: port_priority_reading[p] <= 3'd6;
+                8'b10000000: port_priority_reading[p] <= 3'd7;
+                default: begin end
+            endcase
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        rd_sop[p] <= ready[p] == 1 && port_queue_waiting[p] != 0;
+    end
+end
+
+always @(posedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(rd_sop[p] == 1) begin
+            sram_read_request[queue_head_sram[{p,port_priority_reading[p]}]][p] <= 1;
+            port_reading_sram[p] <= queue_head_sram[{p,port_priority_reading[p]}];
+        end
+        if(end_of_packet[p] == 1) begin
+            sram_read_request[port_reading_sram[p]][p] <= 0;
+        end
+    end
+end
+
+//reset batch at page beginning
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake_reset[p] == 1) begin
+            rd_batch[p] <= 0;
+        end else if(handshake[p] != rd_batch[p]) begin
+            rd_batch[p] <= rd_batch[p] + 1;
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake[p] != rd_batch[p] + 1) begin
+            rd_vld[p] <= 1;
+        end else begin
+            rd_vld[p] <= 0;
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake[p] != rd_batch[p] + 1) begin
+            case(rd_batch[p])
+                3'd0: rd_data[p] <= ecc_decoder_cr_data_0[p];
+                3'd1: rd_data[p] <= ecc_decoder_cr_data_1[p];
+                3'd2: rd_data[p] <= ecc_decoder_cr_data_2[p];
+                3'd3: rd_data[p] <= ecc_decoder_cr_data_3[p];
+                3'd4: rd_data[p] <= ecc_decoder_cr_data_4[p];
+                3'd5: rd_data[p] <= ecc_decoder_cr_data_5[p];
+                3'd6: rd_data[p] <= ecc_decoder_cr_data_6[p];
+                3'd7: rd_data[p] <= ecc_decoder_cr_data_7[p];
+            endcase
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake[p] == rd_batch[p] + 1 && end_of_packet[p]) begin   //end of packet多周期触发 fixme
+            rd_eop[p] <= 1;
+        end else begin
+            rd_eop[p] <= 0;
+        end
+    end
+end
+
+always @(negedge clk) begin
+    for(p = 0; p < 16; p = p + 1) begin
+        if(handshake[p] == rd_batch[p] + 1 && end_of_packet[p]) begin
+            wrr_next[p] <= 1;
+        end else begin
+            wrr_next[p] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            sram_read_request_mask_e[s] = sram_read_request_mask_e[s] + 1;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            if(sram_read_request_mask_e[s] == 15) begin
+                sram_read_request_mask[s] <= 16'hFFFF;
+            end else begin
+                sram_read_request_mask[s][sram_read_request_mask_e[s]] <= 0;
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_next[s]) begin
+            if(sram_read_request_mask[s] & sram_read_request[s] != 0) begin
+                sram_read_request_masked[s] <= sram_read_request_mask[s] & sram_read_request[s];
+            end else begin
+                sram_read_request_masked[s] <= sram_read_request[s];
+            end
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
+            casex(sram_read_request_masked[s]) 
+                16'bxxxxxxxxxxxxxxx1: sram_reading_request[s] <= 4'h0;
+                16'bxxxxxxxxxxxxxx10: sram_reading_request[s] <= 4'h1;
+                16'bxxxxxxxxxxxxx100: sram_reading_request[s] <= 4'h2;
+                16'bxxxxxxxxxxxx1000: sram_reading_request[s] <= 4'h3;
+                16'bxxxxxxxxxxx10000: sram_reading_request[s] <= 4'h4;
+                16'bxxxxxxxxxx100000: sram_reading_request[s] <= 4'h5;
+                16'bxxxxxxxxx1000000: sram_reading_request[s] <= 4'h6;
+                16'bxxxxxxxx10000000: sram_reading_request[s] <= 4'h7;
+                16'bxxxxxxx100000000: sram_reading_request[s] <= 4'h8;
+                16'bxxxxxx1000000000: sram_reading_request[s] <= 4'h9;
+                16'bxxxxx10000000000: sram_reading_request[s] <= 4'ha;
+                16'bxxxx100000000000: sram_reading_request[s] <= 4'hb;
+                16'bxxx1000000000000: sram_reading_request[s] <= 4'hc;
+                16'bxx10000000000000: sram_reading_request[s] <= 4'hd;
+                16'bx100000000000000: sram_reading_request[s] <= 4'he;
+                16'b1000000000000000: sram_reading_request[s] <= 4'hf;
+                default: begin end
+            endcase
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_read_request_masked[s] != 0 && sram_reading[s] == 0) begin
+            sram_reading[s] <= 1;
+            $display("sram = %d",s);
+            sram_rd_page[s] <= queue_head_page[sram_reading_request[s]];
+        end
+        //中途断开，需要重置
+        if(sram_rd_batch[s] == 7) begin
+            sram_reading[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_got_data[s] <= 1;
+        end else begin
+            sram_got_data[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_rd_batch[s] <= sram_rd_batch[s] + 1;
+        end else begin
+            sram_rd_batch[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1) begin
+            sram_rd_en[s] <= 1;
+            sram_rd_addr[s] <= {sram_rd_page[s], sram_rd_batch[s]};
+        end else begin
+            sram_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1 && sram_rd_batch[s] == 0) begin
+            jt_rd_en[s] <= 1;
+            jt_rd_addr[s] <= sram_rd_page[s];
+        end else begin
+            jt_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s] == 1 && sram_rd_batch[s] == 1 && queue_not_empty[sram_read_request[s]]) begin
+            queue_head_sram[sram_read_request[s]] <= jt_dout[s] >> 11;
+            queue_head_page[sram_read_request[s]] <= jt_dout[s];
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1) begin
+            case(sram_rd_batch[s])
+                3'd0: ecc_decoder_data_7[sram_reading_request[s]] <= sram_dout[s];
+                3'd1: ecc_decoder_data_0[sram_reading_request[s]] <= sram_dout[s];
+                3'd2: ecc_decoder_data_1[sram_reading_request[s]] <= sram_dout[s];
+                3'd3: ecc_decoder_data_2[sram_reading_request[s]] <= sram_dout[s];
+                3'd4: ecc_decoder_data_3[sram_reading_request[s]] <= sram_dout[s];
+                3'd5: ecc_decoder_data_4[sram_reading_request[s]] <= sram_dout[s];
+                3'd6: ecc_decoder_data_5[sram_reading_request[s]] <= sram_dout[s];
+                3'd7: ecc_decoder_data_6[sram_reading_request[s]] <= sram_dout[s];
+            endcase
+        end else begin
+            sram_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1 && sram_rd_batch[s] == 0) begin
+            ecc_rd_en[s] <= 1;
+            ecc_rd_addr[s] <= sram_rd_page[s];
+        end else begin
+            ecc_rd_en[s] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_got_data[s] == 1 && sram_rd_batch[s] == 1) begin
+            ecc_decoder_code[sram_reading_request[s]] <= ecc_dout[s];
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        ecc_decoder_enable[sram_reading_request[s]] <= sram_got_data[s] == 1 && sram_rd_batch[s] == 0;
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(sram_reading[s]) begin
+            end_of_packet[sram_reading_request[s]] <= sram_reading_packet_length[sram_reading_request[s]] == port_reading_packet_length[sram_reading_request[s]];
+        end else begin
+            end_of_packet[sram_reading_request[s]] <= 0;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    for(s = 0; s < 32; s = s + 1) begin
+        if(!sram_reading[s]) begin
+            handshake_reset[sram_reading_request[s]] <= 0;
+        end else if(sram_reading_packet_length[sram_reading_request[s]] == port_reading_packet_length[sram_reading_request[s]]) begin
+            handshake_reset[sram_reading_request[s]] <= 1;
+            handshake[sram_reading_request[s]] <= sram_rd_batch[s] - 1; //FIXME
+        end else if(sram_rd_batch[p] == 0 && sram_got_data[p]) begin
+            handshake_reset[sram_reading_request[s]] <= 1;
+            handshake[sram_reading_request[s]] <= sram_rd_batch[s] - 1; //FIXME
+        end
+    end
+end
 
 always @(posedge clk) begin
     for(p = 0; p < 16; p = p + 1) begin
@@ -367,14 +742,6 @@ always @(posedge clk) begin
         end
     end
 end
-
-wire [15:0] [3:0] port_dest_port;
-wire [15:0] [2:0] port_prior;
-wire [15:0] [8:0] port_length;
-wire [15:0] port_data_vld;
-wire [15:0] [15:0] port_data;
-wire [15:0] start_of_packet;
-wire [15:0] port_new_packet;
 
 port port [15:0]
 (
@@ -391,19 +758,12 @@ port port [15:0]
     .data_vld(port_data_vld),
     .data(port_data),
     .start_of_packet(start_of_packet),
-    .new_packet(port_new_packet)
+    .begin_of_packet(begin_of_packet),
+    .new_packet(port_new_packet),
+    .search_get(search_get)
+    // .unlock(port_unlock)
 );
 
-reg [15:0] ecc_encoder_enable;
-reg [15:0][15:0] ecc_encoder_data_0;
-reg [15:0][15:0] ecc_encoder_data_1;
-reg [15:0][15:0] ecc_encoder_data_2;
-reg [15:0][15:0] ecc_encoder_data_3;
-reg [15:0][15:0] ecc_encoder_data_4;
-reg [15:0][15:0] ecc_encoder_data_5;
-reg [15:0][15:0] ecc_encoder_data_6;
-reg [15:0][15:0] ecc_encoder_data_7;
-wire [15:0][7:0] ecc_encoder_code;
 
 ecc_encoder ecc_encoder [15:0]
 (
@@ -419,25 +779,6 @@ ecc_encoder ecc_encoder [15:0]
     .data_7(ecc_encoder_data_7),
     .code(ecc_encoder_code)
 );
-
-reg [15:0] ecc_decoder_enable;
-reg [15:0][15:0] ecc_decoder_data_0;
-reg [15:0][15:0] ecc_decoder_data_1;
-reg [15:0][15:0] ecc_decoder_data_2;
-reg [15:0][15:0] ecc_decoder_data_3;
-reg [15:0][15:0] ecc_decoder_data_4;
-reg [15:0][15:0] ecc_decoder_data_5;
-reg [15:0][15:0] ecc_decoder_data_6;
-reg [15:0][15:0] ecc_decoder_data_7;
-reg [15:0][7:0] ecc_decoder_code;
-wire [15:0][15:0] ecc_decoder_cr_data_0;
-wire [15:0][15:0] ecc_decoder_cr_data_1;
-wire [15:0][15:0] ecc_decoder_cr_data_2;
-wire [15:0][15:0] ecc_decoder_cr_data_3;
-wire [15:0][15:0] ecc_decoder_cr_data_4;
-wire [15:0][15:0] ecc_decoder_cr_data_5;
-wire [15:0][15:0] ecc_decoder_cr_data_6;
-wire [15:0][15:0] ecc_decoder_cr_data_7;
 
 ecc_decoder ecc_decoder [15:0]
 (
@@ -461,14 +802,6 @@ ecc_decoder ecc_decoder [15:0]
     .cr_data_7(ecc_decoder_cr_data_7)
 );
 
-reg [31:0] sram_wr_en;
-reg [31:0][13:0] sram_wr_addr;
-reg [31:0][15:0] sram_din;
-
-reg [31:0] sram_rd_en;
-reg [31:0][13:0] sram_rd_addr;
-wire [31:0][15:0] sram_dout;
-
 sram sram [31:0]
 (
     .clk(clk),
@@ -482,34 +815,6 @@ sram sram [31:0]
     .rd_addr(sram_rd_addr),
     .dout(sram_dout)
 );
-
-reg [31:0] ecc_wr_en;
-reg [31:0][10:0] ecc_wr_addr;
-reg [31:0][7:0] ecc_din;
-
-reg [31:0]ecc_rd_en;
-reg [31:0][10:0] ecc_rd_addr;
-wire [31:0][7:0] ecc_dout;
-
-reg [31:0] jt_wr_en;
-reg [31:0][10:0] jt_wr_addr;
-reg [31:0][15:0] jt_din;
-
-reg [31:0]jt_rd_en;
-reg [31:0][10:0] jt_rd_addr;
-wire [31:0][15:0] jt_dout;
-
-reg [31:0]wr_op;
-reg [31:0][3:0] wr_port;
-reg [31:0]rd_op;
-reg [31:0][3:0] rd_port;
-reg [31:0][10:0] rd_addr;
-
-reg [31:0][3:0] request_port;
-wire [31:0][10:0] page_amount;
-
-wire [31:0][10:0] null_ptr;
-wire [31:0][10:0] free_space;
 
 sram_state sram_state [31:0] 
 (
@@ -531,6 +836,7 @@ sram_state sram_state [31:0]
     .jt_dout(jt_dout),
 
     .wr_op(wr_op),
+    .wr_or(wr_or),
     .wr_port(wr_port),
     .rd_addr(rd_addr),
     .rd_op(rd_op),
@@ -540,7 +846,9 @@ sram_state sram_state [31:0]
     .page_amount(page_amount),
 
     .null_ptr(null_ptr),
-    .free_space(free_space)
+    .free_space(free_space),
+    .delta_free_space(delta_free_space),
+    .delta_page_amount(delta_page_amount)
 );
 
 endmodule
