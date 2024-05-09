@@ -10,6 +10,8 @@ reg    [15:0]    wr_eop  ;
 reg    [15:0]    wr_vld  ;
 reg    [15:0][15:0]   wr_data ;
 
+reg    [15:0]    ready   ;
+
 initial
     begin
         clk     =   1'b1;
@@ -21,9 +23,9 @@ initial
       #40
         rst_n   <=  1'b1;
       #40
-        wr_sop  <= 16'hFFFF;
+        wr_sop  <= 16'h1;
       #400
-        wr_sop  <= 16'hFFFF;
+        ready <= 16'h1;
     end
 
 always #2 clk =   ~clk;
@@ -146,6 +148,11 @@ always@(posedge clk or  negedge rst_n)
             wr_sop[i] <= 0;
         end
 
+wire   [15:0]  rd_sop  ;
+wire   [15:0]  rd_eop  ;
+wire   [15:0]  rd_vld  ;
+wire   [3:0][15:0]  rd_data   ;
+
 controller  controller_inst
 (
     .clk            (clk            )   ,
@@ -154,9 +161,14 @@ controller  controller_inst
     .wr_sop         (wr_sop         )   ,
     .wr_eop         (wr_eop         )   ,
     .wr_vld         (wr_vld         )   ,
-    .wr_data        (wr_data        )   
-    
+    .wr_data        (wr_data        )   ,
 
+    .ready          (ready          )   ,
+    .rd_sop         (rd_sop         )   ,
+    .rd_eop         (rd_eop         )   ,
+    .rd_vld         (rd_vld         )   ,
+    .rd_data        (rd_data        )   
+    
 );
 
 endmodule
