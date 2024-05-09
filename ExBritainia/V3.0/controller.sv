@@ -258,7 +258,7 @@ always @(posedge clk) begin
             if(page_amount[searching_sram_index[wr_p1]] >= max_amount[wr_p1] 
             && free_space[searching_sram_index[wr_p1]] >= ((port_length[wr_p1] - 1) >> 3) + 1) begin
                 //EXCHANGE
-                max_amount[wr_p1] <= page_amount[searching_sram_index[cur_dest_port[wr_p1]]];
+                max_amount[wr_p1] <= page_amount[searching_sram_index[wr_p1]];
                 searching_distribution[wr_p1] <= searching_sram_index[wr_p1];
                 //LOCK UNLOCK
                 if(!(searching_distribution[wr_p1] == distribution[wr_p1] && cur_length[wr_p1] > 0))
@@ -306,6 +306,7 @@ always @(posedge clk) begin
                 delta_page_amount[searching_distribution[wr_p1]] <= ((port_length[wr_p1] - 1) >> 3) + 1;
                 wr_page[wr_p1] <= null_ptr[searching_distribution[wr_p1]];
                 wr_port[searching_distribution[wr_p1]] <= port_dest_port[wr_p1];
+                max_amount[wr_p1] <= 0;
             end else begin
                 //wr_op[distribution[wr_p1]] <= (cur_length[wr_p1] > 1);
                 wr_or[distribution[wr_p1]] <= (cur_length[wr_p1] > 1);

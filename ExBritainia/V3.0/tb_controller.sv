@@ -23,7 +23,7 @@ initial
       #40
         rst_n   <=  1'b1;
       #40
-        wr_sop  <= 16'h1;
+        wr_sop  <= 16'hFFFF;
       #400
         ready <= 16'h1;
     end
@@ -81,7 +81,7 @@ always@(posedge clk or  negedge rst_n)
         //wr_data <= $random % 65536;
         wr_data[i][15:7] <= data_up[i];
         wr_data[i][6:4] <= 1;
-        wr_data[i][3:0] <= 1;
+        wr_data[i][3:0] <= $random % 16;
     end
     else if(state[i] == RD_DATA)
             wr_data[i] <= cnt[i];
@@ -135,7 +135,7 @@ always@(posedge clk or  negedge rst_n)
             else if(eop_ti[i] == 1)
                 begin
                     eop_ti[i] <= 0;
-                    //wr_sop[i] <= 1;
+                    wr_sop[i] <= 1;
                 end
         end
    
