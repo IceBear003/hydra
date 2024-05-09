@@ -15,7 +15,7 @@ module port_frontend(
     output reg [15:0] data = 16'b0,
 
     output reg new_packet_into_buf = 0
-    
+);
 
 reg [63:0][15:0] buffer = 0;
 

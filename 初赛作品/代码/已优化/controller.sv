@@ -72,6 +72,7 @@ wire [15:0] ecc_decoder_cr_data_7 [15:0];
 
 reg [4:0] searching_sram_index [15:0];
 reg [4:0] searching_distribution [15:0];
+reg [10:0] max_amount [15:0];
 reg [5:0] search_cnt [15:0];
 reg searching [15:0];
 
@@ -81,10 +82,16 @@ reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
 
 reg packet_over [15:0];
+reg packet_not_over [15:0];
 reg [15:0] packet_head_addr [15:0];
 reg [15:0] packet_tail_addr [15:0];
 reg [8:0] packet_length [15:0];
 reg [2:0] packet_batch [15:0];
+
+reg [10:0] wr_page [15:0];
+
+reg ecc_result [15:0];
+reg [4:0] ecc_sram [15:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -156,38 +163,189 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
-            packet_head_addr[port]; //头地址刷新
-
+            packet_head_addr[port] <= null_ptr[cur_distribution[port]];
         end
     end
 
     always @(posedge clk) begin
-        if(port_data_vld[port]) begin
+        if(search_cnt[port] == 32) begin
+            packet_batch[port] <= 1;
+        end else begin
             packet_batch[port] <= packet_batch[port] + 1;
         end
     end
 
     always @(posedge clk) begin
-        if(port_data_vld[port]) begin
+        if(search_cnt[port] == 32) begin
+            packet_length[port] <= 1;
+        end else if(port_data_vld[port]) begin
             packet_length[port] <= packet_length[port] + 1;
         end
-        //重置
     end
 
     always @(posedge clk) begin
-        //预设置
-        if(port_data_vld[port] && packet_batch[port] == 7) begin
+        if(search_cnt[port] == 32) begin
+            packet_not_over[port] <= 1;
+        end else if(packet_length[port] == cur_length[port] - 1) begin
+            packet_not_over[port] <= 0;
+        end
+    end
 
-        end else begin
-            
+    always @(posedge clk) begin
+        if(search_cnt[port] == 32) begin
+            packet_over[port] <= 0;
+        end else if(packet_length[port] == cur_length[port] - 1) begin
+            packet_over[port] <= 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 0) begin
+            jt_wr_en[cur_distribution[port]] <= 1;
+        end else if(packet_not_over[port]) begin
+            jt_wr_en[cur_distribution[port]] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 0) begin
+            jt_wr_addr[cur_distribution[port]] <= wr_last_page[port];
+        end
+    end
+    
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 0) begin
+            jt_wr_din[cur_distribution[port]] <= wr_page[port];
+        end
+    end
+    
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 0) begin
+            packet_tail_addr[port] <= wr_page[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 7) begin
+            wr_last_page[port] <= wr_page[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_batch[port] == 7) begin
+            wr_page[port] <= null_ptr[cur_distribution[port]];
+        end else if(search_cnt[port] == 32) begin
+            wr_page[port] <= null_ptr[cur_distribution[port]];
         end
     end
 
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 0) begin
             wr_op[cur_distribution[port]] <= 1;
-        end else begin
+        end else if(packet_not_over[port]) begin
             wr_op[cur_distribution[port]] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            sram_wr_addr[port] <= {wr_page[port], packet_batch[port]};
+        end 
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            sram_wr_en[cur_distribution[port]] <= 1;
+        end else if(packet_not_over[port]) begin
+            sram_wr_en[cur_distribution[port]] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            sram_din[cur_distribution[port]] <= port_data[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if((port_data_vld[port] && packet_batch[port] == 7)||
+            packet_length[port] == packet_length[port] - 1) begin
+            ecc_encoder_enable[port] <= 1;
+        end else begin
+            ecc_encoder_enable[port] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if((port_data_vld[port] && packet_batch[port] == 7)||
+            packet_length[port] == packet_length[port] - 1) begin
+            ecc_encoder_enable[port] <= 1;
+        end else begin
+            ecc_encoder_enable[port] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if((port_data_vld[port] && packet_batch[port] == 7)||
+            packet_length[port] == packet_length[port] - 1) begin
+            ecc_sram[port] <= cur_distribution[port];
+        end else begin
+            ecc_sram[port] <= cur_distribution[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(ecc_encoder_enable[port] == 1) begin
+            ecc_result <= 1;
+        end else if(packet_batch[port] == 2) begin
+            ecc_result <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(packet_batch[port] == 1 && ecc_result == 1) begin
+            ecc_wr_en[ecc_sram[port]] <= 1;
+        end else begin
+            ecc_wr_en[ecc_sram[port]] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(packet_batch[port] == 1 && ecc_result == 1) begin
+            ecc_wr_din[ecc_sram[port]] <= ecc_encoder_code[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(packet_batch[port] == 1 && ecc_result == 1) begin
+            ecc_wr_addr[ecc_sram[port]] <= wr_last_page[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            case(packet_batch[port])
+                3'd0: ecc_decoder_data_0[port] <= port_data[port];
+                3'd1: ecc_decoder_data_1[port] <= port_data[port];
+                3'd2: ecc_decoder_data_2[port] <= port_data[port];
+                3'd3: ecc_decoder_data_3[port] <= port_data[port];
+                3'd4: ecc_decoder_data_4[port] <= port_data[port];
+                3'd5: ecc_decoder_data_5[port] <= port_data[port];
+                3'd6: ecc_decoder_data_6[port] <= port_data[port];
+                3'd7: ecc_decoder_data_7[port] <= port_data[port];
+            endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port]) begin
+            sram_din[cur_distribution[port]] <= port_data[port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(searching[port]) begin
+            sram_addr[cur_distribution[port]] <= port_addr[port];
         end
     end
     
