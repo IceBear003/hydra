@@ -114,7 +114,7 @@ reg [2:0] packet_batch [15:0];
 reg [10:0] wr_page [15:0];
 
 //ECC结果是否到被存储的时机
-//实际上是ecc使能打一拍
+//实际上是ecc_encoder_enable打一拍
 reg ecc_result [15:0];
 //ECC结果存储的SRAM的编号
 //对于一个数据包末尾页的校验，其存储时间在数据包处理完毕之后
@@ -128,11 +128,19 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         full[port] <= (locking | much_space) == 0;
     end
 
+    /* 
+        搜索
+    */
+
+    //刷新每个端口下一周期搜索的SRAM编号
     always @(posedge clk) begin
         searching_sram_index[port] <= (cnt_32 + port) % 32;
+    end
+    //询问下一周期搜索的SRAM中有多少(属于正在缓冲区匹配SRAM的数据包的)目的端口的半字
+    always @(posedge clk) begin
         request_port[(cnt_32 + port) % 32] <= port_dest_port[port];
     end
-
+    //有新的数据包进入缓冲区，应当启动搜索，32周期后结束搜索
     always @(posedge clk) begin
         if(port_new_packet_into_buf[port] == 1) begin
             searching[port] <= 1;
@@ -140,7 +148,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             searching[port] <= 0;
         end
     end
-
+    //搜索计数器，等于31时正在进行第32次搜索，等于32之后一周期被清零
+    //可以将其等于32的时刻认为是搜索全部完成的时候
     always @(posedge clk) begin
         if(searching[port] == 1) begin
             search_cnt[port] <= search_cnt[port] + 1;
@@ -149,35 +158,32 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
+    /*
+        持久化
+    */
+    //如果搜索结束，则意味着要开始写入数据包了
+    //持久化数据包的目的端口
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_dest_port[port] <= port_dest_port[port];
         end
     end
-
+    //持久化数据包的目的队列
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_prior[port] <= port_prior[port];
         end
     end
-
+    //持久化数据包的长度
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_length[port] <= port_length[port];
         end
     end
-
+    //持久化搜索结果的SRAM
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_distribution[port] <= searching_distribution[port];
-        end
-    end
-
-    always @(posedge clk) begin
-        if(search_cnt[port] == 32) begin
-            search_cnt[port] <= 0;
-        end else begin
-            search_cnt[port] <= search_cnt[port] + 1;
         end
     end
 
