@@ -98,8 +98,9 @@ reg [4:0] cur_distribution [15:0];
 reg [6:0] last_dest_queue [15:0];   //目的队列(3+4)
 reg [10:0] last_page [15:0];        //被写入的页地址
 
-//数据包是否已经结束，驱动队列头尾地址更新
+//数据包是否已经结束/是否需要插入队列末端，指导队列头尾地址更新
 reg packet_over [15:0];
+reg packet_merge[15:0];
 //数据包是否还未结束，防止已经与端口脱离关系的SRAM正常工作受干扰
 reg packet_not_over [15:0];
 //数据包的头尾地址(5+11)
@@ -313,7 +314,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     //轮询把整个数据包插入队尾，这样不同端口就不会冲突
     always @(posedge clk) begin
-        if(port == cnt_16 && packet_over[port]) begin
+        if(port == cnt_16 && packet_over[port] && packet_merge[port]) begin
             //把原来的尾巴的跳转表指向头
             jt_wr_en[queue_tail_sram[last_dest_queue[port]]] <= 1;
             jt_wr_addr[queue_tail_page[last_dest_queue[port]]] <= wr_last_page[port];
@@ -321,7 +322,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             //把尾巴设置为新的尾地址
             queue_tail_sram[last_dest_queue[port]] <= packet_tail_addr[port][15:11];
             queue_tail_page[last_dest_queue[port]] <= packet_tail_addr[port][10:0];
-        end
+        end 
+    end
+    //是否已经插入优先级队列末端，1-需要插入，0-已经插入
+    always @(posedge clk) begin
+        if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
+            packet_merge[port] <= 1;
+        end else if(port == cnt_16 && packet_over[port]) begin
+            packet_merge[port] <= 0;
+        end 
     end
 
     /*
