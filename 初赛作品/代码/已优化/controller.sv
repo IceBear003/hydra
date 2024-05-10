@@ -1,7 +1,7 @@
 `include "./初赛作品/代码/已优化/port_frontend.sv"
 `include "./初赛作品/代码/已优化/ecc_encoder.sv"
 `include "./初赛作品/代码/已优化/ecc_decoder.sv"
-`include "./初赛作品/代码/已优化/sram.sv"
+`include "./初赛作品/代码/已优化/dual_port_sram.sv"
 `include "./初赛作品/代码/已优化/sram_state.sv"
 
 module controller(
@@ -111,6 +111,8 @@ reg [8:0] packet_length [15:0];
 //数据包处理批次下标
 reg [2:0] packet_batch [15:0];
 
+//上次写入的页地址
+reg [10:0] wr_last_page [15:0];
 //正在写入的页地址
 reg [10:0] wr_page [15:0];
 
@@ -121,7 +123,6 @@ reg ecc_result [15:0];
 //对于一个数据包末尾页的校验，其存储时间在数据包处理完毕之后
 //这时distribution可能已经被更新，所以需要额外存储ECC校验码目的SRAM
 reg [4:0] ecc_sram [15:0];
-
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -161,7 +162,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //主搜索逻辑
     //这里有个无伤大雅的小问题 FIXME
     always @(posedge clk) begin
-        if(new_packet_into_buf[port]) begin     //新包来了，重置寄存器
+        if(port_new_packet_into_buf[port]) begin     //新包来了，重置寄存器
             max_amount[port] <= 0;
             search_get[port] <= 0;
         end else if (searching[port] == 1) begin    //搜索中
@@ -265,7 +266,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt != 32) begin
-            jt_wr_din[cur_distribution[port]] <= wr_page[port];
+            jt_din[cur_distribution[port]] <= wr_page[port];
         end
     end
     
@@ -309,7 +310,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //队列末端时需要知道是哪个队列，防止这时候cur_dest_port/prior可能已经更新
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
-            last_dest_queue[port] <= {cur_distribution[port], cur_sram_index[port]};
+            last_dest_queue[port] <= {cur_dest_port[port], cur_prior[port]};
         end
     end
     //轮询把整个数据包插入队尾，这样不同端口就不会冲突
@@ -377,9 +378,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //引入ecc_result也是防止在开头一页batch=1的时候误触发ECC加码/存储操作
     always @(posedge clk) begin
         if(ecc_encoder_enable[port] == 1) begin
-            ecc_result <= 1;
+            ecc_result[port] <= 1;
         end else if(packet_batch[port] == 1) begin
-            ecc_result <= 0;
+            ecc_result[port] <= 0;
         end
     end
     //获取到结果就可以写了，即batch=1的时候
@@ -392,7 +393,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     always @(posedge clk) begin
         if(packet_batch[port] == 1 && ecc_result == 1) begin
-            ecc_wr_din[ecc_sram[port]] <= ecc_encoder_code[port];
+            ecc_din[ecc_sram[port]] <= ecc_encoder_code[port];
         end
     end
     always @(posedge clk) begin
@@ -519,7 +520,7 @@ generate for(sram = 0; sram < 16; sram = sram + 1) begin : SRAMs
         much_space[sram] <= free_space[sram] >= 512;
     end
 
-    sram sram
+    dual_port_sram dual_port_sram
     (
         .clk(clk),
         

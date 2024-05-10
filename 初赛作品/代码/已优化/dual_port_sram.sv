@@ -1,4 +1,4 @@
-module sram
+module dual_port_sram
 #(
     parameter ADDR_WIDTH = 14,
     parameter DATA_WIDTH = 16,
