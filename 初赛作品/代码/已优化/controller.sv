@@ -81,30 +81,46 @@ wire [15:0] ecc_decoder_cr_data_5 [15:0];
 wire [15:0] ecc_decoder_cr_data_6 [15:0];
 wire [15:0] ecc_decoder_cr_data_7 [15:0];
 
+//搜索相关寄存器
 reg [4:0] searching_sram_index [15:0];
 reg [4:0] searching_distribution [15:0];
 reg [10:0] max_amount [15:0];
-reg [5:0] search_cnt_32 [15:0];
+reg [5:0] search_cnt [15:0];
 reg searching [15:0];
 
+//持久化寄存器
+//当前正被写入SRAM的数据包
 reg [3:0] cur_dest_port [15:0];
 reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
+//上个被写入SRAM的数据包
+reg [6:0] last_dest_queue [15:0];   //目的队列(3+4)
+reg [10:0] last_page [15:0];        //被写入的页地址
 
+//数据包是否已经结束，驱动队列头尾地址更新
 reg packet_over [15:0];
+//数据包是否还未结束，防止已经与端口脱离关系的SRAM正常工作受干扰
 reg packet_not_over [15:0];
+//数据包的头尾地址(5+11)
 reg [15:0] packet_head_addr [15:0];
 reg [15:0] packet_tail_addr [15:0];
+//数据包已经被处理的半字数
 reg [8:0] packet_length [15:0];
+//数据包处理批次下标
 reg [2:0] packet_batch [15:0];
 
+//正在写入的页地址
 reg [10:0] wr_page [15:0];
 
+//ECC结果是否到被存储的时机
+//实际上是ecc使能打一拍
 reg ecc_result [15:0];
+//ECC结果存储的SRAM的编号
+//对于一个数据包末尾页的校验，其存储时间在数据包处理完毕之后
+//这时distribution可能已经被更新，所以需要额外存储ECC校验码目的SRAM
 reg [4:0] ecc_sram [15:0];
 
-reg [7:0] last_dest_queue [15:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -120,59 +136,59 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(port_new_packet_into_buf[port] == 1) begin
             searching[port] <= 1;
-        end else if(search_cnt_32[port] == 31) begin
+        end else if(search_cnt[port] == 31) begin
             searching[port] <= 0;
         end
     end
 
     always @(posedge clk) begin
         if(searching[port] == 1) begin
-            search_cnt_32[port] <= search_cnt_32[port] + 1;
+            search_cnt[port] <= search_cnt[port] + 1;
         end else begin
-            search_cnt_32[port] <= 0;
+            search_cnt[port] <= 0;
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             cur_dest_port[port] <= port_dest_port[port];
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             cur_prior[port] <= port_prior[port];
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             cur_length[port] <= port_length[port];
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             cur_distribution[port] <= searching_distribution[port];
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
-            search_cnt_32[port] <= 0;
+        if(search_cnt[port] == 32) begin
+            search_cnt[port] <= 0;
         end else begin
-            search_cnt_32[port] <= search_cnt_32[port] + 1;
+            search_cnt[port] <= search_cnt[port] + 1;
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             packet_head_addr[port] <= {searching_distribution[port], null_ptr[searching_distribution[port]]};
         end
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             packet_batch[port] <= 0;
         end else begin
             packet_batch[port] <= packet_batch[port] + 1;
@@ -180,7 +196,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             packet_length[port] <= 1;
         end else if(port_data_vld[port]) begin
             packet_length[port] <= packet_length[port] + 1;
@@ -188,7 +204,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             packet_not_over[port] <= 1;
         end else if(packet_length[port] == cur_length[port]) begin
             packet_not_over[port] <= 0;
@@ -196,7 +212,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(search_cnt_32[port] == 32) begin
+        if(search_cnt[port] == 32) begin
             packet_over[port] <= 0;
         end else if(packet_length[port] == cur_length[port]) begin
             packet_over[port] <= 1;
@@ -204,7 +220,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt_32 != 32) begin
+        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt != 32) begin
             jt_wr_en[cur_distribution[port]] <= 1;
         end else if(packet_not_over[port]) begin
             jt_wr_en[cur_distribution[port]] <= 0;
@@ -212,13 +228,13 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt_32 != 32) begin
+        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt != 32) begin
             jt_wr_addr[cur_distribution[port]] <= wr_last_page[port];
         end
     end
     
     always @(posedge clk) begin
-        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt_32 != 32) begin
+        if(port_data_vld[port] && packet_batch[port] == 0 && search_cnt != 32) begin
             jt_wr_din[cur_distribution[port]] <= wr_page[port];
         end
     end
@@ -238,7 +254,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7) begin
             wr_page[port] <= null_ptr[cur_distribution[port]];
-        end else if(search_cnt_32[port] == 32) begin
+        end else if(search_cnt[port] == 32) begin
             wr_page[port] <= null_ptr[cur_distribution[port]];
         end
     end
