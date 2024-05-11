@@ -310,7 +310,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             jt_din[cur_distribution[port]] <= null_ptr[cur_distribution[port]];
         end else if(port == cnt_32 >> 1 && packet_merge[port] &&
                     jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_din[queue_tail_page[last_dest_queue[port]]] <= packet_head_addr[port];
+            jt_din[queue_tail_sram[last_dest_queue[port]]] <= packet_head_addr[port];
         end
     end
     
