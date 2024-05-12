@@ -5,7 +5,7 @@
 `include "./初赛作品/代码/已优化/sram_state.sv"
 
 module controller(
-    input clk,
+    input clk, 
     input rst_n,
 
     //Config
@@ -22,138 +22,135 @@ module controller(
     input [15:0] ready,
     output reg [15:0] rd_sop = 0,
     output reg [15:0] rd_eop = 0,
-    output reg [15:0] rd_vld = 0,
-    output reg [15:0] [15:0] rd_data,
-
-    //port_frontend IOs
-    input [3:0] port_dest_port [15:0],
-    input [2:0] port_prior [15:0],
-    input [8:0] port_length [15:0],
-    output reg search_get [15:0],
-    input port_data_vld [15:0],
-    input [15:0] port_data [15:0],
-    input port_new_packet_into_buf [15:0],
-    //ecc_encoder IOs
-    output reg ecc_encoder_enable [15:0],
-    output reg [15:0] ecc_encoder_data_0 [15:0],
-    output reg [15:0] ecc_encoder_data_1 [15:0],
-    output reg [15:0] ecc_encoder_data_2 [15:0],
-    output reg [15:0] ecc_encoder_data_3 [15:0],
-    output reg [15:0] ecc_encoder_data_4 [15:0],
-    output reg [15:0] ecc_encoder_data_5 [15:0],
-    output reg [15:0] ecc_encoder_data_6 [15:0],
-    output reg [15:0] ecc_encoder_data_7 [15:0],
-    input [7:0] ecc_encoder_code [15:0],
-    //ecc_decoder IOs
-    output reg  ecc_decoder_enable [15:0],
-    output reg [15:0] ecc_decoder_data_0 [15:0],
-    output reg [15:0] ecc_decoder_data_1 [15:0],
-    output reg [15:0] ecc_decoder_data_2 [15:0],
-    output reg [15:0] ecc_decoder_data_3 [15:0],
-    output reg [15:0] ecc_decoder_data_4 [15:0],
-    output reg [15:0] ecc_decoder_data_5 [15:0],
-    output reg [15:0] ecc_decoder_data_6 [15:0],
-    output reg [15:0] ecc_decoder_data_7 [15:0],
-    output reg [7:0] ecc_decoder_code [15:0],
-    input [15:0] ecc_decoder_cr_data_0 [15:0],
-    input [15:0] ecc_decoder_cr_data_1 [15:0],
-    input [15:0] ecc_decoder_cr_data_2 [15:0],
-    input [15:0] ecc_decoder_cr_data_3 [15:0],
-    input [15:0] ecc_decoder_cr_data_4 [15:0],
-    input [15:0] ecc_decoder_cr_data_5 [15:0],
-    input [15:0] ecc_decoder_cr_data_6 [15:0],
-    input [15:0] ecc_decoder_cr_data_7 [15:0],
-    
-    //sram IOs
-    output reg sram_wr_en [31:0],
-    output reg [13:0] sram_wr_addr [31:0],
-    output reg [15:0] sram_din [31:0],
-
-    output reg sram_rd_en [31:0],
-    output reg [13:0] sram_rd_addr [31:0],
-    input [15:0] sram_dout [31:0],
-    //sram_state IOs
-    output reg  ecc_wr_en [31:0],
-    output reg [10:0] ecc_wr_addr [31:0],
-    output reg [7:0] ecc_din [31:0],
-
-    output reg ecc_rd_en [31:0],
-    output reg [10:0] ecc_rd_addr [31:0],
-    input [7:0] ecc_dout [31:0],
-
-    output reg jt_wr_en [31:0],
-    output reg [10:0] jt_wr_addr [31:0],
-    output reg [15:0] jt_din [31:0],
-
-    output reg jt_rd_en [31:0],
-    output reg [10:0] jt_rd_addr [31:0],
-    input [15:0] jt_dout [31:0],
-
-    output reg wr_op [31:0],
-    output reg [3:0] wr_port [31:0],
-    output reg rd_op [31:0],
-    output reg [3:0] rd_port [31:0],
-    output reg [10:0] rd_addr [31:0],
-
-    output reg [3:0] request_port [31:0],
-    input [10:0] page_amount [31:0],
-
-    input [10:0] null_ptr [31:0],
-    input [10:0] free_space [31:0]
+    output reg [15:0] rd_vld = 0,z
+    output reg [15:0] [15:0] rd_data
 );
-
-
-reg [4:0] queue_head_sram [127:0];
-reg [10:0] queue_head_page [127:0];
-reg [4:0] queue_tail_sram [127:0];
-reg [10:0] queue_tail_page [127:0];
-reg [7:0] queue_not_empty [15:0];
 
 reg [4:0] cnt_32 = 0;
 always @(posedge clk) begin
     cnt_32 <= cnt_32 + 1;
 end
-reg [3:0] cnt_16 = 0;
-always @(posedge clk) begin
-    cnt_16 <= cnt_16 + 1;
-end
 
-//搜索相关寄存器
+//port_frontend IOs
+wire [3:0] port_dest_port [15:0];
+wire [2:0] port_prior [15:0];
+wire [8:0] port_length [15:0];
+reg search_get [15:0];
+wire port_data_vld [15:0];
+wire [15:0] port_data [15:0];
+wire port_new_packet_into_buf [15:0];
+reg [2:0] packet_batch [15:0];
+reg packet_over [15:0];
+reg packet_not_over [15:0];
+reg [9:0] packet_length [15:0];
+//ecc_encoder IOs
+reg ecc_encoder_enable [15:0];
+reg [15:0] ecc_encoder_data_0 [15:0];
+reg [15:0] ecc_encoder_data_1 [15:0];
+reg [15:0] ecc_encoder_data_2 [15:0];
+reg [15:0] ecc_encoder_data_3 [15:0];
+reg [15:0] ecc_encoder_data_4 [15:0];
+reg [15:0] ecc_encoder_data_5 [15:0];
+reg [15:0] ecc_encoder_data_6 [15:0];
+reg [15:0] ecc_encoder_data_7 [15:0];
+wire [7:0] ecc_encoder_code [15:0];
+//ecc_decoder IOs
+reg  ecc_decoder_enable [15:0];
+reg [15:0] ecc_decoder_data_0 [15:0];
+reg [15:0] ecc_decoder_data_1 [15:0];
+reg [15:0] ecc_decoder_data_2 [15:0];
+reg [15:0] ecc_decoder_data_3 [15:0];
+reg [15:0] ecc_decoder_data_4 [15:0];
+reg [15:0] ecc_decoder_data_5 [15:0];
+reg [15:0] ecc_decoder_data_6 [15:0];
+reg [15:0] ecc_decoder_data_7 [15:0];
+reg [7:0] ecc_decoder_code [15:0];
+wire [15:0] ecc_decoder_cr_data_0 [15:0];
+wire [15:0] ecc_decoder_cr_data_1 [15:0];
+wire [15:0] ecc_decoder_cr_data_2 [15:0];
+wire [15:0] ecc_decoder_cr_data_3 [15:0];
+wire [15:0] ecc_decoder_cr_data_4 [15:0];
+wire [15:0] ecc_decoder_cr_data_5 [15:0];
+wire [15:0] ecc_decoder_cr_data_6 [15:0];
+wire [15:0] ecc_decoder_cr_data_7 [15:0];
+
 reg [4:0] searching_sram_index [15:0];
 reg [4:0] searching_distribution [15:0];
-reg [10:0] max_amount [15:0];
 reg [5:0] search_cnt [15:0];
 reg searching [15:0];
 
-//持久化寄存器
-//当前正被写入SRAM的数据包
 reg [3:0] cur_dest_port [15:0];
 reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
-//上个被写入SRAM的数据包
-reg [6:0] last_dest_queue [15:0];   //目的队列(3+4)
-reg [10:0] last_page [15:0];        //被写入的页地址
 
-//数据包是否已经结束，需要插入队列末端，指导队列头尾地址更新
-reg packet_merge[15:0];
-//数据包善后信号，从第一个包发送到最后一个包被写入sram
-reg packet_signal_reset[15:0];
-//上个数据包的头尾地址(5+11)
-reg [15:0] last_packet_head_addr [15:0];
-reg [15:0] last_packet_tail_addr [15:0];
-//数据包的头尾地址(5+11)
+//sram IOs
+reg sram_wr_en [31:0];
+reg [13:0] sram_wr_addr [31:0];
+reg [15:0] sram_din [31:0];
+
+reg sram_rd_en [31:0];
+reg [13:0] sram_rd_addr [31:0];
+wire [15:0] sram_dout [31:0];
+//sram_state IOs
+reg  ecc_wr_en [31:0];
+reg [10:0] ecc_wr_addr [31:0];
+reg [7:0] ecc_din [31:0];
+
+reg ecc_rd_en [31:0];
+reg [10:0] ecc_rd_addr [31:0];
+wire [7:0] ecc_dout [31:0];
+
+reg jt_wr_en [31:0];
+reg [10:0] jt_wr_addr [31:0];
+reg [15:0] jt_din [31:0];
+
+reg jt_rd_en [31:0];
+reg [10:0] jt_rd_addr [31:0];
+wire [15:0] jt_dout [31:0];
+
+reg wr_op [31:0];
+reg [3:0] wr_port [31:0];
+reg rd_op [31:0];
+reg [3:0] rd_port [31:0];
+reg [10:0] rd_addr [31:0];
+
+reg [3:0] request_port [31:0];
+reg [10:0] max_amount [31:0];
+wire [10:0] page_amount [31:0];
+
+wire [10:0] null_ptr [31:0];
+wire [10:0] free_space [31:0];
+
+reg [31:0] much_space;
+reg [31:0] locking;
+
+reg [10:0] wr_page [15:0];
+reg [10:0] wr_last_page [15:0];
+
 reg [15:0] packet_head_addr [15:0];
+reg [15:0] packet_head [15:0];
 reg [15:0] packet_tail_addr [15:0];
+reg [15:0] packet_tail [15:0];
+
+reg [6:0] last_dest_queue [15:0];
+
+//reg packet_over [15:0];
+reg packet_merge[15:0];
+//数据包是否还未结束，防止已经与端口脱离关系的SRAM正常工作受干扰
+//reg packet_not_over [15:0];
+//数据包的头尾地址(5+11)
+//reg [15:0] packet_head_addr [15:0];
+//reg [15:0] packet_tail_addr [15:0];
 //数据包已经被处理的半字数
-reg [8:0] packet_length [15:0];
+//reg [8:0] packet_length [15:0];
 //数据包处理批次下标
-reg [2:0] packet_batch [15:0];
+//reg [2:0] packet_batch [15:0];
 
 //上次写入的页地址
-reg [10:0] wr_last_page [15:0];
+//reg [10:0] wr_last_page [15:0];
 //正在写入的页地址
-reg [10:0] wr_page [15:0];
+//reg [10:0] wr_page [15:0];
 
 //ECC结果是否到被存储的时机
 //实际上是ecc_encoder_enable打一拍
@@ -163,10 +160,22 @@ reg ecc_result [15:0];
 //这时distribution可能已经被更新，所以需要额外存储ECC校验码目的SRAM
 reg [4:0] ecc_sram [15:0];
 
+reg [4:0] queue_tail_sram [127:0];
+reg [127:0] queue_not_empty = 0;
+reg [10:0] queue_tail_page [127:0];
+
+reg [3:0] cnt_16 = 0;
+reg [3:0] cnt_tem [15:0];
+always @(posedge clk) begin
+    cnt_16 <= cnt_16 + 1;
+end
+
+
+
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
-    always @(posedge clk) begin
-        full[port] <= (locking_c | much_space_c) == 0;
+     always @(posedge clk) begin
+        full[port] <= (locking | much_space) == 0;
     end
 
     /* 
@@ -194,30 +203,39 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //搜索计数器，等于31时正在进行第32次搜索，等于32之后一周期被清零
     //可以将其等于32的时刻认为是搜索全部完成的时候
     always @(posedge clk) begin
-        if(!rst_n) begin
+        //$display("se arch_cnt[port] = %d",search_cnt[port]);
+        //$display("searching[port] = %d",searching[port]);
+        if(search_cnt[port] == 33 || searching[port] == 0)begin
             search_cnt[port] <= 0;
-        end else if(searching[port] == 0) begin
-            search_cnt[port] <= 0;
+            //$display("se arch_cnt[port] = %d",search_cnt[port]);
         end else if(searching[port] == 1) begin
             search_cnt[port] <= search_cnt[port] + 1;
-        end
+            //$display("search_cnt[port] = %d",search_cnt[port]);
+        end 
     end
     //主搜索逻辑
-    //这里有个无伤大雅的小问题 FIXME
+    //这里有个无伤大雅的小问题（真的吗？我不觉得） FIXME
+    //问题：如何把max_amount置0
     always @(posedge clk) begin
         if(port_new_packet_into_buf[port]) begin     //新包来了，重置寄存器
             max_amount[port] <= 0;
             search_get[port] <= 0;
-        end else if (searching[port] == 0 && port_new_packet_into_buf[port] != 1) begin    //搜索中
-        end else if (locking[searching_sram_index[port]] == 1) begin    //不搜索锁定的  
-        end else if (free_space[searching_sram_index[port]] < port_length[port]) begin      //不搜索空间不够的
-        end else if (max_amount[port] > page_amount[searching_sram_index[port]]) begin     //不偏好己方端口数据量少的
-        end else begin
-            max_amount[port] <= page_amount[searching_sram_index[port]];
-            searching_distribution[port] <= searching_sram_index[port];
-            locking[searching_sram_index[port]] <= 1;
-            locking[searching_distribution[port]] <= 0;
-            search_get[port] <= 1;
+            //$display("11112345");
+        end else if (searching[port] == 1 || port_new_packet_into_buf[port] == 1) begin    //搜索中
+
+            if (locking[searching_sram_index[port]] == 1) begin    //不搜索锁定的  
+            end else if (free_space[searching_sram_index[port]] < port_length[port]) begin      //不搜索空间不够的
+            //$display("free_space[searching_sram_index[port]] = %d",free_space[searching_sram_index[port]]);
+            end else if (max_amount[port] > page_amount[searching_sram_index[port]]) begin     //不偏好己方端口数据量少的
+            //改： >
+            end else begin
+                max_amount[port] <= page_amount[searching_sram_index[port]];
+                searching_distribution[port] <= searching_sram_index[port];
+                locking[searching_sram_index[port]] <= 1;
+                locking[searching_distribution[port]] <= 0;
+                search_get[port] <= 1;
+                //$display("searching_sram_index[port] = %d, %d",searching_sram_index[port],port);
+        end
         end
     end
 
@@ -247,6 +265,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_distribution[port] <= searching_distribution[port];
+            //$display("searching_distribution[port] = %d",searching_distribution[port]);
         end
     end
 
@@ -257,7 +276,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             packet_batch[port] <= 0;
-        end else if(port_data_vld[port] || packet_length[port] == cur_length[port] + 1) begin
+        end else if(port_data_vld[port] || packet_over[port]) begin
             //数据包结束之后时刻自增
             //即使数据包处理完毕后仍可以当作打拍器使用
             packet_batch[port] <= packet_batch[port] + 1;
@@ -272,13 +291,29 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(port_data_vld[port]) begin      //有有效数据的周期自增
             packet_length[port] <= packet_length[port] + 1;
         end
+        //$display("packet_length[port] = %d",packet_length[port]);
     end
-    //从第一个有效数据发来到最后一个数据被写入SRAM
+
     always @(posedge clk) begin
-        if(port_data_vld[port] == 1 || packet_batch[port] == 0) begin
-            packet_signal_reset[port] <= 1;
-        end else if(packet_length[port] == cur_length[port] + 1) begin
-            packet_signal_reset[port] <= 0;
+        if(search_cnt[port] == 32) begin
+            packet_not_over[port] <= 1;
+        end else if(packet_length[port] == cur_length[port] + 1) begin  //最后一周期的有效数据
+            packet_not_over[port] <= 0;
+        end
+        //$display("packet_not_over[port] = %d",packet_not_over[port]);
+    end
+
+    always @(posedge clk) begin
+        if(cnt_16 == cnt_tem[port]) begin
+            packet_over[port] <= 0;
+        end else if(packet_length[port] == cur_length[port] + 1) begin  //最后一周期的有效数据
+            packet_over[port] <= 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(packet_length[port] == cur_length[port] + 1) begin  //最后一周期的有效数据
+            cnt_tem[port] <= cnt_16;
         end
     end
 
@@ -287,64 +322,59 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     */
     //当batch=0且有效数据的时候，更新上页对应的的跳转表指向这一页的地址
     //不能在数据包最开始的batch=0触发，所以search_cnt != 32
+    //改：search_cnt加上[port]
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_wr_en[cur_distribution[port]] <= 1;
-        end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-            jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_wr_en[queue_tail_sram[last_dest_queue[port]]] <= 1;  //这个1虽然无法重置但是无伤大雅
-        end else if(packet_signal_reset[port] == 1) begin
+        end else if(packet_not_over[port]) begin
             jt_wr_en[cur_distribution[port]] <= 0;
         end
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_wr_addr[cur_distribution[port]] <= wr_page[port];
-        end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_wr_addr[queue_tail_page[last_dest_queue[port]]] <= wr_last_page[port];
         end
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_din[cur_distribution[port]] <= null_ptr[cur_distribution[port]];
-        end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_din[queue_tail_sram[last_dest_queue[port]]] <= packet_head_addr[port];
         end
     end
     
     //数据包头尾地址的记载
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
-            packet_head_addr[port] <= {searching_distribution[port], null_ptr[searching_distribution[port]]};
+            packet_head[port] <= {searching_distribution[port], null_ptr[searching_distribution[port]]};
         end
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 0) begin
-            packet_tail_addr[port] <= {cur_distribution[port], wr_page[port]};
+            packet_tail[port] <= {cur_distribution[port], wr_page[port]};
+            $display("packet_tail_addr[port] = %d",packet_tail_addr[port]);
         end
     end
 
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
-            last_packet_head_addr[port] <= packet_head_addr[port];
+            packet_head_addr[port] <= packet_head[port];
         end
     end
 
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
-            last_packet_tail_addr[port] <= packet_tail_addr[port];
+            packet_tail_addr[port] <= packet_tail[port];
         end
     end
 
     //提前一周期生成下一页的地址
     //即使下一页没东西了也没副作用，因为该页没有被弹出空闲队列
     always @(posedge clk) begin
-        if(port_data_vld[port] && packet_batch[port] == 7) begin
+        if((port_data_vld[port] && packet_batch[port] == 7)) begin
             wr_page[port] <= null_ptr[cur_distribution[port]];
-        end else if(search_cnt[port] == 32) begin   //数据包头也需要提前生成
+            //$display("
+        end else if(search_cnt[port] == 32) begin   //数据包头也需要提前生成 改：searching_distribution
             wr_page[port] <= null_ptr[searching_distribution[port]];
+            //$display("null_ptr[searching_distribution[port]] = %d",null_ptr[searching_distribution[port]]);
         end
     end
     //生成下一页地址的时候，持久化上一页的地址，方便写跳转表
@@ -355,13 +385,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     //当真正开始使用页的时候，把它弹出空闲队列
     always @(posedge clk) begin
-        if(port_data_vld[port] && (packet_batch[port] == 7 
-            && packet_length[port] != cur_length[port])) begin
+        if((port_data_vld[port] && (packet_batch[port] == 7 
+        && packet_length[port] != cur_length[port]))) begin
+            //这边有问题
             wr_op[cur_distribution[port]] <= 1;
         end else if(search_cnt[port] == 32) begin
             wr_op[searching_distribution[port]] <= 1;
-        end else if(packet_signal_reset[port] == 1) begin
+        end else if(packet_not_over[port]) begin
             wr_op[cur_distribution[port]] <= 0;
+            //$display("1234321");
         end
     end
     //持久化上个数据包的目的队列(3+4)，这是为了在数据包处理完毕后，将其头尾插入
@@ -369,21 +401,35 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
             last_dest_queue[port] <= {cur_dest_port[port], cur_prior[port]};
+            $display("121122");
         end
     end
     //轮询把整个数据包插入队尾，这样不同端口就不会冲突
     always @(posedge clk) begin
-        if(port == cnt_32 >> 1 && packet_merge[port]) begin
+        if(port == cnt_16 && packet_over[port] && packet_merge[port] && packet_batch[port] != 7) begin
+            //把原来的尾巴的跳转表指向头
+            if(queue_not_empty[last_dest_queue[port]])
+                jt_wr_en[queue_tail_sram[last_dest_queue[port]]] <= 1;
+            jt_wr_addr[queue_tail_page[last_dest_queue[port]]] <= wr_last_page[port];
+            jt_din[queue_tail_page[last_dest_queue[port]]] <= packet_head_addr[port];
+            queue_not_empty[last_dest_queue[port]] <= 1;
             //把尾巴设置为新的尾地址
             queue_tail_sram[last_dest_queue[port]] <= packet_tail_addr[port][15:11];
             queue_tail_page[last_dest_queue[port]] <= packet_tail_addr[port][10:0];
+            $display("queue_tail_sram[last_dest_queue[port]] = %d",queue_tail_sram[last_dest_queue[port]]);
+            $display("last_dest_queue[port] = %d",last_dest_queue[port]);
+            $display("packet_head_addr[port] = %d",packet_head_addr[port]);
+            $display("packet_tail_addr[port] = %d",packet_tail_addr[port]);
+            
         end 
+        //$display("packet_over[port] = %d",packet_over[port]);
+        //$display("packet_merge[port] = %d",packet_merge[port]);
     end
     //是否已经插入优先级队列末端，1-需要插入，0-已经插入
     always @(posedge clk) begin
-        if(packet_length[port] == cur_length[port]) begin
+        if(packet_length[port] == cur_length[port] + 1) begin
             packet_merge[port] <= 1;
-        end else if(port == cnt_32 >> 1 && packet_merge[port]) begin
+        end else if(port == cnt_16 && packet_over[port]) begin
             packet_merge[port] <= 0;
         end 
     end
@@ -399,8 +445,13 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(port_data_vld[port]) begin
             sram_wr_en[cur_distribution[port]] <= 1;
-        end else if(packet_signal_reset[port] == 1) begin
+            //$display("wr_page[port] = %d",wr_page[port]);
+            //$display("packet_batch[port] = %d",packet_batch[port]);
+            //$display("cur_distribution[port] = %d",cur_distribution[port]);
+            //$display("sram_din[cur_distribution[port]] = %d",sram_din[cur_distribution[port]]);
+        end else if(packet_not_over[port]) begin    //数据包结束了就不归这个端口关了，就不能任由其设置为0了
             sram_wr_en[cur_distribution[port]] <= 0;
+            $display("111222");
         end
     end
     always @(posedge clk) begin
@@ -412,9 +463,38 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /*
         ECC校验
     */
+    always @(posedge clk) begin
+        if(port_data_vld[port] == 1) begin
+            case(packet_batch[port]) 
+                3'b000 : ecc_encoder_data_0[port] <= port_data[port];
+                3'b001 : ecc_encoder_data_1[port] <= port_data[port];
+                3'b010 : ecc_encoder_data_2[port] <= port_data[port];
+                3'b011 : ecc_encoder_data_3[port] <= port_data[port];
+                3'b100 : ecc_encoder_data_4[port] <= port_data[port];
+                3'b101 : ecc_encoder_data_5[port] <= port_data[port];
+                3'b110 : ecc_encoder_data_6[port] <= port_data[port];
+                3'b111 : ecc_encoder_data_7[port] <= port_data[port];
+            endcase
+        end else
+            ecc_encoder_data_0[port] <= 0;
+    end
+
+    always @(posedge clk) begin
+        if(port_data_vld[port] == 1) begin
+            if(packet_batch[port] == 0) begin
+                ecc_encoder_data_1[port] <= 0;
+                ecc_encoder_data_2[port] <= 0;
+                ecc_encoder_data_3[port] <= 0;
+                ecc_encoder_data_4[port] <= 0;
+                ecc_encoder_data_5[port] <= 0;
+                ecc_encoder_data_6[port] <= 0;
+                ecc_encoder_data_7[port] <= 0;
+            end
+        end
+    end
     //一页写完了或者数据包结束了的时候使能ECC
     always @(posedge clk) begin
-        if((port_data_vld[port] && packet_batch[port] == 7) || packet_length[port] == cur_length[port]) begin
+        if(port_data_vld[port] && (packet_batch[port] == 7 || packet_length[port] == cur_length[port])) begin
             ecc_encoder_enable[port] <= 1;
         end else begin
             ecc_encoder_enable[port] <= 0;
@@ -438,6 +518,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
     //获取到结果就可以写了，即batch=1的时候
+    //改：ecc_result加上[port]
     always @(posedge clk) begin
         if(packet_batch[port] == 1 && ecc_result[port] == 1) begin
             ecc_wr_en[ecc_sram[port]] <= 1;
@@ -455,41 +536,16 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             ecc_wr_addr[ecc_sram[port]] <= wr_last_page[port];
         end
     end
-    //不同批次的数据写入ECC缓冲区
-    always @(posedge clk) begin
-        if(port_data_vld[port]) begin
-            case(packet_batch[port])
-                3'd0: ecc_decoder_data_0[port] <= port_data[port];
-                3'd1: ecc_decoder_data_1[port] <= port_data[port];
-                3'd2: ecc_decoder_data_2[port] <= port_data[port];
-                3'd3: ecc_decoder_data_3[port] <= port_data[port];
-                3'd4: ecc_decoder_data_4[port] <= port_data[port];
-                3'd5: ecc_decoder_data_5[port] <= port_data[port];
-                3'd6: ecc_decoder_data_6[port] <= port_data[port];
-                3'd7: ecc_decoder_data_7[port] <= port_data[port];
-            endcase
-        end
-    end
-    //在新一批数据开始写入时清空ECC缓冲区
-    always @(posedge clk) begin
-        if(port_data_vld[port] == 1 && packet_batch[port] == 0) begin
-            ecc_encoder_data_1[port] <= 0;
-            ecc_encoder_data_2[port] <= 0;
-            ecc_encoder_data_3[port] <= 0;
-            ecc_encoder_data_4[port] <= 0;
-            ecc_encoder_data_5[port] <= 0;
-            ecc_encoder_data_6[port] <= 0;
-            ecc_encoder_data_7[port] <= 0;
-        end
-    end
-    
+    //改：增加search_get
     port_frontend port_frontend
     (
         .clk(clk),
+
         .wr_sop(wr_sop[port]),
         .wr_eop(wr_eop[port]),
         .wr_vld(wr_vld[port]),
         .wr_data(wr_data[port]),
+
         .dest_port(port_dest_port[port]),
         .prior(port_prior[port]),
         .length(port_length[port]),
@@ -538,54 +594,56 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     );
 end endgenerate
 
-reg much_space [31:0];
-reg locking [31:0];
-wire [31:0] much_space_c;
-wire [31:0] locking_c;
-
-assign much_space_c = {much_space[31], much_space[30], much_space[29], much_space[28], much_space[27], much_space[26], much_space[25], much_space[24], much_space[23], much_space[22], much_space[21], much_space[20], much_space[19], much_space[18], much_space[17], much_space[16], much_space[15], much_space[14], much_space[13], much_space[12], much_space[11], much_space[10], much_space[9], much_space[8], much_space[7], much_space[6], much_space[5], much_space[4], much_space[3], much_space[2], much_space[1], much_space[0]};
-assign locking_c = {locking[31], locking[30], locking[29], locking[28], locking[27], locking[26], locking[25], locking[24], locking[23], locking[22], locking[21], locking[20], locking[19], locking[18], locking[17], locking[16], locking[15], locking[14], locking[13], locking[12], locking[11], locking[10], locking[9], locking[8], locking[7], locking[6], locking[5], locking[4], locking[3], locking[2], locking[1], locking[0]};
-
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     
     always @(posedge clk) begin
         much_space[sram] <= free_space[sram] >= 512;
+        //$display("null_ptr[sram] = %d",null_ptr[sram]);
     end
 
     dual_port_sram dual_port_sram
     (
         .clk(clk),
+        .rst_n(rst_n),
+        
         .wr_en(sram_wr_en[sram]),
         .wr_addr(sram_wr_addr[sram]),
         .din(sram_din[sram]),
+        
         .rd_en(sram_rd_en[sram]),
         .rd_addr(sram_rd_addr[sram]),
         .dout(sram_dout[sram])
     );
 
-    sram_state sram_state
+    sram_state sram_state//改：rst_n
     (
         .clk(clk),
+        .rst_n(rst_n),
+
         .ecc_wr_en(ecc_wr_en[sram]),
         .ecc_wr_addr(ecc_wr_addr[sram]),
         .ecc_din(ecc_din[sram]),
         .ecc_rd_en(ecc_rd_en[sram]),
         .ecc_rd_addr(ecc_rd_addr[sram]),
         .ecc_dout(ecc_dout[sram]),
+
         .jt_wr_en(jt_wr_en[sram]),
         .jt_wr_addr(jt_wr_addr[sram]),
         .jt_din(jt_din[sram]),
         .jt_rd_en(jt_rd_en[sram]),
         .jt_rd_addr(jt_rd_addr[sram]),
         .jt_dout(jt_dout[sram]),
-        .wr_op(wr_op[sram]),
+
+        .wr_or(wr_op[sram]),
         .wr_port(wr_port[sram]),
         .rd_addr(rd_addr[sram]),
         .rd_op(rd_op[sram]),
         .rd_port(rd_port[sram]),
+
         .request_port(request_port[sram]),
         .page_amount(page_amount[sram]),
+
         .null_ptr(null_ptr[sram]),
         .free_space(free_space[sram])
     );
