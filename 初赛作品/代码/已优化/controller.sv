@@ -4,6 +4,12 @@
 `include "./初赛作品/代码/已优化/dual_port_sram.sv"
 `include "./初赛作品/代码/已优化/sram_state.sv"
 
+// `include "port_frontend.sv"
+// `include "ecc_encoder.sv"
+// `include "ecc_decoder.sv"
+// `include "dual_port_sram.sv"
+// `include "sram_state.sv"
+
 module controller(
     input clk,
     input rst_n,
@@ -102,13 +108,6 @@ module controller(
     input [10:0] free_space [31:0]
 );
 
-
-reg [4:0] queue_head_sram [127:0];
-reg [10:0] queue_head_page [127:0];
-reg [4:0] queue_tail_sram [127:0];
-reg [10:0] queue_tail_page [127:0];
-reg [7:0] queue_not_empty [15:0];
-
 reg [4:0] cnt_32 = 0;
 always @(posedge clk) begin
     cnt_32 <= cnt_32 + 1;
@@ -132,7 +131,7 @@ reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
 //上个被写入SRAM的数据包
-reg [6:0] last_dest_queue [15:0];   //目的队列(3+4)
+reg [2:0] last_dest_queue [15:0];   //目的队列(3+4)
 reg [10:0] last_page [15:0];        //被写入的页地址
 
 //数据包是否已经结束，需要插入队列末端，指导队列头尾地址更新
@@ -163,8 +162,197 @@ reg ecc_result [15:0];
 //这时distribution可能已经被更新，所以需要额外存储ECC校验码目的SRAM
 reg [4:0] ecc_sram [15:0];
 
+
+//读取
+//端口正在请求哪个SRAM的数据
+reg [4:0] reading_sram [15:0];
+//SRAM正在处理哪个端口的请求
+reg [3:0] processing_request [31:0];
+//端口请求的页地址
+reg [10:0] reading_page [15:0];
+//端口请求的半字数
+reg [2:0] reading_batch [15:0];
+//数据准备完毕，端口可进一步处理
+reg handshake [31:0];
+
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
+
+    //端口正在读取哪个队列的数据包
+    //从0到7优先度递减
+    reg [2:0] reading_priority;
+    //端口正在读取的数据包的剩余长度(半字)
+    reg [8:0] reading_packet_length;
+    //输出计数器-页终止位
+    reg [3:0] output_batch;
+    //输出计数器-页终止位
+    reg [2:0] end_batch;
+
+    reg packet_length_got;
+
+    always @(posedge clk) begin
+        if(handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == 1) begin
+            ecc_decoder_enable[port] <= 1;
+        end else begin
+            ecc_decoder_enable[port] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(ecc_decoder_enable[port] == 1) begin
+            output_batch <= 0;
+        end else if(output_batch <= reading_batch[port]) begin
+            output_batch <= output_batch + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(output_batch <= reading_batch[port]) begin
+            case(output_batch) 
+                3'd0: rd_data[port] <= ecc_decoder_cr_data_0[port];
+                3'd1: rd_data[port] <= ecc_decoder_cr_data_1[port];
+                3'd2: rd_data[port] <= ecc_decoder_cr_data_2[port];
+                3'd3: rd_data[port] <= ecc_decoder_cr_data_3[port];
+                3'd4: rd_data[port] <= ecc_decoder_cr_data_4[port];
+                3'd5: rd_data[port] <= ecc_decoder_cr_data_5[port];
+                3'd6: rd_data[port] <= ecc_decoder_cr_data_6[port];
+                3'd7: rd_data[port] <= ecc_decoder_cr_data_7[port];
+            endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        rd_vld[port] <= output_batch <= end_batch[port];
+    end
+
+    always @(posedge clk) begin
+        if(rd_vld[port] == 1 && packet_length_got == 0) begin
+            reading_packet_length <= rd_data[port];
+        end else if(rd_vld[port] == 1) begin
+            reading_packet_length <= reading_packet_length - 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(packet_length_got == 1 && output_batch == end_batch[port]) begin
+            end_batch <= reading_batch[port];
+            reading_batch[port] <= reading_packet_length > 7 ? 7 : reading_packet_length;
+        end else if(packet_length_got == 0) begin
+            end_batch <= 7;
+            reading_batch[port] <= 7;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(rd_sop[port] == 1) begin
+            packet_length_got <= 0;
+        end else if(rd_vld[port] == 1 && packet_length_got[port] == 0) begin 
+            packet_length_got[port] <= 1;
+        end
+    end
+
+    //跳转表应当判空
+    always @(posedge clk) begin
+        if(rd_sop[port] == 1 ||
+            (handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == 1)) begin
+            reading_sram[port] <= queue_head_sram[reading_priority];
+            reading_page[port] <= queue_head_page[reading_priority];
+            {queue_head_sram[reading_priority], queue_head_page[reading_priority]} <= jt_dout[reading_sram[port]];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(rd_vld[port] == 1 && reading_packet_length == 0) begin
+            rd_eop[port] <= 1;
+            next_packet <= 1;
+        end else begin
+            rd_eop[port] <= 0;
+        end
+    end
+
+    reg next_packet;
+    reg [7:0] wrr_mask;
+    reg [2:0] wrr_start;
+    reg [2:0] wrr_end;
+
+    reg [7:0] queue_waiting;
+    
+    //WRR位掩码刷新，当next_packet为高时刷新
+    always @(posedge clk) begin
+        if(next_packet == 0) begin
+        end else if(wrr_start < wrr_end) begin
+            wrr_mask[wrr_start] <= 0;
+            wrr_start <= wrr_start + 1;
+        end else if(wrr_end > 1) begin
+            wrr_start <= 0;
+            wrr_end <= wrr_end - 1;
+            wrr_mask <= 8'hFF >> (7 - wrr_end);
+        end else begin
+            wrr_start <= 0;
+            wrr_end <= 7;
+            wrr_mask <= 8'hFF;
+        end
+    end
+
+    //等待读取的队列（被掩码处理过）在next_packet为高时刷新
+    //注意，这里用的是上次next_packet已经刷新好的wrr_mask而不是这次新刷新的
+    always @(posedge clk) begin
+        if(next_packet == 1 && wrr_en == 1 && (wrr_mask & queue_not_empty != 0)) begin
+            queue_waiting <= wrr_mask & queue_not_empty;
+        end else begin
+            queue_waiting <= queue_not_empty;
+        end
+    end
+
+    reg waiting_ready;
+    //根据独热码判定最优先位置
+    always @(posedge clk) begin
+        if(wr_eop[port] == 1) begin
+            waiting_ready <= 1;
+        end else if(ready[port] == 1) begin
+            waiting_ready <= 0;
+        end
+    end
+
+    //根据独热码判定最优先位置
+    always @(posedge clk) begin
+        if(ready[port] == 1 && waiting_ready == 1) begin
+            case(queue_waiting & ~(queue_waiting - 1)) 
+                8'h01: reading_priority[port] <= 0;
+                8'h02: reading_priority[port] <= 1;
+                8'h04: reading_priority[port] <= 2;
+                8'h08: reading_priority[port] <= 3;
+                8'h10: reading_priority[port] <= 4;
+                8'h20: reading_priority[port] <= 5;
+                8'h40: reading_priority[port] <= 6;
+                8'h80: reading_priority[port] <= 7;
+                default: begin end
+            endcase
+        end
+    end
+
+    //ready时拉高sop
+    always @(posedge clk) begin
+        if(rd_sop[port] == 1) begin
+            rd_sop[port] <= 0;
+        end else if(ready[port]) begin
+            rd_sop[port] <= 1;
+        end
+    end
+
+    //初始化当前包的状态信息
+    always @(posedge clk) begin
+        if(rd_sop[port] == 1) begin
+            reading_packet_length[port] <= 0;
+        end
+    end
+    
+    reg [4:0] queue_head_sram [7:0];
+    reg [10:0] queue_head_page [7:0];
+    reg [4:0] queue_tail_sram [7:0];
+    reg [10:0] queue_tail_page [7:0];
+    reg [7:0] queue_not_empty;
+
     always @(posedge clk) begin
         full[port] <= (locking_c | much_space_c) == 0;
     end
@@ -366,7 +554,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //队列末端时需要知道是哪个队列，防止这时候cur_dest_port/prior可能已经更新
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
-            last_dest_queue[port] <= {cur_dest_port[port], cur_prior[port]};
+            last_dest_queue[port] <= cur_prior[port];
         end
     end
     //轮询把整个数据包插入队尾，这样不同端口就不会冲突
@@ -544,6 +732,148 @@ assign locking_c = {locking[31], locking[30], locking[29], locking[28], locking[
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
+
+    wire [15:0] requesting_ports;
+    reg [15:0] requesting_ports_masked;
+
+    reg next_request;
+    reg [15:0] mask;
+    reg [3:0] mask_start;
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            mask_start <= 0;
+        end else if(mask_next) begin
+            mask_start <= mask_start + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(mask_next) begin
+            mask <= 16'hFFFF >> mask_start;
+        end
+    end
+
+    assign requesting_ports = {
+        reading_sram[0] == sram,
+        reading_sram[1] == sram,
+        reading_sram[2] == sram,
+        reading_sram[3] == sram,
+        reading_sram[4] == sram,
+        reading_sram[5] == sram,
+        reading_sram[6] == sram,
+        reading_sram[7] == sram,
+        reading_sram[8] == sram,
+        reading_sram[9] == sram,
+        reading_sram[10] == sram,
+        reading_sram[11] == sram,
+        reading_sram[12] == sram,
+        reading_sram[13] == sram,
+        reading_sram[14] == sram,
+        reading_sram[15] == sram
+    };
+
+    always @(posedge clk) begin
+        if(requesting_ports_ports & mask != 0) begin
+            requesting_ports_masked <= requesting_ports & mask;
+        end else begin
+            requesting_ports_masked <= requesting_ports;
+        end
+    end
+
+    reg processing_enable;
+    reg [3:0] processing_batch; //初值应该为9
+    reg [3:0] processing_port;
+
+    reg start_of_page;
+
+    always @(posedge clk) begin
+        processing_enable <= requesting_ports_masked != 0;
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 1 && start_of_page == 1) begin
+            processing_batch <= 0;
+            start_of_page <= 0;
+        end else if(processing_batch <= reading_batch[processing_port] + 1) begin
+            processing_batch <= processing_batch + 1;
+        end else begin
+            start_of_page <= 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 1 && start_of_page == 1) begin
+            case(requesting_ports_masked & ~(requesting_ports_masked - 1))
+                16'h0001: processing_port <= 4'h0;
+                16'h0002: processing_port <= 4'h1;
+                16'h0004: processing_port <= 4'h2;
+                16'h0008: processing_port <= 4'h3;
+                16'h0010: processing_port <= 4'h4;
+                16'h0020: processing_port <= 4'h5;
+                16'h0040: processing_port <= 4'h6;
+                16'h0080: processing_port <= 4'h7;
+                16'h0100: processing_port <= 4'h8;
+                16'h0200: processing_port <= 4'h9;
+                16'h0400: processing_port <= 4'hA;
+                16'h0800: processing_port <= 4'hB;
+                16'h1000: processing_port <= 4'hC;
+                16'h2000: processing_port <= 4'hD;
+                16'h4000: processing_port <= 4'hE;
+                16'h8000: processing_port <= 4'hF;
+                default: begin end
+            endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 1 && processing_batch == 0) begin
+            jt_rd_en[sram] <= 1;
+            jt_rd_addr[sram] <= reading_page[processing_port];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 0) begin
+        end else if(processing_batch == 0) begin
+            ecc_rd_en[sram] <= 1;
+            ecc_rd_addr[sram] <= reading_page[processing_port];
+        end else if(processing_batch == 1) begin
+            ecc_decoder_code[processing_port] <= ecc_dout[sram];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 1 && processing_batch <= reading_batch[processing_port]) begin
+            sram_rd_en[sram] <= 1;
+            sram_rd_addr[sram] <= {reading_page[processing_port],processing_batch};
+        end
+    end
+
+    always @(posedge clk) begin
+        if(processing_enable == 1) begin
+            case(processing_batch)
+                4'h1: ecc_decoder_data_0[processing_port] <= sram_dout[sram];
+                4'h2: ecc_decoder_data_1[processing_port] <= sram_dout[sram];
+                4'h3: ecc_decoder_data_2[processing_port] <= sram_dout[sram];
+                4'h4: ecc_decoder_data_3[processing_port] <= sram_dout[sram];
+                4'h5: ecc_decoder_data_4[processing_port] <= sram_dout[sram];
+                4'h6: ecc_decoder_data_5[processing_port] <= sram_dout[sram];
+                4'h7: ecc_decoder_data_6[processing_port] <= sram_dout[sram];
+                4'h8: ecc_decoder_data_7[processing_port] <= sram_dout[sram];
+                4'h0: begin
+                    ecc_decoder_data_0[processing_port] <= 0;
+                    ecc_decoder_data_1[processing_port] <= 0;
+                    ecc_decoder_data_2[processing_port] <= 0;
+                    ecc_decoder_data_3[processing_port] <= 0;
+                    ecc_decoder_data_4[processing_port] <= 0;
+                    ecc_decoder_data_5[processing_port] <= 0;
+                    ecc_decoder_data_6[processing_port] <= 0;
+                    ecc_decoder_data_7[processing_port] <= 0;
+                end
+            endcase
+        end
+    end
     
     always @(posedge clk) begin
         much_space[sram] <= free_space[sram] >= 512;
