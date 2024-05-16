@@ -808,13 +808,13 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     always @(posedge clk) begin
         if(!rst_n) begin
             mask_start <= 0;
-        end else if(mask_next) begin
+        end else if(next_request) begin
             mask_start <= mask_start + 1;
         end
     end
 
     always @(posedge clk) begin
-        if(mask_next) begin
+        if(next_request) begin
             mask <= 16'hFFFF >> mask_start;
         end
     end
