@@ -798,7 +798,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     };
 
     always @(posedge clk) begin
-        if(requesting_ports_ports & mask != 0) begin
+        if(requesting_ports & mask != 0) begin
             requesting_ports_masked <= requesting_ports & mask;
         end else begin
             requesting_ports_masked <= requesting_ports;
