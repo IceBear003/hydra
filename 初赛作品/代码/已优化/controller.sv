@@ -181,7 +181,6 @@ reg [2:0] reading_batch [15:0];
 //数据准备完毕，端口可进一步处理
 reg handshake [31:0];
 
-reg [3:0] sram_distribution [31:0];
 reg sram_occupy [31:0];
 
 genvar port;
@@ -477,7 +476,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
-            sram_distribution[searching_distribution[port]] <= port;
             sram_occupy[searching_distribution[port]] <= 1;
         end else if(port_data_vld[port] && packet_length[port] == cur_length[port] && packet_length[port]) begin
             sram_occupy[cur_distribution[port]] <= 0;
@@ -531,8 +529,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             jt_wr_en[queue_tail_sram[last_dest_queue[port]]] <= 1;  //这个1虽然无法重置但是无伤大雅
             last_distribution[port] <= queue_tail_sram[last_dest_queue[port]];
         end else if(jt_wr_en[last_distribution[port]] == 1 && !packet_merge[port] 
-                    && ((sram_occupy[last_distribution[port]] && 
-                    packet_batch[sram_distribution[last_distribution[port]]] != 7) 
+                    && ((sram_occupy[last_distribution[port]] && packet_batch[port] != 7) 
                     || !sram_occupy[last_distribution[port]])) begin
             jt_wr_en[last_distribution[port]] <= 0;
         end else if(packet_batch[port] != 7 || packet_length[port] == cur_length[port] + 1) begin
