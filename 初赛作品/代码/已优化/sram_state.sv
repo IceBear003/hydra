@@ -1,3 +1,5 @@
+`include "./初赛作品/代码/已优化/fifo_null_pages.sv"
+
 module sram_state
 #(
     parameter ECC_STORAGE_ADDR_WIDTH = 11,

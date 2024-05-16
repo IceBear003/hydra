@@ -95,7 +95,12 @@ module controller(
     output reg [10:0] jt_rd_addr [31:0],
     input [15:0] jt_dout [31:0],
 
+    output reg wr_or [31:0],
     output reg wr_op [31:0],
+    
+    output reg [11:0] delta_free_space [31:0],
+    output reg [11:0] delta_page_amount [31:0],
+
     output reg [3:0] wr_port [31:0],
     output reg rd_op [31:0],
     output reg [3:0] rd_port [31:0],
@@ -130,6 +135,7 @@ reg [3:0] cur_dest_port [15:0];
 reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
+reg [4:0] last_distribution [15:0];
 //上个被写入SRAM的数据包
 reg [2:0] last_dest_queue [15:0];   //目的队列(3+4)
 reg [10:0] last_page [15:0];        //被写入的页地址
@@ -174,6 +180,9 @@ reg [10:0] reading_page [15:0];
 reg [2:0] reading_batch [15:0];
 //数据准备完毕，端口可进一步处理
 reg handshake [31:0];
+
+reg [3:0] sram_distribution [31:0];
+reg sram_occupy [31:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -403,19 +412,18 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(!rst_n) begin
             search_cnt[port] <= 0;
-        end else if(searching[port] == 0) begin
-            search_cnt[port] <= 0;
         end else if(searching[port] == 1) begin
             search_cnt[port] <= search_cnt[port] + 1;
+        end else if(searching[port] == 0) begin
+            search_cnt[port] <= 0;
         end
     end
     //主搜索逻辑
     //这里有个无伤大雅的小问题 FIXME
     always @(posedge clk) begin
-        if(port_new_packet_into_buf[port]) begin     //新包来了，重置寄存器
+        if (!(searching[port] == 1 || port_new_packet_into_buf[port] == 1)) begin     //新包来了，重置寄存器
             max_amount[port] <= 0;
             search_get[port] <= 0;
-        end else if (searching[port] == 0 && port_new_packet_into_buf[port] != 1) begin    //搜索中
         end else if (locking[searching_sram_index[port]] == 1) begin    //不搜索锁定的  
         end else if (free_space[searching_sram_index[port]] < port_length[port]) begin      //不搜索空间不够的
         end else if (max_amount[port] > page_amount[searching_sram_index[port]]) begin     //不偏好己方端口数据量少的
@@ -457,14 +465,35 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
+    always @(posedge clk) begin
+        if(search_cnt[port] == 32) begin
+            wr_op[searching_distribution[port]] <= 1;
+            delta_free_space[searching_distribution[port]] <= ((port_length[port] - 1) >> 3) + 1;
+            delta_page_amount[searching_distribution[port]] <= ((port_length[port] - 1) >> 3) + 1;
+        end else if(wr_op[cur_distribution[port]] == 1) begin
+            wr_op[cur_distribution[port]] <= 0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(search_cnt[port] == 32) begin
+            sram_distribution[searching_distribution[port]] <= port;
+            sram_occupy[searching_distribution[port]] <= 1;
+        end else if(port_data_vld[port] && packet_length[port] == cur_length[port] && packet_length[port]) begin
+            sram_occupy[cur_distribution[port]] <= 0;
+        end
+    end
+
     /*
         处理数据包
     */
     //处理数据包批次，在搜索完成的时候重置为0
     always @(posedge clk) begin
-        if(search_cnt[port] == 32) begin
+        if(!rst_n) begin
             packet_batch[port] <= 0;
-        end else if(port_data_vld[port] || packet_length[port] == cur_length[port] + 1) begin
+        end else if(search_cnt[port] == 32 || packet_length[port] == cur_length[port] + 1) begin
+            packet_batch[port] <= 0;
+        end else if(port_data_vld[port]) begin
             //数据包结束之后时刻自增
             //即使数据包处理完毕后仍可以当作打拍器使用
             packet_batch[port] <= packet_batch[port] + 1;
@@ -478,13 +507,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             packet_length[port] <= 1;
         end else if(port_data_vld[port]) begin      //有有效数据的周期自增
             packet_length[port] <= packet_length[port] + 1;
+        end else if(packet_length[port] == cur_length[port] + 1) begin
+            packet_length[port] <= 0;
         end
     end
     //从第一个有效数据发来到最后一个数据被写入SRAM
     always @(posedge clk) begin
-        if(port_data_vld[port] == 1 || packet_batch[port] == 0) begin
+        if(search_cnt[port] == 32) begin
             packet_signal_reset[port] <= 1;
-        end else if(packet_length[port] == cur_length[port] + 1) begin
+        end else if(!port_data_vld[port]) begin
             packet_signal_reset[port] <= 0;
         end
     end
@@ -492,32 +523,39 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /*
         写跳转表
     */
-    //当batch=0且有效数据的时候，更新上页对应的的跳转表指向这一页的地址
-    //不能在数据包最开始的batch=0触发，所以search_cnt != 32
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_wr_en[cur_distribution[port]] <= 1;
         end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-            jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
+            jt_wr_en[queue_tail_sram[last_dest_queue[port]]] != 1) begin
             jt_wr_en[queue_tail_sram[last_dest_queue[port]]] <= 1;  //这个1虽然无法重置但是无伤大雅
+            last_distribution[port] <= queue_tail_sram[last_dest_queue[port]];
+        end else if(jt_wr_en[last_distribution[port]] == 1 && !packet_merge[port] 
+                    && ((sram_occupy[last_distribution[port]] && 
+                    packet_batch[sram_distribution[last_distribution[port]]] != 7) 
+                    || !sram_occupy[last_distribution[port]])) begin
+            jt_wr_en[last_distribution[port]] <= 0;
+        end else if(packet_batch[port] != 7 || packet_length[port] == cur_length[port] + 1) begin
+            jt_wr_en[cur_distribution[port]] <= 0;
         end
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_wr_addr[cur_distribution[port]] <= wr_page[port];
         end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_wr_addr[queue_tail_page[last_dest_queue[port]]] <= wr_last_page[port];
+                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] != 1) begin
+            jt_wr_addr[queue_tail_sram[last_dest_queue[port]]] <= wr_last_page[port];
         end
     end
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
             jt_din[cur_distribution[port]] <= null_ptr[cur_distribution[port]];
         end else if(port == cnt_32 >> 1 && packet_merge[port] &&
-                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] == 0 ) begin
-            jt_din[queue_tail_sram[last_dest_queue[port]]] <= packet_head_addr[port];
+                    jt_wr_en[queue_tail_sram[last_dest_queue[port]]] != 1) begin
+            jt_din[queue_tail_sram[last_dest_queue[port]]] <= last_packet_head_addr[port];
         end
     end
+    
     
     //数据包头尾地址的记载
     always @(posedge clk) begin
@@ -554,7 +592,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     //生成下一页地址的时候，持久化上一页的地址，方便写跳转表
     always @(posedge clk) begin
-        if(port_data_vld[port] && packet_batch[port] == 7) begin
+        if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
             wr_last_page[port] <= wr_page[port];
         end
     end
@@ -562,11 +600,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(port_data_vld[port] && (packet_batch[port] == 7 
             && packet_length[port] != cur_length[port])) begin
-            wr_op[cur_distribution[port]] <= 1;
+            wr_or[cur_distribution[port]] <= 1;
         end else if(search_cnt[port] == 32) begin
-            wr_op[searching_distribution[port]] <= 1;
+            wr_or[searching_distribution[port]] <= 1;
         end else if(packet_signal_reset[port] == 1) begin
-            wr_op[cur_distribution[port]] <= 0;
+            wr_or[cur_distribution[port]] <= 0;
         end
     end
     //持久化上个数据包的目的队列(3+4)，这是为了在数据包处理完毕后，将其头尾插入
@@ -578,10 +616,14 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     //轮询把整个数据包插入队尾，这样不同端口就不会冲突
     always @(posedge clk) begin
-        if(port == cnt_32 >> 1 && packet_merge[port]) begin
-            //把尾巴设置为新的尾地址
-            queue_tail_sram[last_dest_queue[port]] <= packet_tail_addr[port][15:11];
-            queue_tail_page[last_dest_queue[port]] <= packet_tail_addr[port][10:0];
+        if(port == cnt_32 >> 1 && packet_merge[port] && jt_wr_en[queue_tail_sram[last_dest_queue[port]]] != 1) begin
+            if(queue_not_empty[last_dest_queue[port]]) begin
+                queue_not_empty[last_dest_queue[port]] <= 0;
+                queue_head_sram[last_dest_queue[port]] <= last_packet_head_addr[port][15:11];
+                queue_head_page[last_dest_queue[port]] <= last_packet_head_addr[port][10:0];
+            end
+            queue_tail_sram[last_dest_queue[port]] <= last_packet_tail_addr[port][15:11];
+            queue_tail_page[last_dest_queue[port]] <= last_packet_tail_addr[port][10:0];
         end 
     end
     //是否已经插入优先级队列末端，1-需要插入，0-已经插入
@@ -925,6 +967,11 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         much_space[sram] <= free_space[sram] >= 512;
     end
 
+    always @(posedge clk) begin
+        if(!rst_n)
+            rd_op[sram] <= 0;
+    end
+
     dual_port_sram dual_port_sram
     (
         .clk(clk),
@@ -951,11 +998,16 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .jt_rd_en(jt_rd_en[sram]),
         .jt_rd_addr(jt_rd_addr[sram]),
         .jt_dout(jt_dout[sram]),
+        
+        .wr_or(wr_or[sram]),
         .wr_op(wr_op[sram]),
         .wr_port(wr_port[sram]),
         .rd_addr(rd_addr[sram]),
         .rd_op(rd_op[sram]),
         .rd_port(rd_port[sram]),
+        .delta_free_space(delta_free_space[sram]),
+        .delta_page_amount(delta_page_amount[sram]),
+
         .request_port(request_port[sram]),
         .page_amount(page_amount[sram]),
         .null_ptr(null_ptr[sram]),
