@@ -184,30 +184,36 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //端口正在读取的数据包的剩余长度(半字)
     reg [8:0] reading_packet_length;
     //输出计数器-页终止位
-    reg [3:0] output_batch;
+    reg [3:0] output_batch; //建议初始为8+
     //输出计数器-页终止位
     reg [2:0] end_batch;
-
+    //当前数据包是否已经读取长度
     reg packet_length_got;
 
+    //当SRAM读取完当前页的所有半字
+    //并发来握手信号时，就使能ECC
     always @(posedge clk) begin
-        if(handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == 1) begin
+        if(handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == port) begin
             ecc_decoder_enable[port] <= 1;
         end else begin
             ecc_decoder_enable[port] <= 0;
         end
     end
 
+    //当ECC正在运行的时候，输出计数器重置
+    //在下一个周期开始累加直到当前页的最后一个半字
+    //batch 0到1的时候，发送第一个半字（在一周期后生效）
     always @(posedge clk) begin
         if(ecc_decoder_enable[port] == 1) begin
             output_batch <= 0;
-        end else if(output_batch <= reading_batch[port]) begin
+        end else if(output_batch <= end_batch) begin
             output_batch <= output_batch + 1;
         end
     end
 
+    //根据batch发送半字
     always @(posedge clk) begin
-        if(output_batch <= reading_batch[port]) begin
+        if(output_batch <= end_batch) begin
             case(output_batch) 
                 3'd0: rd_data[port] <= ecc_decoder_cr_data_0[port];
                 3'd1: rd_data[port] <= ecc_decoder_cr_data_1[port];
@@ -221,52 +227,65 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
+    //rd vld使能，当output batch累计到页尾之后，则为0，表示不发送数据
     always @(posedge clk) begin
-        rd_vld[port] <= output_batch <= end_batch[port];
+        rd_vld[port] <= output_batch <= end_batch;
     end
 
+    //读取数据包的第一个半字的高9位
+    //得到数据包的长度，当然应该减去控制半字本身所占的一半字
+
+    //每当发送一个数据减1，直到0为止
     always @(posedge clk) begin
         if(rd_vld[port] == 1 && packet_length_got == 0) begin
-            reading_packet_length <= rd_data[port];
-        end else if(rd_vld[port] == 1) begin
+            reading_packet_length <= rd_data[port][15:7] - 1;
+        end else if(output_batch <= end_batch) begin
             reading_packet_length <= reading_packet_length - 1;
         end
     end
 
+    //当前页发完了，即将要发下一页了
+    //持久化下一页的计数器长度
     always @(posedge clk) begin
-        if(packet_length_got == 1 && output_batch == end_batch[port]) begin
+        if(packet_length_got == 1 && output_batch == end_batch) begin
             end_batch <= reading_batch[port];
-            reading_batch[port] <= reading_packet_length > 7 ? 7 : reading_packet_length;
+            reading_batch[port] <= reading_packet_length > 15 ? 7 : reading_packet_length - 7;
         end else if(packet_length_got == 0) begin
             end_batch <= 7;
             reading_batch[port] <= 7;
         end
     end
 
+    //维护packet length got在获取到长度之前一直为0
     always @(posedge clk) begin
         if(rd_sop[port] == 1) begin
             packet_length_got <= 0;
-        end else if(rd_vld[port] == 1 && packet_length_got[port] == 0) begin 
-            packet_length_got[port] <= 1;
+        end else if(rd_vld[port] == 1 && packet_length_got == 0) begin 
+            packet_length_got <= 1;
         end
     end
 
-    //跳转表应当判空
+    //如果是数据包开头，或者一页开始输出的时候，则为下一页的读取做准备
+    //jt 的 rd en和rd addr在SRAM模块实现
+    //跳转表应当判空 这里还没确定
     always @(posedge clk) begin
         if(rd_sop[port] == 1 ||
-            (handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == 1)) begin
+            (handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == port)) begin
             reading_sram[port] <= queue_head_sram[reading_priority];
             reading_page[port] <= queue_head_page[reading_priority];
             {queue_head_sram[reading_priority], queue_head_page[reading_priority]} <= jt_dout[reading_sram[port]];
         end
     end
 
+    //当包长为0的时候，说明再发最后一个，下一个周期就可以拉高rd eop了
+    //并且使得WRR轮换
     always @(posedge clk) begin
         if(rd_vld[port] == 1 && reading_packet_length == 0) begin
             rd_eop[port] <= 1;
             next_packet <= 1;
         end else begin
             rd_eop[port] <= 0;
+            next_packet <= 0;
         end
     end
 
@@ -733,9 +752,13 @@ assign locking_c = {locking[31], locking[30], locking[29], locking[28], locking[
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
+    //正在请求读取当前SRAM的端口
     wire [15:0] requesting_ports;
+    //被掩码处理过的正在请求读取当前SRAM的端口
     reg [15:0] requesting_ports_masked;
 
+    //掩码维护
+    //用于实现多个端口同时读取时的轮询输出页操作
     reg next_request;
     reg [15:0] mask;
     reg [3:0] mask_start;
@@ -754,6 +777,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //这样就不会爆multi driven
     assign requesting_ports = {
         reading_sram[0] == sram,
         reading_sram[1] == sram,
@@ -781,16 +805,23 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //是否正在处理请求
     reg processing_enable;
+    //处理请求到第几个半字
     reg [3:0] processing_batch; //初值应该为9
+    //正在处理哪个端口的请求
     reg [3:0] processing_port;
-
+    //当前是否是一页的开头
     reg start_of_page;
 
+    //只要有请求当然就在处理
     always @(posedge clk) begin
         processing_enable <= requesting_ports_masked != 0;
     end
 
+    //当一页开始的时候，batch设置为0
+    //读取的时候batch累加，直到reading_batch+1 (最高可达9)
+    //batch等于0的时候，sram读取0位置的半字，等于1的时候，输出读取0位置的半字到ECC缓冲区
     always @(posedge clk) begin
         if(processing_enable == 1 && start_of_page == 1) begin
             processing_batch <= 0;
@@ -802,6 +833,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //当一页真正开始前，搜索当前是在读取哪个端口
     always @(posedge clk) begin
         if(processing_enable == 1 && start_of_page == 1) begin
             case(requesting_ports_masked & ~(requesting_ports_masked - 1))
@@ -826,6 +858,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //一页刚开始读取的时候，查询跳转表，方便端口中jt dout的调用
     always @(posedge clk) begin
         if(processing_enable == 1 && processing_batch == 0) begin
             jt_rd_en[sram] <= 1;
@@ -833,6 +866,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //一页刚开始的时候读取ECC校验码
+    //在第一半字读取完毕的时候将ECC校验码写到端口的ECC校验器里
     always @(posedge clk) begin
         if(processing_enable == 0) begin
         end else if(processing_batch == 0) begin
@@ -843,6 +878,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //读取数据
     always @(posedge clk) begin
         if(processing_enable == 1 && processing_batch <= reading_batch[processing_port]) begin
             sram_rd_en[sram] <= 1;
@@ -850,6 +886,16 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //页完全读取结束，发送握手信号触发端口中ECC使能的实现以及后续的输出操作
+    always @(posedge clk) begin
+        if(processing_batch == reading_batch[processing_port] + 1) begin
+            handshake[sram] <= 1;
+        end else begin
+            handshake[sram] <= 0;
+        end
+    end
+
+    //ECC缓冲区的装填（batch=1~8）与清空（batch=0）
     always @(posedge clk) begin
         if(processing_enable == 1) begin
             case(processing_batch)
