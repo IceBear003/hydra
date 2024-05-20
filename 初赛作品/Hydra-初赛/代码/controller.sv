@@ -1,9 +1,3 @@
-//`include "./³õÈü×÷Æ·/´úÂë/ÒÑÓÅ»¯/port_frontend.sv"
-//`include "./³õÈü×÷Æ·/´úÂë/ÒÑÓÅ»¯/ecc_encoder.sv"
-//`include "./³õÈü×÷Æ·/´úÂë/ÒÑÓÅ»¯/ecc_decoder.sv"
-//`include "./³õÈü×÷Æ·/´úÂë/ÒÑÓÅ»¯/dual_port_sram.sv"
-//`include "./³õÈü×÷Æ·/´úÂë/ÒÑÓÅ»¯/sram_state.sv"
-
 // `include "port_frontend.sv"
 // `include "ecc_encoder.sv"
 // `include "ecc_decoder.sv"
@@ -131,65 +125,65 @@ assign much_space_c = {much_space[31], much_space[30], much_space[29], much_spac
 assign locking_c = {locking[31], locking[30], locking[29], locking[28], locking[27], locking[26], locking[25], locking[24], locking[23], locking[22], locking[21], locking[20], locking[19], locking[18], locking[17], locking[16], locking[15], locking[14], locking[13], locking[12], locking[11], locking[10], locking[9], locking[8], locking[7], locking[6], locking[5], locking[4], locking[3], locking[2], locking[1], locking[0]};
 
 
-//ËÑË÷Ïà¹Ø¼Ä´æÆ÷
+//æœç´¢ç›¸å…³å¯„å­˜å™¨
 reg [4:0] searching_sram_index [15:0];
 reg [4:0] searching_distribution [15:0];
 reg [10:0] max_amount [15:0];
 reg [5:0] search_cnt [15:0];
 reg searching [15:0];
 
-//³Ö¾Ã»¯¼Ä´æÆ÷
-//µ±Ç°Õı±»Ğ´ÈëSRAMµÄÊı¾İ°ü
+//æŒä¹…åŒ–å¯„å­˜å™¨
+//å½“å‰æ­£è¢«å†™å…¥SRAMçš„æ•°æ®åŒ…
 reg [3:0] cur_dest_port [15:0];
 reg [2:0] cur_prior [15:0];
 reg [8:0] cur_length [15:0];
 reg [4:0] cur_distribution [15:0];
 reg [4:0] last_distribution [15:0];
-//ÉÏ¸ö±»Ğ´ÈëSRAMµÄÊı¾İ°ü
-reg [2:0] last_dest_queue [15:0];   //Ä¿µÄ¶ÓÁĞ(3+4)
+//ä¸Šä¸ªè¢«å†™å…¥SRAMçš„æ•°æ®åŒ…
+reg [2:0] last_dest_queue [15:0];   //ç›®çš„é˜Ÿåˆ—(3+4)
 reg [3:0] last_dest_port [15:0];
-reg [10:0] last_page [15:0];        //±»Ğ´ÈëµÄÒ³µØÖ·
+reg [10:0] last_page [15:0];        //è¢«å†™å…¥çš„é¡µåœ°å€
 
-//Êı¾İ°üÊÇ·ñÒÑ¾­½áÊø£¬ĞèÒª²åÈë¶ÓÁĞÄ©¶Ë£¬Ö¸µ¼¶ÓÁĞÍ·Î²µØÖ·¸üĞÂ
+//æ•°æ®åŒ…æ˜¯å¦å·²ç»ç»“æŸï¼Œéœ€è¦æ’å…¥é˜Ÿåˆ—æœ«ç«¯ï¼ŒæŒ‡å¯¼é˜Ÿåˆ—å¤´å°¾åœ°å€æ›´æ–°
 reg [15:0] packet_merge = 0;
-//Êı¾İ°üÉÆºóĞÅºÅ£¬´ÓµÚÒ»¸ö°ü·¢ËÍµ½×îºóÒ»¸ö°ü±»Ğ´Èësram
+//æ•°æ®åŒ…å–„åä¿¡å·ï¼Œä»ç¬¬ä¸€ä¸ªåŒ…å‘é€åˆ°æœ€åä¸€ä¸ªåŒ…è¢«å†™å…¥sram
 reg packet_signal_reset[15:0];
-//ÉÏ¸öÊı¾İ°üµÄÍ·Î²µØÖ·(5+11)
+//ä¸Šä¸ªæ•°æ®åŒ…çš„å¤´å°¾åœ°å€(5+11)
 reg [15:0] last_packet_head_addr [15:0];
 reg [15:0] last_packet_tail_addr [15:0];
-//Êı¾İ°üµÄÍ·Î²µØÖ·(5+11)
+//æ•°æ®åŒ…çš„å¤´å°¾åœ°å€(5+11)
 reg [15:0] packet_head_addr [15:0];
 reg [15:0] packet_tail_addr [15:0];
-//Êı¾İ°üÒÑ¾­±»´¦ÀíµÄ°ë×ÖÊı
+//æ•°æ®åŒ…å·²ç»è¢«å¤„ç†çš„åŠå­—æ•°
 reg [8:0] packet_length [15:0];
-//Êı¾İ°ü´¦ÀíÅú´ÎÏÂ±ê
+//æ•°æ®åŒ…å¤„ç†æ‰¹æ¬¡ä¸‹æ ‡
 reg [2:0] packet_batch [15:0];
 
-//ÉÏ´ÎĞ´ÈëµÄÒ³µØÖ·
+//ä¸Šæ¬¡å†™å…¥çš„é¡µåœ°å€
 reg [10:0] wr_last_page [15:0];
-//ÕıÔÚĞ´ÈëµÄÒ³µØÖ·
+//æ­£åœ¨å†™å…¥çš„é¡µåœ°å€
 reg [10:0] wr_page [15:0];
 
-//ECC½á¹ûÊÇ·ñµ½±»´æ´¢µÄÊ±»ú
-//Êµ¼ÊÉÏÊÇecc_encoder_enable´òÒ»ÅÄ
+//ECCç»“æœæ˜¯å¦åˆ°è¢«å­˜å‚¨çš„æ—¶æœº
+//å®é™…ä¸Šæ˜¯ecc_encoder_enableæ‰“ä¸€æ‹
 reg ecc_result [15:0];
-//ECC½á¹û´æ´¢µÄSRAMµÄ±àºÅ
-//¶ÔÓÚÒ»¸öÊı¾İ°üÄ©Î²Ò³µÄĞ£Ñé£¬Æä´æ´¢Ê±¼äÔÚÊı¾İ°ü´¦ÀíÍê±ÏÖ®ºó
-//ÕâÊ±distribution¿ÉÄÜÒÑ¾­±»¸üĞÂ£¬ËùÒÔĞèÒª¶îÍâ´æ´¢ECCĞ£ÑéÂëÄ¿µÄSRAM
+//ECCç»“æœå­˜å‚¨çš„SRAMçš„ç¼–å·
+//å¯¹äºä¸€ä¸ªæ•°æ®åŒ…æœ«å°¾é¡µçš„æ ¡éªŒï¼Œå…¶å­˜å‚¨æ—¶é—´åœ¨æ•°æ®åŒ…å¤„ç†å®Œæ¯•ä¹‹å
+//è¿™æ—¶distributionå¯èƒ½å·²ç»è¢«æ›´æ–°ï¼Œæ‰€ä»¥éœ€è¦é¢å¤–å­˜å‚¨ECCæ ¡éªŒç ç›®çš„SRAM
 reg [4:0] ecc_sram [15:0];
 
 reg [15:0] waiting_ready = 0;
 
-//¶ÁÈ¡
-//¶Ë¿ÚÕıÔÚÇëÇóÄÄ¸öSRAMµÄÊı¾İ
+//è¯»å–
+//ç«¯å£æ­£åœ¨è¯·æ±‚å“ªä¸ªSRAMçš„æ•°æ®
 reg [5:0] reading_sram [15:0];
-//SRAMÕıÔÚ´¦ÀíÄÄ¸ö¶Ë¿ÚµÄÇëÇó
+//SRAMæ­£åœ¨å¤„ç†å“ªä¸ªç«¯å£çš„è¯·æ±‚
 reg [3:0] processing_request [31:0];
-//¶Ë¿ÚÇëÇóµÄÒ³µØÖ·
+//ç«¯å£è¯·æ±‚çš„é¡µåœ°å€
 reg [10:0] reading_page [15:0];
-//¶Ë¿ÚÇëÇóµÄ°ë×ÖÊı
+//ç«¯å£è¯·æ±‚çš„åŠå­—æ•°
 reg [2:0] reading_batch [15:0];
-//Êı¾İ×¼±¸Íê±Ï£¬¶Ë¿Ú¿É½øÒ»²½´¦Àí
+//æ•°æ®å‡†å¤‡å®Œæ¯•ï¼Œç«¯å£å¯è¿›ä¸€æ­¥å¤„ç†
 reg handshake [31:0];
 
 reg sram_occupy [31:0];
@@ -206,16 +200,16 @@ reg [2:0] reading_priority [15:0];
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
-    //¶Ë¿ÚÕıÔÚ¶ÁÈ¡ÄÄ¸ö¶ÓÁĞµÄÊı¾İ°ü
-    //´Ó0µ½7ÓÅÏÈ¶Èµİ¼õ
+    //ç«¯å£æ­£åœ¨è¯»å–å“ªä¸ªé˜Ÿåˆ—çš„æ•°æ®åŒ…
+    //ä»0åˆ°7ä¼˜å…ˆåº¦é€’å‡
     //reg [2:0] reading_priority[port];
-    //¶Ë¿ÚÕıÔÚ¶ÁÈ¡µÄÊı¾İ°üµÄÊ£Óà³¤¶È(°ë×Ö)
+    //ç«¯å£æ­£åœ¨è¯»å–çš„æ•°æ®åŒ…çš„å‰©ä½™é•¿åº¦(åŠå­—)
     reg [8:0] reading_packet_length;
-    //Êä³ö¼ÆÊıÆ÷-Ò³ÖÕÖ¹Î»
-    reg [3:0] output_batch; //½¨Òé³õÊ¼Îª8+
-    //Êä³ö¼ÆÊıÆ÷-Ò³ÖÕÖ¹Î»
+    //è¾“å‡ºè®¡æ•°å™¨-é¡µç»ˆæ­¢ä½
+    reg [3:0] output_batch; //å»ºè®®åˆå§‹ä¸º8+
+    //è¾“å‡ºè®¡æ•°å™¨-é¡µç»ˆæ­¢ä½
     reg [2:0] end_batch;
-    //µ±Ç°Êı¾İ°üÊÇ·ñÒÑ¾­¶ÁÈ¡³¤¶È
+    //å½“å‰æ•°æ®åŒ…æ˜¯å¦å·²ç»è¯»å–é•¿åº¦
     reg packet_length_got;
 
     
@@ -227,8 +221,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     reg [7:0] queue_waiting;
 
-    //µ±SRAM¶ÁÈ¡Íêµ±Ç°Ò³µÄËùÓĞ°ë×Ö
-    //²¢·¢À´ÎÕÊÖĞÅºÅÊ±£¬¾ÍÊ¹ÄÜECC
+    //å½“SRAMè¯»å–å®Œå½“å‰é¡µçš„æ‰€æœ‰åŠå­—
+    //å¹¶å‘æ¥æ¡æ‰‹ä¿¡å·æ—¶ï¼Œå°±ä½¿èƒ½ECC
     always @(posedge clk) begin
         if(handshake[reading_sram[port]] == 1 && processing_request[reading_sram[port]] == port) begin
             ecc_decoder_enable[port] <= 1;
@@ -237,9 +231,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //µ±ECCÕıÔÚÔËĞĞµÄÊ±ºò£¬Êä³ö¼ÆÊıÆ÷ÖØÖÃ
-    //ÔÚÏÂÒ»¸öÖÜÆÚ¿ªÊ¼ÀÛ¼ÓÖ±µ½µ±Ç°Ò³µÄ×îºóÒ»¸ö°ë×Ö
-    //batch 0µ½1µÄÊ±ºò£¬·¢ËÍµÚÒ»¸ö°ë×Ö£¨ÔÚÒ»ÖÜÆÚºóÉúĞ§£©
+    //å½“ECCæ­£åœ¨è¿è¡Œçš„æ—¶å€™ï¼Œè¾“å‡ºè®¡æ•°å™¨é‡ç½®
+    //åœ¨ä¸‹ä¸€ä¸ªå‘¨æœŸå¼€å§‹ç´¯åŠ ç›´åˆ°å½“å‰é¡µçš„æœ€åä¸€ä¸ªåŠå­—
+    //batch 0åˆ°1çš„æ—¶å€™ï¼Œå‘é€ç¬¬ä¸€ä¸ªåŠå­—ï¼ˆåœ¨ä¸€å‘¨æœŸåç”Ÿæ•ˆï¼‰
     always @(posedge clk) begin
         if(!rst_n || rd_eop[port]) begin
             output_batch <= 9;
@@ -250,7 +244,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //¸ù¾İbatch·¢ËÍ°ë×Ö
+    //æ ¹æ®batchå‘é€åŠå­—
     always @(posedge clk) begin
         if(!rst_n || rd_eop[port]) begin
             rd_data[port] <= 0;
@@ -268,16 +262,16 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //rd vldÊ¹ÄÜ£¬µ±output batchÀÛ¼Æµ½Ò³Î²Ö®ºó£¬ÔòÎª0£¬±íÊ¾²»·¢ËÍÊı¾İ
+    //rd vldä½¿èƒ½ï¼Œå½“output batchç´¯è®¡åˆ°é¡µå°¾ä¹‹åï¼Œåˆ™ä¸º0ï¼Œè¡¨ç¤ºä¸å‘é€æ•°æ®
     always @(posedge clk) begin
         rd_vld[port] <= output_batch <= end_batch;
         
     end
 
-    //¶ÁÈ¡Êı¾İ°üµÄµÚÒ»¸ö°ë×ÖµÄ¸ß9Î»
-    //µÃµ½Êı¾İ°üµÄ³¤¶È£¬µ±È»Ó¦¸Ã¼õÈ¥¿ØÖÆ°ë×Ö±¾ÉíËùÕ¼µÄÒ»°ë×Ö
+    //è¯»å–æ•°æ®åŒ…çš„ç¬¬ä¸€ä¸ªåŠå­—çš„é«˜9ä½
+    //å¾—åˆ°æ•°æ®åŒ…çš„é•¿åº¦ï¼Œå½“ç„¶åº”è¯¥å‡å»æ§åˆ¶åŠå­—æœ¬èº«æ‰€å çš„ä¸€åŠå­—
 
-    //Ã¿µ±·¢ËÍÒ»¸öÊı¾İ¼õ1£¬Ö±µ½0ÎªÖ¹
+    //æ¯å½“å‘é€ä¸€ä¸ªæ•°æ®å‡1ï¼Œç›´åˆ°0ä¸ºæ­¢
     always @(posedge clk) begin
         if(rd_vld[port] == 1 && packet_length_got == 0) begin
             reading_packet_length <= rd_data[port][15:7] - 2;
@@ -286,8 +280,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //µ±Ç°Ò³·¢ÍêÁË£¬¼´½«Òª·¢ÏÂÒ»Ò³ÁË
-    //³Ö¾Ã»¯ÏÂÒ»Ò³µÄ¼ÆÊıÆ÷³¤¶È
+    //å½“å‰é¡µå‘å®Œäº†ï¼Œå³å°†è¦å‘ä¸‹ä¸€é¡µäº†
+    //æŒä¹…åŒ–ä¸‹ä¸€é¡µçš„è®¡æ•°å™¨é•¿åº¦
     always @(posedge clk) begin
         if(!rst_n || rd_eop[port]) begin
             end_batch <= 0;
@@ -300,7 +294,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //Î¬»¤packet length gotÔÚ»ñÈ¡µ½³¤¶ÈÖ®Ç°Ò»Ö±Îª0
+    //ç»´æŠ¤packet length gotåœ¨è·å–åˆ°é•¿åº¦ä¹‹å‰ä¸€ç›´ä¸º0
     always @(posedge clk) begin
         if(rd_sop[port] == 1) begin
             packet_length_got <= 0;
@@ -311,9 +305,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     reg is_reading;
 
-    //Èç¹ûÊÇÊı¾İ°ü¿ªÍ·£¬»òÕßÒ»Ò³¿ªÊ¼Êä³öµÄÊ±ºò£¬ÔòÎªÏÂÒ»Ò³µÄ¶ÁÈ¡×ö×¼±¸
-    //jt µÄ rd enºÍrd addrÔÚSRAMÄ£¿éÊµÏÖ
-    //Ìø×ª±íÓ¦µ±ÅĞ¿Õ ÕâÀï»¹Ã»È·¶¨
+    //å¦‚æœæ˜¯æ•°æ®åŒ…å¼€å¤´ï¼Œæˆ–è€…ä¸€é¡µå¼€å§‹è¾“å‡ºçš„æ—¶å€™ï¼Œåˆ™ä¸ºä¸‹ä¸€é¡µçš„è¯»å–åšå‡†å¤‡
+    //jt çš„ rd enå’Œrd addråœ¨SRAMæ¨¡å—å®ç°
+    //è·³è½¬è¡¨åº”å½“åˆ¤ç©º è¿™é‡Œè¿˜æ²¡ç¡®å®š
     always @(posedge clk) begin
         if(!rst_n || rd_eop[port]) begin
             reading_sram[port] <= 32;
@@ -325,8 +319,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //µ±°ü³¤Îª0µÄÊ±ºò£¬ËµÃ÷ÔÙ·¢×îºóÒ»¸ö£¬ÏÂÒ»¸öÖÜÆÚ¾Í¿ÉÒÔÀ­¸ßrd eopÁË
-    //²¢ÇÒÊ¹µÃWRRÂÖ»»
+    //å½“åŒ…é•¿ä¸º0çš„æ—¶å€™ï¼Œè¯´æ˜å†å‘æœ€åä¸€ä¸ªï¼Œä¸‹ä¸€ä¸ªå‘¨æœŸå°±å¯ä»¥æ‹‰é«˜rd eopäº†
+    //å¹¶ä¸”ä½¿å¾—WRRè½®æ¢
 
     always @(posedge clk) begin
         if(rd_vld[port] == 1 && reading_packet_length == 0) begin
@@ -352,7 +346,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [3:0] port_1;
     assign port_1 = port;
     
-    //WRRÎ»ÑÚÂëË¢ĞÂ£¬µ±next_packetÎª¸ßÊ±Ë¢ĞÂ
+    //WRRä½æ©ç åˆ·æ–°ï¼Œå½“next_packetä¸ºé«˜æ—¶åˆ·æ–°
     always @(posedge clk) begin
         if(next_packet == 0) begin
         end else if(wrr_start < wrr_end) begin
@@ -369,8 +363,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //µÈ´ı¶ÁÈ¡µÄ¶ÓÁĞ£¨±»ÑÚÂë´¦Àí¹ı£©ÔÚnext_packetÎª¸ßÊ±Ë¢ĞÂ
-    //×¢Òâ£¬ÕâÀïÓÃµÄÊÇÉÏ´Înext_packetÒÑ¾­Ë¢ĞÂºÃµÄwrr_mask¶ø²»ÊÇÕâ´ÎĞÂË¢ĞÂµÄ
+    //ç­‰å¾…è¯»å–çš„é˜Ÿåˆ—ï¼ˆè¢«æ©ç å¤„ç†è¿‡ï¼‰åœ¨next_packetä¸ºé«˜æ—¶åˆ·æ–°
+    //æ³¨æ„ï¼Œè¿™é‡Œç”¨çš„æ˜¯ä¸Šæ¬¡next_packetå·²ç»åˆ·æ–°å¥½çš„wrr_maskè€Œä¸æ˜¯è¿™æ¬¡æ–°åˆ·æ–°çš„
     always @(posedge clk) begin
         if(next_packet == 1 && wrr_en == 1 && (wrr_mask & queue_not_empty[port] != 0)) begin
             queue_waiting <= wrr_mask & queue_not_empty[port];
@@ -380,8 +374,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     
-    //¸ù¾İ¶ÀÈÈÂëÅĞ¶¨×îÓÅÏÈÎ»ÖÃ
-    //ÕâÀï£¬ÓĞµãÎÊÌâ
+    //æ ¹æ®ç‹¬çƒ­ç åˆ¤å®šæœ€ä¼˜å…ˆä½ç½®
+    //è¿™é‡Œï¼Œæœ‰ç‚¹é—®é¢˜
     always @(posedge clk) begin
         if(wr_eop[port] == 1) begin
             waiting_ready[port] <= 1;
@@ -390,7 +384,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //¸ù¾İ¶ÀÈÈÂëÅĞ¶¨×îÓÅÏÈÎ»ÖÃ
+    //æ ¹æ®ç‹¬çƒ­ç åˆ¤å®šæœ€ä¼˜å…ˆä½ç½®
     always @(posedge clk) begin
         if(ready[port] == 1 && waiting_ready[port] == 1) begin
             case(queue_waiting & ~(queue_waiting - 1)) 
@@ -407,7 +401,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //readyÊ±À­¸ßsop
+    //readyæ—¶æ‹‰é«˜sop
     always @(posedge clk) begin
         if(rd_sop[port] == 1) begin
             rd_sop[port] <= 0;
@@ -416,7 +410,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //³õÊ¼»¯µ±Ç°°üµÄ×´Ì¬ĞÅÏ¢
+    //åˆå§‹åŒ–å½“å‰åŒ…çš„çŠ¶æ€ä¿¡æ¯
     always @(posedge clk) begin
         if(rd_sop[port] == 1) begin
             reading_packet_length <= 0;
@@ -429,18 +423,18 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /* 
-        ËÑË÷
+        æœç´¢
     */
 
-    //Ë¢ĞÂÃ¿¸ö¶Ë¿ÚÏÂÒ»ÖÜÆÚËÑË÷µÄSRAM±àºÅ
+    //åˆ·æ–°æ¯ä¸ªç«¯å£ä¸‹ä¸€å‘¨æœŸæœç´¢çš„SRAMç¼–å·
     always @(posedge clk) begin
         searching_sram_index[port] <= (cnt_32 + port) % 32;
     end
-    //Ñ¯ÎÊÏÂÒ»ÖÜÆÚËÑË÷µÄSRAMÖĞÓĞ¶àÉÙ(ÊôÓÚÕıÔÚ»º³åÇøÆ¥ÅäSRAMµÄÊı¾İ°üµÄ)Ä¿µÄ¶Ë¿ÚµÄ°ë×Ö
+    //è¯¢é—®ä¸‹ä¸€å‘¨æœŸæœç´¢çš„SRAMä¸­æœ‰å¤šå°‘(å±äºæ­£åœ¨ç¼“å†²åŒºåŒ¹é…SRAMçš„æ•°æ®åŒ…çš„)ç›®çš„ç«¯å£çš„åŠå­—
     always @(posedge clk) begin
         request_port[(cnt_32 + port) % 32] <= port_dest_port[port];
     end
-    //ÓĞĞÂµÄÊı¾İ°ü½øÈë»º³åÇø£¬Ó¦µ±Æô¶¯ËÑË÷£¬32ÖÜÆÚºó½áÊøËÑË÷
+    //æœ‰æ–°çš„æ•°æ®åŒ…è¿›å…¥ç¼“å†²åŒºï¼Œåº”å½“å¯åŠ¨æœç´¢ï¼Œ32å‘¨æœŸåç»“æŸæœç´¢
     always @(posedge clk) begin
         if(!rst_n) begin
             searching[port] <= 0;
@@ -450,8 +444,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             searching[port] <= 0;
         end
     end
-    //ËÑË÷¼ÆÊıÆ÷£¬µÈÓÚ31Ê±ÕıÔÚ½øĞĞµÚ32´ÎËÑË÷£¬µÈÓÚ32Ö®ºóÒ»ÖÜÆÚ±»ÇåÁã
-    //¿ÉÒÔ½«ÆäµÈÓÚ32µÄÊ±¿ÌÈÏÎªÊÇËÑË÷È«²¿Íê³ÉµÄÊ±ºò
+    //æœç´¢è®¡æ•°å™¨ï¼Œç­‰äº31æ—¶æ­£åœ¨è¿›è¡Œç¬¬32æ¬¡æœç´¢ï¼Œç­‰äº32ä¹‹åä¸€å‘¨æœŸè¢«æ¸…é›¶
+    //å¯ä»¥å°†å…¶ç­‰äº32çš„æ—¶åˆ»è®¤ä¸ºæ˜¯æœç´¢å…¨éƒ¨å®Œæˆçš„æ—¶å€™
     always @(posedge clk) begin
         if(!rst_n) begin
             search_cnt[port] <= 0;
@@ -461,15 +455,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             search_cnt[port] <= 0;
         end
     end
-    //Ö÷ËÑË÷Âß¼­
-    //ÕâÀïÓĞ¸öÎŞÉË´óÑÅµÄĞ¡ÎÊÌâ FIXME
+    //ä¸»æœç´¢é€»è¾‘
+    //è¿™é‡Œæœ‰ä¸ªæ— ä¼¤å¤§é›…çš„å°é—®é¢˜ FIXME
     always @(posedge clk) begin
-        if (!(searching[port] == 1 || port_new_packet_into_buf[port] == 1)) begin     //ĞÂ°üÀ´ÁË£¬ÖØÖÃ¼Ä´æÆ÷
+        if (!(searching[port] == 1 || port_new_packet_into_buf[port] == 1)) begin     //æ–°åŒ…æ¥äº†ï¼Œé‡ç½®å¯„å­˜å™¨
             max_amount[port] <= 0;
             search_get[port] <= 0;
-        end else if (locking[searching_sram_index[port]] == 1) begin    //²»ËÑË÷Ëø¶¨µÄ  
-        end else if (free_space[searching_sram_index[port]] < port_length[port]) begin      //²»ËÑË÷¿Õ¼ä²»¹»µÄ
-        end else if (max_amount[port] > page_amount[searching_sram_index[port]]) begin     //²»Æ«ºÃ¼º·½¶Ë¿ÚÊı¾İÁ¿ÉÙµÄ
+        end else if (locking[searching_sram_index[port]] == 1) begin    //ä¸æœç´¢é”å®šçš„  
+        end else if (free_space[searching_sram_index[port]] < port_length[port]) begin      //ä¸æœç´¢ç©ºé—´ä¸å¤Ÿçš„
+        end else if (max_amount[port] > page_amount[searching_sram_index[port]]) begin     //ä¸åå¥½å·±æ–¹ç«¯å£æ•°æ®é‡å°‘çš„
         end else begin
             max_amount[port] <= page_amount[searching_sram_index[port]];
             searching_distribution[port] <= searching_sram_index[port];
@@ -480,28 +474,28 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /*
-        ³Ö¾Ã»¯
+        æŒä¹…åŒ–
     */
-    //Èç¹ûËÑË÷½áÊø£¬ÔòÒâÎ¶×ÅÒª¿ªÊ¼Ğ´ÈëÊı¾İ°üÁË
-    //³Ö¾Ã»¯Êı¾İ°üµÄÄ¿µÄ¶Ë¿Ú
+    //å¦‚æœæœç´¢ç»“æŸï¼Œåˆ™æ„å‘³ç€è¦å¼€å§‹å†™å…¥æ•°æ®åŒ…äº†
+    //æŒä¹…åŒ–æ•°æ®åŒ…çš„ç›®çš„ç«¯å£
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_dest_port[port] <= port_dest_port[port];
         end
     end
-    //³Ö¾Ã»¯Êı¾İ°üµÄÄ¿µÄ¶ÓÁĞ
+    //æŒä¹…åŒ–æ•°æ®åŒ…çš„ç›®çš„é˜Ÿåˆ—
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_prior[port] <= port_prior[port];
         end
     end
-    //³Ö¾Ã»¯Êı¾İ°üµÄ³¤¶È
+    //æŒä¹…åŒ–æ•°æ®åŒ…çš„é•¿åº¦
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_length[port] <= port_length[port];
         end
     end
-    //³Ö¾Ã»¯ËÑË÷½á¹ûµÄSRAM
+    //æŒä¹…åŒ–æœç´¢ç»“æœçš„SRAM
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             cur_distribution[port] <= searching_distribution[port];
@@ -528,33 +522,33 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /*
-        ´¦ÀíÊı¾İ°ü
+        å¤„ç†æ•°æ®åŒ…
     */
-    //´¦ÀíÊı¾İ°üÅú´Î£¬ÔÚËÑË÷Íê³ÉµÄÊ±ºòÖØÖÃÎª0
+    //å¤„ç†æ•°æ®åŒ…æ‰¹æ¬¡ï¼Œåœ¨æœç´¢å®Œæˆçš„æ—¶å€™é‡ç½®ä¸º0
     always @(posedge clk) begin
         if(!rst_n) begin
             packet_batch[port] <= 0;
         end else if(search_cnt[port] == 32 || packet_length[port] == cur_length[port] + 1) begin
             packet_batch[port] <= 0;
         end else if(port_data_vld[port]) begin
-            //Êı¾İ°ü½áÊøÖ®ºóÊ±¿Ì×ÔÔö
-            //¼´Ê¹Êı¾İ°ü´¦ÀíÍê±ÏºóÈÔ¿ÉÒÔµ±×÷´òÅÄÆ÷Ê¹ÓÃ
+            //æ•°æ®åŒ…ç»“æŸä¹‹åæ—¶åˆ»è‡ªå¢
+            //å³ä½¿æ•°æ®åŒ…å¤„ç†å®Œæ¯•åä»å¯ä»¥å½“ä½œæ‰“æ‹å™¨ä½¿ç”¨
             packet_batch[port] <= packet_batch[port] + 1;
         end
     end
-    //µ±Ç°ÒÑ¾­´¦ÀíµÄ³¤¶È×ÔÔö£¬ÔÚËÑË÷Íê±ÏµÄÊ±ºòÖØÖÃÎª1£¬ÕâÀïÎªÊ²Ã´²»ÉèÖÃÎª0
-    //ÊÇÒòÎªÈç¹ûÉèÖÃÎª0£¬ÄÇÃ´Êı¾İ°ü×îºóÒ»¸ö°ë×Ö´¦ÀíµÄÊ±ºòÓëcur_length²îÁË1£¬±È½Ï´óĞ¡µÄÊ±ºòÒªÒıÈëÒ»¸ö+1µÄ×éºÏÂß¼­
-    //ÔõÃ´ÓÅ»¯ÔõÃ´À´ÁË
+    //å½“å‰å·²ç»å¤„ç†çš„é•¿åº¦è‡ªå¢ï¼Œåœ¨æœç´¢å®Œæ¯•çš„æ—¶å€™é‡ç½®ä¸º1ï¼Œè¿™é‡Œä¸ºä»€ä¹ˆä¸è®¾ç½®ä¸º0
+    //æ˜¯å› ä¸ºå¦‚æœè®¾ç½®ä¸º0ï¼Œé‚£ä¹ˆæ•°æ®åŒ…æœ€åä¸€ä¸ªåŠå­—å¤„ç†çš„æ—¶å€™ä¸cur_lengthå·®äº†1ï¼Œæ¯”è¾ƒå¤§å°çš„æ—¶å€™è¦å¼•å…¥ä¸€ä¸ª+1çš„ç»„åˆé€»è¾‘
+    //æ€ä¹ˆä¼˜åŒ–æ€ä¹ˆæ¥äº†
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             packet_length[port] <= 1;
-        end else if(port_data_vld[port]) begin      //ÓĞÓĞĞ§Êı¾İµÄÖÜÆÚ×ÔÔö
+        end else if(port_data_vld[port]) begin      //æœ‰æœ‰æ•ˆæ•°æ®çš„å‘¨æœŸè‡ªå¢
             packet_length[port] <= packet_length[port] + 1;
         end else if(packet_length[port] == cur_length[port] + 1) begin
             packet_length[port] <= 0;
         end
     end
-    //´ÓµÚÒ»¸öÓĞĞ§Êı¾İ·¢À´µ½×îºóÒ»¸öÊı¾İ±»Ğ´ÈëSRAM
+    //ä»ç¬¬ä¸€ä¸ªæœ‰æ•ˆæ•°æ®å‘æ¥åˆ°æœ€åä¸€ä¸ªæ•°æ®è¢«å†™å…¥SRAM
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             packet_signal_reset[port] <= 1;
@@ -564,7 +558,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /*
-        Ğ´Ìø×ª±í
+        å†™è·³è½¬è¡¨
     */
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_batch[port] == 7 && packet_length[port] != cur_length[port]) begin
@@ -610,7 +604,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     
     
-    //Êı¾İ°üÍ·Î²µØÖ·µÄ¼ÇÔØ
+    //æ•°æ®åŒ…å¤´å°¾åœ°å€çš„è®°è½½
     always @(posedge clk) begin
         if(search_cnt[port] == 32) begin
             packet_head_addr[port] <= {searching_distribution[port], null_ptr[searching_distribution[port]]};
@@ -634,24 +628,24 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    //ÌáÇ°Ò»ÖÜÆÚÉú³ÉÏÂÒ»Ò³µÄµØÖ·
-    //¼´Ê¹ÏÂÒ»Ò³Ã»¶«Î÷ÁËÒ²Ã»¸±×÷ÓÃ£¬ÒòÎª¸ÃÒ³Ã»ÓĞ±»µ¯³ö¿ÕÏĞ¶ÓÁĞ
+    //æå‰ä¸€å‘¨æœŸç”Ÿæˆä¸‹ä¸€é¡µçš„åœ°å€
+    //å³ä½¿ä¸‹ä¸€é¡µæ²¡ä¸œè¥¿äº†ä¹Ÿæ²¡å‰¯ä½œç”¨ï¼Œå› ä¸ºè¯¥é¡µæ²¡æœ‰è¢«å¼¹å‡ºç©ºé—²é˜Ÿåˆ—
     always @(posedge clk) begin
         if(!rst_n) begin
             wr_page[port] <= 0;
         end else if(port_data_vld[port] && packet_batch[port] == 7) begin
             wr_page[port] <= null_ptr[cur_distribution[port]];
-        end else if(search_cnt[port] == 32) begin   //Êı¾İ°üÍ·Ò²ĞèÒªÌáÇ°Éú³É
+        end else if(search_cnt[port] == 32) begin   //æ•°æ®åŒ…å¤´ä¹Ÿéœ€è¦æå‰ç”Ÿæˆ
             wr_page[port] <= null_ptr[searching_distribution[port]];
         end
     end
-    //Éú³ÉÏÂÒ»Ò³µØÖ·µÄÊ±ºò£¬³Ö¾Ã»¯ÉÏÒ»Ò³µÄµØÖ·£¬·½±ãĞ´Ìø×ª±í
+    //ç”Ÿæˆä¸‹ä¸€é¡µåœ°å€çš„æ—¶å€™ï¼ŒæŒä¹…åŒ–ä¸Šä¸€é¡µçš„åœ°å€ï¼Œæ–¹ä¾¿å†™è·³è½¬è¡¨
     always @(posedge clk) begin
         if(port_data_vld[port] && packet_length[port] == cur_length[port]) begin
             wr_last_page[port] <= wr_page[port];
         end
     end
-    //µ±ÕæÕı¿ªÊ¼Ê¹ÓÃÒ³µÄÊ±ºò£¬°ÑËüµ¯³ö¿ÕÏĞ¶ÓÁĞ
+    //å½“çœŸæ­£å¼€å§‹ä½¿ç”¨é¡µçš„æ—¶å€™ï¼ŒæŠŠå®ƒå¼¹å‡ºç©ºé—²é˜Ÿåˆ—
     always @(posedge clk) begin
         if(port_data_vld[port] && (packet_batch[port] == 7 
             && packet_length[port] != cur_length[port])) begin
@@ -662,8 +656,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_or[cur_distribution[port]] <= 0;
         end
     end
-    //³Ö¾Ã»¯ÉÏ¸öÊı¾İ°üµÄÄ¿µÄ¶ÓÁĞ(3+4)£¬ÕâÊÇÎªÁËÔÚÊı¾İ°ü´¦ÀíÍê±Ïºó£¬½«ÆäÍ·Î²²åÈë
-    //¶ÓÁĞÄ©¶ËÊ±ĞèÒªÖªµÀÊÇÄÄ¸ö¶ÓÁĞ£¬·ÀÖ¹ÕâÊ±ºòcur_dest_port/prior¿ÉÄÜÒÑ¾­¸üĞÂ
+    //æŒä¹…åŒ–ä¸Šä¸ªæ•°æ®åŒ…çš„ç›®çš„é˜Ÿåˆ—(3+4)ï¼Œè¿™æ˜¯ä¸ºäº†åœ¨æ•°æ®åŒ…å¤„ç†å®Œæ¯•åï¼Œå°†å…¶å¤´å°¾æ’å…¥
+    //é˜Ÿåˆ—æœ«ç«¯æ—¶éœ€è¦çŸ¥é“æ˜¯å“ªä¸ªé˜Ÿåˆ—ï¼Œé˜²æ­¢è¿™æ—¶å€™cur_dest_port/priorå¯èƒ½å·²ç»æ›´æ–°
     always @(posedge clk) begin
         if(!rst_n) begin
             last_dest_queue[port] <= 0;
@@ -673,7 +667,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             last_dest_port[port] <= cur_dest_port[port];
         end
     end
-    //ÂÖÑ¯°ÑÕû¸öÊı¾İ°ü²åÈë¶ÓÎ²£¬ÕâÑù²»Í¬¶Ë¿Ú¾Í²»»á³åÍ»
+    //è½®è¯¢æŠŠæ•´ä¸ªæ•°æ®åŒ…æ’å…¥é˜Ÿå°¾ï¼Œè¿™æ ·ä¸åŒç«¯å£å°±ä¸ä¼šå†²çª
     always @(posedge clk) begin
         if(!rst_n) begin
             queue_tail_sram[port][0] <= 0;
@@ -701,7 +695,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             end
         end
     end
-    //ÊÇ·ñÒÑ¾­²åÈëÓÅÏÈ¼¶¶ÓÁĞÄ©¶Ë£¬1-ĞèÒª²åÈë£¬0-ÒÑ¾­²åÈë
+    //æ˜¯å¦å·²ç»æ’å…¥ä¼˜å…ˆçº§é˜Ÿåˆ—æœ«ç«¯ï¼Œ1-éœ€è¦æ’å…¥ï¼Œ0-å·²ç»æ’å…¥
     always @(posedge clk) begin
         if(packet_length[port] == cur_length[port]) begin
             packet_merge[port] <= 1;
@@ -712,7 +706,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /*
-        Ğ´ÈëSRAM
+        å†™å…¥SRAM
     */
     always @(posedge clk) begin
         if(port_data_vld[port]) begin
@@ -733,9 +727,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     /*
-        ECCĞ£Ñé
+        ECCæ ¡éªŒ
     */
-    //Ò»Ò³Ğ´ÍêÁË»òÕßÊı¾İ°ü½áÊøÁËµÄÊ±ºòÊ¹ÄÜECC
+    //ä¸€é¡µå†™å®Œäº†æˆ–è€…æ•°æ®åŒ…ç»“æŸäº†çš„æ—¶å€™ä½¿èƒ½ECC
     always @(posedge clk) begin
         if((port_data_vld[port] && packet_batch[port] == 7) || packet_length[port] == cur_length[port]) begin
             ecc_encoder_enable[port] <= 1;
@@ -743,7 +737,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             ecc_encoder_enable[port] <= 0;
         end
     end
-    //Ê¹ÄÜECCµÄÊ±ºò¼ÇÂ¼Ò»ÏÂÕâ¸öECCµÄ½á¹ûÓ¦µ±´æ·Åµ½ÄÄ¸öSRAM£¨¼´µ±Ç°Êı¾İ°üµÄSRAM£©
+    //ä½¿èƒ½ECCçš„æ—¶å€™è®°å½•ä¸€ä¸‹è¿™ä¸ªECCçš„ç»“æœåº”å½“å­˜æ”¾åˆ°å“ªä¸ªSRAMï¼ˆå³å½“å‰æ•°æ®åŒ…çš„SRAMï¼‰
     always @(posedge clk) begin
         if((port_data_vld[port] && packet_batch[port] == 7) || packet_length[port] == cur_length[port]) begin
             ecc_sram[port] <= cur_distribution[port];
@@ -751,8 +745,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             ecc_sram[port] <= cur_distribution[port];
         end
     end
-    //´òÒ»ÅÄ£¬µÈ´ıecc½á¹û×¼±¸ºÃ£¨batch=0µÄÊ±ºòeccÔÚ¸üĞÂ½á¹û£¬=1µÄÊ±ºò¼´¿É»ñÈ¡£¬¼ûºóÈı¸öalways£©
-    //ÒıÈëecc_resultÒ²ÊÇ·ÀÖ¹ÔÚ¿ªÍ·Ò»Ò³batch=1µÄÊ±ºòÎó´¥·¢ECC¼ÓÂë/´æ´¢²Ù×÷
+    //æ‰“ä¸€æ‹ï¼Œç­‰å¾…eccç»“æœå‡†å¤‡å¥½ï¼ˆbatch=0çš„æ—¶å€™eccåœ¨æ›´æ–°ç»“æœï¼Œ=1çš„æ—¶å€™å³å¯è·å–ï¼Œè§åä¸‰ä¸ªalwaysï¼‰
+    //å¼•å…¥ecc_resultä¹Ÿæ˜¯é˜²æ­¢åœ¨å¼€å¤´ä¸€é¡µbatch=1çš„æ—¶å€™è¯¯è§¦å‘ECCåŠ ç /å­˜å‚¨æ“ä½œ
     always @(posedge clk) begin
         if(ecc_encoder_enable[port] == 1) begin
             ecc_result[port] <= 1;
@@ -760,7 +754,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             ecc_result[port] <= 0;
         end
     end
-    //»ñÈ¡µ½½á¹û¾Í¿ÉÒÔĞ´ÁË£¬¼´batch=1µÄÊ±ºò
+    //è·å–åˆ°ç»“æœå°±å¯ä»¥å†™äº†ï¼Œå³batch=1çš„æ—¶å€™
     always @(posedge clk) begin
         if(packet_batch[port] == 1 && ecc_result[port] == 1) begin
             ecc_wr_en[ecc_sram[port]] <= 1;
@@ -778,7 +772,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             ecc_wr_addr[ecc_sram[port]] <= wr_last_page[port];
         end
     end
-    //²»Í¬Åú´ÎµÄÊı¾İĞ´ÈëECC»º³åÇø
+    //ä¸åŒæ‰¹æ¬¡çš„æ•°æ®å†™å…¥ECCç¼“å†²åŒº
     always @(posedge clk) begin
         if(port_data_vld[port]) begin
             case(packet_batch[port])
@@ -793,7 +787,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             endcase
         end
     end
-    //ÔÚĞÂÒ»ÅúÊı¾İ¿ªÊ¼Ğ´ÈëÊ±Çå¿ÕECC»º³åÇø
+    //åœ¨æ–°ä¸€æ‰¹æ•°æ®å¼€å§‹å†™å…¥æ—¶æ¸…ç©ºECCç¼“å†²åŒº
     always @(posedge clk) begin
         if(port_data_vld[port] == 1 && packet_batch[port] == 0) begin
             ecc_encoder_data_1[port] <= 0;
@@ -881,13 +875,13 @@ end endgenerate
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
-    //ÕıÔÚÇëÇó¶ÁÈ¡µ±Ç°SRAMµÄ¶Ë¿Ú
+    //æ­£åœ¨è¯·æ±‚è¯»å–å½“å‰SRAMçš„ç«¯å£
     wire [15:0] requesting_ports;
-    //±»ÑÚÂë´¦Àí¹ıµÄÕıÔÚÇëÇó¶ÁÈ¡µ±Ç°SRAMµÄ¶Ë¿Ú
+    //è¢«æ©ç å¤„ç†è¿‡çš„æ­£åœ¨è¯·æ±‚è¯»å–å½“å‰SRAMçš„ç«¯å£
     reg [15:0] requesting_ports_masked;
 
-    //ÑÚÂëÎ¬»¤
-    //ÓÃÓÚÊµÏÖ¶à¸ö¶Ë¿ÚÍ¬Ê±¶ÁÈ¡Ê±µÄÂÖÑ¯Êä³öÒ³²Ù×÷
+    //æ©ç ç»´æŠ¤
+    //ç”¨äºå®ç°å¤šä¸ªç«¯å£åŒæ—¶è¯»å–æ—¶çš„è½®è¯¢è¾“å‡ºé¡µæ“ä½œ
     reg next_request;
     reg [15:0] mask;
     reg [3:0] mask_start;
@@ -908,7 +902,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //ÕâÑù¾Í²»»á±¬multi driven
+    //è¿™æ ·å°±ä¸ä¼šçˆ†multi driven
     assign requesting_ports = {
         reading_sram[15] == sram,
         reading_sram[14] == sram,
@@ -936,25 +930,25 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //ÊÇ·ñÕıÔÚ´¦ÀíÇëÇó
+    //æ˜¯å¦æ­£åœ¨å¤„ç†è¯·æ±‚
     reg processing_enable;
-    //´¦ÀíÇëÇóµ½µÚ¼¸¸ö°ë×Ö
-    reg [3:0] processing_batch; //³õÖµÓ¦¸ÃÎª9
-    //ÕıÔÚ´¦ÀíÄÄ¸ö¶Ë¿ÚµÄÇëÇó
+    //å¤„ç†è¯·æ±‚åˆ°ç¬¬å‡ ä¸ªåŠå­—
+    reg [3:0] processing_batch; //åˆå€¼åº”è¯¥ä¸º9
+    //æ­£åœ¨å¤„ç†å“ªä¸ªç«¯å£çš„è¯·æ±‚
     reg [3:0] processing_port;
-    //µ±Ç°ÊÇ·ñÊÇÒ»Ò³µÄ¿ªÍ·
+    //å½“å‰æ˜¯å¦æ˜¯ä¸€é¡µçš„å¼€å¤´
     reg start_of_page;
 
     reg [2:0] read_batch;
 
-    //Ö»ÒªÓĞÇëÇóµ±È»¾ÍÔÚ´¦Àí
+    //åªè¦æœ‰è¯·æ±‚å½“ç„¶å°±åœ¨å¤„ç†
     always @(posedge clk) begin
         processing_enable <= requesting_ports_masked != 0;
     end
 
-    //µ±Ò»Ò³¿ªÊ¼µÄÊ±ºò£¬batchÉèÖÃÎª0
-    //¶ÁÈ¡µÄÊ±ºòbatchÀÛ¼Ó£¬Ö±µ½reading_batch+1 (×î¸ß¿É´ï9)
-    //batchµÈÓÚ0µÄÊ±ºò£¬sram¶ÁÈ¡0Î»ÖÃµÄ°ë×Ö£¬µÈÓÚ1µÄÊ±ºò£¬Êä³ö¶ÁÈ¡0Î»ÖÃµÄ°ë×Öµ½ECC»º³åÇø
+    //å½“ä¸€é¡µå¼€å§‹çš„æ—¶å€™ï¼Œbatchè®¾ç½®ä¸º0
+    //è¯»å–çš„æ—¶å€™batchç´¯åŠ ï¼Œç›´åˆ°reading_batch+1 (æœ€é«˜å¯è¾¾9)
+    //batchç­‰äº0çš„æ—¶å€™ï¼Œsramè¯»å–0ä½ç½®çš„åŠå­—ï¼Œç­‰äº1çš„æ—¶å€™ï¼Œè¾“å‡ºè¯»å–0ä½ç½®çš„åŠå­—åˆ°ECCç¼“å†²åŒº
     always @(posedge clk) begin
         if(processing_enable == 1 && start_of_page == 1) begin
             processing_batch <= 0;
@@ -967,7 +961,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //µ±Ò»Ò³ÕæÕı¿ªÊ¼Ç°£¬ËÑË÷µ±Ç°ÊÇÔÚ¶ÁÈ¡ÄÄ¸ö¶Ë¿Ú
+    //å½“ä¸€é¡µçœŸæ­£å¼€å§‹å‰ï¼Œæœç´¢å½“å‰æ˜¯åœ¨è¯»å–å“ªä¸ªç«¯å£
     always @(posedge clk) begin
         if(processing_enable == 1 && start_of_page == 1) begin
             case(requesting_ports_masked & ~(requesting_ports_masked - 1))
@@ -1016,7 +1010,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //Ò»Ò³¸Õ¿ªÊ¼¶ÁÈ¡µÄÊ±ºò£¬²éÑ¯Ìø×ª±í£¬·½±ã¶Ë¿ÚÖĞjt doutµÄµ÷ÓÃ
+    //ä¸€é¡µåˆšå¼€å§‹è¯»å–çš„æ—¶å€™ï¼ŒæŸ¥è¯¢è·³è½¬è¡¨ï¼Œæ–¹ä¾¿ç«¯å£ä¸­jt doutçš„è°ƒç”¨
     always @(posedge clk) begin
         if(processing_enable == 1 && processing_batch == 0) begin
             jt_rd_en[sram] <= 1;
@@ -1029,8 +1023,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         
     end
 
-    //Ò»Ò³¸Õ¿ªÊ¼µÄÊ±ºò¶ÁÈ¡ECCĞ£ÑéÂë
-    //ÔÚµÚÒ»°ë×Ö¶ÁÈ¡Íê±ÏµÄÊ±ºò½«ECCĞ£ÑéÂëĞ´µ½¶Ë¿ÚµÄECCĞ£ÑéÆ÷Àï
+    //ä¸€é¡µåˆšå¼€å§‹çš„æ—¶å€™è¯»å–ECCæ ¡éªŒç 
+    //åœ¨ç¬¬ä¸€åŠå­—è¯»å–å®Œæ¯•çš„æ—¶å€™å°†ECCæ ¡éªŒç å†™åˆ°ç«¯å£çš„ECCæ ¡éªŒå™¨é‡Œ
     always @(posedge clk) begin
         if(processing_enable == 0) begin
         end else if(processing_batch == 0) begin
@@ -1041,7 +1035,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //¶ÁÈ¡Êı¾İ
+    //è¯»å–æ•°æ®
     always @(posedge clk) begin
         if(processing_enable == 1 && processing_batch <= read_batch + 2) begin
             sram_rd_en[sram] <= 1;
@@ -1050,7 +1044,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //Ò³ÍêÈ«¶ÁÈ¡½áÊø£¬·¢ËÍÎÕÊÖĞÅºÅ´¥·¢¶Ë¿ÚÖĞECCÊ¹ÄÜµÄÊµÏÖÒÔ¼°ºóĞøµÄÊä³ö²Ù×÷
+    //é¡µå®Œå…¨è¯»å–ç»“æŸï¼Œå‘é€æ¡æ‰‹ä¿¡å·è§¦å‘ç«¯å£ä¸­ECCä½¿èƒ½çš„å®ç°ä»¥åŠåç»­çš„è¾“å‡ºæ“ä½œ
     always @(posedge clk) begin
         if(processing_batch == read_batch + 3) begin
             handshake[sram] <= 1;
@@ -1061,7 +1055,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
-    //ECC»º³åÇøµÄ×°Ìî£¨batch=1~8£©ÓëÇå¿Õ£¨batch=0£©
+    //ECCç¼“å†²åŒºçš„è£…å¡«ï¼ˆbatch=1~8ï¼‰ä¸æ¸…ç©ºï¼ˆbatch=0ï¼‰
     always @(posedge clk) begin
         if(processing_enable == 1) begin
             case(processing_batch)

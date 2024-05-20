@@ -1,3 +1,4 @@
+`include "fifo_null_pages.sv"
 module sram_state
 #(
     parameter ECC_STORAGE_ADDR_WIDTH = 11,
