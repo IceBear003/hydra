@@ -14,6 +14,7 @@ module port_wr_frontend(
     //Whether the process of matching SRAM is finished.
     //From the module "port_sram_matcher"
     input match_suc,
+    output reg match_enable,
     //The length & dest_port is needed to match an SRAM.
     //To the module "port_sram_matcher"
     output reg [3:0] new_dest_port,
@@ -22,6 +23,7 @@ module port_wr_frontend(
 
     //The info of the packet transfering to the backend.
     //To the module "port_backend"
+    output reg end_of_packet,
     output reg [3:0] cur_dest_port,
     output reg [2:0] cur_prior,
     output reg [8:0] cur_length
@@ -79,6 +81,14 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 always @(posedge clk) begin
+    if(wr_vld && wr_state == 3'd1) begin
+        match_enable <= 1;
+    end else if (match_suc == 1) begin
+        match_enable <= 0;
+    end
+end
+
+always @(posedge clk) begin
     if(wr_vld) begin
         buffer[wr_ptr] <= wr_data;
     end
@@ -101,7 +111,9 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    pause <= wr_ptr + 6'd2 == xfer_ptr;
+    pause <= (wr_ptr + 6'd2 == xfer_ptr) || 
+             (wr_state == 3'd3 && match_enable) || 
+             (wr_state == 3'd0 && match_enable);
 end
 
 always @(posedge clk or negedge rst_n) begin
@@ -116,8 +128,18 @@ always @(posedge clk or negedge rst_n) begin
         xfer_state <= 3'd2;
     end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
         xfer_state <= 3'd0;                                                 //TODO"持有的延迟"   
-    end else if(xfer_state == 3'd2 && xfer_ptr + 6'd1 != wr_ptr) begin
+    end else if(xfer_state == 3'd2 && xfer_ptr != wr_ptr) begin
         xfer_state <= 3'd1;
+    end
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n) begin
+        end_of_packet <= 0;
+    end else if(xfer_state == 3'd1 && xfer_ptr == end_ptr) begin
+        end_of_packet <= 1;
+    end else begin
+        end_of_packet <= 0;
     end
 end
 
