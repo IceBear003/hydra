@@ -8,25 +8,28 @@ module port_wr_frontend(
     input wr_eop,
     output reg pause,
 
-    output reg [15:0] xfer_data,
+    /*
+     * To the module "port_backend"
+     */
+    //Whether the data in buffer are transfering to backend.
     output reg xfer_data_vld,
-
-    //Whether the process of matching SRAM is finished.
-    //From the module "port_sram_matcher"
-    input match_suc,
-    output reg match_enable,
-    //The length & dest_port is needed to match an SRAM.
-    //To the module "port_sram_matcher"
-    output reg [3:0] new_dest_port,
-    output reg [2:0] new_prior,
-    output reg [8:0] new_length,
-
+    output reg [15:0] xfer_data,
     //The info of the packet transfering to the backend.
-    //To the module "port_backend"
     output reg end_of_packet,
     output reg [3:0] cur_dest_port,
     output reg [2:0] cur_prior,
-    output reg [8:0] cur_length
+    output reg [8:0] cur_length,
+
+    /*
+     * To the module "port_sram_matcher"
+     */
+    //Whether the process of matching SRAM is finished.
+    input match_suc,
+    output reg match_enable,
+    //The length & dest_port is needed to match an SRAM.
+    output reg [3:0] new_dest_port,
+    output reg [2:0] new_prior,
+    output reg [8:0] new_length
 );
 
 /*
