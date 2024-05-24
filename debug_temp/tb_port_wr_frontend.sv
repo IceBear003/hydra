@@ -93,7 +93,7 @@ always@(posedge clk or  negedge rst_n)
         wr_vld <= 1;
         cnt <= cnt + 1'b1;
     end
-    else if(state == RD_DATA && cnt < data_up - 1)
+    else if(state == RD_DATA && cnt < data_up + 1)
     begin
         //if(cnt >= 32 && cnt <= 74)
         //    wr_vld <= 0;
@@ -101,7 +101,7 @@ always@(posedge clk or  negedge rst_n)
             wr_vld <= 1;
         cnt <= cnt + 1'b1;
     end
-    else if(cnt == data_up - 1 && state == RD_DATA)
+    else if(cnt == data_up + 1 && state == RD_DATA)
     begin
         cnt <= 0;
         wr_eop <= 1;
@@ -114,7 +114,7 @@ reg     [3:0]   eop_ti;
 always@(posedge clk or  negedge rst_n)
     if(rst_n == 0 || match_suc == 1) begin
         match_suc <= 0;
-    end else if(cnt == 33) begin
+    end else if(cnt == 43) begin
         match_suc <= 1;
     end
 
