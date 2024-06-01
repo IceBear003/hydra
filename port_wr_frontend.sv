@@ -24,7 +24,7 @@ module port_wr_frontend(
      * To the module "port_sram_matcher"
      */
     //Whether the process of matching SRAM is finished.
-    input match_suc,
+    input match_end,
     output reg match_enable,
     //The length & dest_port is needed to match an SRAM.
     output reg [3:0] new_dest_port,
@@ -66,7 +66,7 @@ always @(posedge clk or negedge rst_n) begin
     end else if(wr_state == 3'd2 && wr_length == new_length) begin
         wr_state <= 3'd3;
     end else if(wr_state == 3'd3 && wr_eop) begin
-        wr_state <= 3'd0;
+        wr_state <= 3'd0; 
     end
 end
 
@@ -86,7 +86,7 @@ end
 always @(posedge clk) begin
     if(wr_vld && wr_state == 3'd1) begin
         match_enable <= 1;
-    end else if (match_suc == 1) begin
+    end else if (match_end == 1) begin
         match_enable <= 0;
     end
 end
@@ -122,7 +122,7 @@ end
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
         xfer_state <= 3'd0;
-    end else if(xfer_state == 3'd0 && match_suc) begin
+    end else if(xfer_state == 3'd0 && match_end) begin
         xfer_state <= 3'd1;
         cur_length <= new_length;
         cur_prior <= new_prior;
