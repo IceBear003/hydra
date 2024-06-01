@@ -139,7 +139,7 @@ end
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
         end_of_packet <= 0;
-    end else if(xfer_state == 3'd1 && xfer_ptr == end_ptr) begin
+    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
         end_of_packet <= 1;
     end else begin
         end_of_packet <= 0;

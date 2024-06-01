@@ -21,10 +21,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 7
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 7
+}</component>
   <component name="ProjectId" id="2hFAM6gYNGeYYNl58Mg3nsw9Kgd" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -58,6 +58,7 @@
       <workItem from="1717179402466" duration="77000" />
       <workItem from="1717179494522" duration="1109000" />
       <workItem from="1717227879622" duration="159000" />
+      <workItem from="1717264605464" duration="1960000" />
     </task>
     <servers />
   </component>
