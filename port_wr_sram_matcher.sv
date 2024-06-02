@@ -14,9 +14,7 @@ module port_wr_sram_matcher
     input match_enable,
     output reg [4:0] matching_next_sram,
     output reg [4:0] matching_best_sram,
-
     output reg match_end,
-    output reg [4:0] matched_sram,
 
     input [3:0] new_dest_port,
     input [8:0] new_length,
@@ -42,7 +40,8 @@ always @(posedge clk) begin
     if(!rst_n) begin
         state <= 2'd0;
     end else if(state == 0 && match_enable == 1) begin
-        if(new_dest_port == old_dest_port && free_space[matched_sram] >= new_length) begin
+        if(new_dest_port == old_dest_port && 
+           free_space[matching_best_sram] >= new_length) begin
             match_end <= 1;
             state <= 2'd2;
         end else begin

@@ -36,19 +36,34 @@ reg [10:0] free_space [31:0];
 reg [8:0] packet_amount [31:0] [15:0];
 
 //SRAM选PORT，32to5译码器
-wire [31:0] select_sram [15:0];
-
+reg [31:0] select_sram [15:0];
+//PORT传输给SRAM的信号
 wire xfer_data_vld [15:0];
 wire [15:0] xfer_data [15:0];
 wire end_of_packet [15:0];
+
+reg [4:0] queue_head_sram [15:0] [7:0];
+reg [10:0] queue_head_page [15:0] [7:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     wire [3:0] new_dest_port;
     wire [8:0] new_length;
-    //在这里计算出接下来一个周期要搜索的SRAM
-    //并传值
+
+    wire [3:0] cur_dest_port;
+    wire [2:0] cur_prior;
+
+    reg [3:0] last_dest_port;
+    reg [2:0] last_prior;
+
+    // //跳转表合并请求
+    // always @(posedge clk) begin
+    //     if(end_of_packet[port]) begin
+    //         last_dest_port <= cur_dest_port;
+    //         last_prior <= cur_prior;
+    //     end
+    // end
 
     port_wr_frontend port_wr_frontend(
         .clk(clk),
@@ -63,9 +78,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .xfer_data_vld(xfer_data_vld[port]),
         .xfer_data(xfer_data[port]),
         .end_of_packet(end_of_packet[port]),
-        .cur_dest_port(),
-        .cur_prior(),
-        .cur_length(),
+        .cur_dest_port(cur_dest_port),
+        .cur_prior(cur_prior),
         
         .match_end(match_end),
         .match_enable(match_enable),
@@ -75,8 +89,14 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     wire match_enable;
     wire [4:0] matching_next_sram;
-
+    wire [4:0] matching_best_sram;
     wire match_end;
+
+    always@(posedge clk) begin
+        if(match_end) begin
+            select_sram[port] <= 1 << matching_best_sram;
+        end
+    end
 
     port_wr_sram_matcher port_wr_sram_matcher(
         .clk(clk),
@@ -87,10 +107,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     
         .match_enable(match_enable),
         .matching_next_sram(matching_next_sram),
-        .matching_best_sram,
-    
+        .matching_best_sram(matching_best_sram),
         .match_end(match_end),
-        .matched_sram,
     
         .new_dest_port(new_dest_port),
         .new_length(new_length),
