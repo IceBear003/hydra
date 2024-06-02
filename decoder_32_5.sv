@@ -1,4 +1,4 @@
-module mux_32(
+module decoder_32_5(
     input [31:0] select,
     output reg [4:0] idx
 );

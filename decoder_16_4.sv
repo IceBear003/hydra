@@ -1,4 +1,4 @@
-module mux_16(
+module decoder_16_4(
     input [15:0] select,
     output reg [3:0] idx
 );

@@ -28,7 +28,6 @@ module port_wr_frontend(
     output reg match_enable,
     //The length & dest_port is needed to match an SRAM.
     output reg [3:0] new_dest_port,
-    output reg [2:0] new_prior,
     output reg [8:0] new_length
 );
 
@@ -55,6 +54,8 @@ reg [5:0] xfer_ptr;
 reg [7:0] end_ptr;
 
 reg [8:0] wr_length;
+
+reg [2:0] new_prior;
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
