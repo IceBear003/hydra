@@ -1,4 +1,4 @@
-module port_sram_matcher
+module port_wr_sram_matcher
 #(parameter PORT_IDX = 0)
 (
     input clk,
