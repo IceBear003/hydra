@@ -12,6 +12,7 @@ module port_sram_matcher
     input [4:0] threshold,
 
     input match_enable,
+    output reg [4:0] matching_next_sram,
     output reg [4:0] matching_best_sram,
 
     output reg match_end,
@@ -20,11 +21,12 @@ module port_sram_matcher
     input [3:0] new_dest_port,
     input [8:0] new_length,
 
-    input [10:0] free_space [31:0],
-    input occupied [31:0],
-    input [8:0] packet_amount,
-
-    input rd_sop
+    //SRAM剩余空间
+    input [10:0] free_space,
+    //SRAM是否被占用
+    input occupied,
+    //SRAM中新包端口对应的数据包数量
+    input [8:0] packet_amount
 );
 
 reg [1:0] state;
@@ -65,24 +67,28 @@ end
 
 always @(posedge clk) begin
     if(!rst_n) begin
-        matching_sram <= PORT_IDX;
+        matching_next_sram <= PORT_IDX;
     end else begin
         case(match_mode)
-            0: matching_sram <= {PORT_IDX, matching_sram == {PORT_IDX,1'b0} ? 1'b1 : 1'b1};
-            1: if(matching_sram <= 15) matching_sram <= matching_sram + 16;
-               else if(matching_sram == 31) matching_sram <= PORT_IDX;
-               else matching_sram <= matching_sram + 1;
-            default: matching_sram <= matching_sram + 1;
+            0: matching_next_sram <= {PORT_IDX, matching_next_sram == {PORT_IDX,1'b0} ? 1'b1 : 1'b1};
+            1: if(matching_next_sram <= 15) matching_next_sram <= matching_next_sram + 16;
+               else if(matching_next_sram == 31) matching_next_sram <= PORT_IDX;
+               else matching_next_sram <= matching_next_sram + 1;
+            default: matching_next_sram <= matching_next_sram + 1;
         endcase
     end
+end
+
+always @(posedge clk) begin
+    matching_sram <= matching_next_sram;
 end
 
 always @(posedge clk) begin
     if(state != 1) begin
         matching_find <= 0;
         max_amount <= 0;
-    end else if(free_space[matching_sram] < new_length) begin
-    end else if(occupied[matching_sram] == 1) begin
+    end else if(free_space < new_length) begin
+    end else if(occupied == 1) begin
     end else if(packet_amount > max_amount) begin
         matching_best_sram <= matching_sram;
         max_amount <= packet_amount;

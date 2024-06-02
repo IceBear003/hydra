@@ -1,7 +1,13 @@
 `include "port_ecc_encoder.sv"
 
 module port_wr_backend(
-
+    input xfer_data_vld,
+    input [15:0] xfer_data,
+    
+    input end_of_packet,
+    input [3:0] cur_dest_port,
+    input [2:0] cur_prior,
+    input [8:0] cur_length
 );
 
 reg [15:0] encoder_buffer [7:0];
