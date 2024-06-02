@@ -3,9 +3,9 @@ module port_wr_frontend(
     input rst_n,
 
     input wr_sop,
+    input wr_eop,
     input wr_vld,
     input [15:0] wr_data,
-    input wr_eop,
     output reg pause,
 
     /*

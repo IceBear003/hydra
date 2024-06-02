@@ -7,11 +7,12 @@ module sram_interface
     input clk,
     input rst_n,
 
+    //需要32组MUX16-1
     input xfer_data_vld,
     input [15:0] xfer_data,
     input end_of_packet,
 
-    //包的首尾页地址，16*32选1
+    //包的首尾页地址，无需多选器
     output reg [15:0] packet_head_addr,
     output reg [15:0] packet_tail_addr
 );
@@ -73,10 +74,29 @@ always @(posedge clk) begin
     end
 end
 
-//ECC存储
+//ECC
 (* ram_style = "block" *) reg [7:0] ecc_storage [2047:0];
 reg [10:0] es_wr_addr;
 reg [7:0] es_din;
+
+reg [15:0] ecc_buffer [7:0];
+wire [7:0] ecc_result;
+
+always @(posedge clk) begin
+    if(xfer_data_vld == 0) begin
+    end else if(wr_batch == 3'd0) begin
+        ecc_buffer[0] <= xfer_data;
+        ecc_buffer[1] <= 0;
+        ecc_buffer[2] <= 0;
+        ecc_buffer[3] <= 0;
+        ecc_buffer[4] <= 0;
+        ecc_buffer[5] <= 0;
+        ecc_buffer[6] <= 0;
+        ecc_buffer[7] <= 0;
+    end else begin
+        ecc_buffer[wr_batch] <= xfer_data;
+    end
+end
 
 always @(posedge clk) begin
     if(wr_batch == 7 || end_of_packet) begin
@@ -121,18 +141,15 @@ sram sram(
     .dout()*/
 );
 
-reg [15:0] encoder_buffer [7:0];
-wire [7:0] ecc_result;
-
 sram_ecc_encoder sram_ecc_encoder( 
-    .data_0(encoder_buffer[0]),
-    .data_1(encoder_buffer[1]),
-    .data_2(encoder_buffer[2]),
-    .data_3(encoder_buffer[3]),
-    .data_4(encoder_buffer[4]),
-    .data_5(encoder_buffer[5]),
-    .data_6(encoder_buffer[6]),
-    .data_7(encoder_buffer[7]),
+    .data_0(ecc_buffer[0]),
+    .data_1(ecc_buffer[1]),
+    .data_2(ecc_buffer[2]),
+    .data_3(ecc_buffer[3]),
+    .data_4(ecc_buffer[4]),
+    .data_5(ecc_buffer[5]),
+    .data_6(ecc_buffer[6]),
+    .data_7(ecc_buffer[7]),
     .code(ecc_result)
 );
 

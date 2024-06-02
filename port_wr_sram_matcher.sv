@@ -4,12 +4,12 @@ module port_wr_sram_matcher
     input clk,
     input rst_n,
 
-    // code -     mode          - threshold(max)
+    // code -     mode          - match_threshold(max)
     // 0    -    static         - 1
     // 1    -    semi-dynamic   - 17
     // 2    -    dynamic        - 32
     input [1:0] match_mode,
-    input [4:0] threshold,
+    input [4:0] match_threshold,
 
     input match_enable,
     output reg [4:0] matching_next_sram,
@@ -49,7 +49,7 @@ always @(posedge clk) begin
             match_end <= 0;
             state <= 2'd1;
         end
-    end else if(state == 1 && matching_tick >= threshold && matching_find == 1) begin
+    end else if(state == 1 && matching_tick >= match_threshold && matching_find == 1) begin
         match_end <= 1;
         state <= 2'd2;
     end else if(state == 2) begin
