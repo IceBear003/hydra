@@ -1,4 +1,4 @@
-module port_ecc_decoder(
+module sram_ecc_decoder(
     input update,
     input [15:0] data_0,
     input [15:0] data_1,
