@@ -35,15 +35,23 @@ reg occupied [31:0];
 reg [10:0] free_space [31:0];
 reg [8:0] packet_amount [31:0] [15:0];
 
-//SRAM选PORT，32to5译码器
+//SRAM选PORT，16to4译码器
 reg [31:0] select_sram [15:0];
 //PORT传输给SRAM的信号
 wire xfer_data_vld [15:0];
 wire [15:0] xfer_data [15:0];
 wire end_of_packet [15:0];
 
+//PORT选PORT，16to4译码器
+reg [15:0] select_port [15:0];
+reg [2:0] dest_prior [15:0];
+
 reg [4:0] queue_head_sram [15:0] [7:0];
 reg [10:0] queue_head_page [15:0] [7:0];
+reg [4:0] queue_tail_sram [15:0] [7:0];
+reg [10:0] queue_tail_page [15:0] [7:0];
+wire [15:0] packet_head_addr_port [15:0];
+wire [15:0] packet_tail_addr_port [15:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -54,14 +62,49 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [3:0] cur_dest_port;
     wire [2:0] cur_prior;
 
-    reg [3:0] last_dest_port;
-    reg [2:0] last_prior;
-
-    // //跳转表合并请求
+    //跳转表合并请求
     // always @(posedge clk) begin
     //     if(end_of_packet[port]) begin
-    //         last_dest_port <= cur_dest_port;
-    //         last_prior <= cur_prior;
+    //         select_port[port] <= 1 << cur_dest_port;
+    //         dest_prior[port] <= cur_prior;
+    //         packet_head_addr_port[port] <= packet_head_addr[match];
+    //     end
+    // end
+
+    // wire [15:0] select = {
+    //     select_port[0][port],
+    //     select_port[1][port],
+    //     select_port[2][port],
+    //     select_port[3][port],
+    //     select_port[4][port],
+    //     select_port[5][port],
+    //     select_port[6][port],
+    //     select_port[7][port],
+    //     select_port[8][port],
+    //     select_port[9][port],
+    //     select_port[10][port],
+    //     select_port[11][port],
+    //     select_port[12][port],
+    //     select_port[13][port],
+    //     select_port[14][port],
+    //     select_port[15][port]
+    // };
+
+    // reg [3:0] cnt_16;
+
+    // always @(posedge clk) begin
+    //     if(!rst_n) begin
+    //         cnt_16 <= 0;
+    //     end else begin
+    //         cnt_16 <= cnt_16 + 1;
+    //     end
+    // end
+
+    // always @(posedge clk) begin
+    //     if(select[cnt_16] == 1) begin
+    //         //TODO
+    //         {queue_tail_sram[port][dest_prior[cnt_16]], queue_tail_page[port][dest_prior[cnt_16]]} 
+    //             <= packet_tail_addr[matching_best_sram];
     //     end
     // end
 
