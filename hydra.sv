@@ -17,7 +17,7 @@ module hydra(
     input [15:0] wr_sop,
     input [15:0] wr_eop,
     input [15:0] wr_vld,
-    input [15:0] wr_data [15:0],
+    input [15:0] [15:0] wr_data,
     input [15:0] pause,
 
     output reg full,
@@ -27,17 +27,8 @@ module hydra(
     output reg [15:0] rd_sop,
     output reg [15:0] rd_eop,
     output reg [15:0] rd_vld,
-    output reg [15:0] rd_data [15:0]
+    output reg [15:0] [15:0] rd_data
 );
-
-reg [4:0] cnt_32;
-always @(posedge clk) begin
-    if(!rst_n) begin
-        cnt_32 <= 0;
-    end else begin
-        cnt_32 <= cnt_32 + 1;
-    end
-end
 
 //SRAM状态描述
 wire occupied [31:0];
@@ -88,6 +79,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire match_end;
 
     always@(posedge clk) begin
+        //TODO 粘滞选项
         select_sram[port] <= 1 << matching_best_sram;
     end
 
