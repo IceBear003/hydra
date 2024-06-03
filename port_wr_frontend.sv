@@ -16,8 +16,6 @@ module port_wr_frontend(
     output reg [15:0] xfer_data,
     //The info of the packet transfering to the backend.
     output reg end_of_packet,
-    output reg [3:0] cur_dest_port,
-    output reg [2:0] cur_prior,
 
     /*
      * To the module "port_sram_matcher"
@@ -124,8 +122,6 @@ always @(posedge clk or negedge rst_n) begin
         xfer_state <= 3'd0;
     end else if(xfer_state == 3'd0 && match_end) begin
         xfer_state <= 3'd1;
-        cur_dest_port <= new_dest_port;
-        cur_prior <= new_prior;
     end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
         xfer_state <= 3'd2;
     end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin

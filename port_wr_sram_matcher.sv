@@ -41,7 +41,7 @@ always @(posedge clk) begin
         state <= 2'd0;
     end else if(state == 0 && match_enable == 1) begin
         if(new_dest_port == old_dest_port && 
-           free_space[matching_best_sram] >= new_length) begin
+           free_space[matching_best_sram] >= new_length) begin  //TODO FIXME: 判断是否仍然属于本端口
             match_end <= 1;
             state <= 2'd2;
         end else begin

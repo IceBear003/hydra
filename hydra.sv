@@ -40,7 +40,7 @@ always @(posedge clk) begin
 end
 
 //SRAM状态描述
-reg occupied [31:0];
+wire occupied [31:0];
 reg [10:0] free_space [31:0];
 reg [8:0] packet_amount [31:0] [15:0];
 
@@ -50,10 +50,6 @@ reg [31:0] select_sram [15:0];
 wire xfer_data_vld [15:0];
 wire [15:0] xfer_data [15:0];
 wire end_of_packet [15:0];
-
-//PORT选PORT，16to4译码器
-reg [15:0] select_port [15:0];
-reg [2:0] dest_prior [15:0];
 
 reg [4:0] queue_head_sram [15:0] [7:0];
 reg [10:0] queue_head_page [15:0] [7:0];
@@ -65,9 +61,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     wire [3:0] new_dest_port;
     wire [8:0] new_length;
-
-    wire [3:0] cur_dest_port;
-    wire [2:0] cur_prior;
 
     port_wr_frontend port_wr_frontend(
         .clk(clk),
@@ -82,8 +75,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .xfer_data_vld(xfer_data_vld[port]),
         .xfer_data(xfer_data[port]),
         .end_of_packet(end_of_packet[port]),
-        .cur_dest_port(cur_dest_port),
-        .cur_prior(cur_prior),
         
         .match_end(match_end),
         .match_enable(match_enable),
@@ -97,9 +88,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire match_end;
 
     always@(posedge clk) begin
-        if(match_end) begin
-            select_sram[port] <= 1 << matching_best_sram;
-        end
+        select_sram[port] <= 1 << matching_best_sram;
     end
 
     port_wr_sram_matcher port_wr_sram_matcher(
@@ -125,7 +114,7 @@ end endgenerate
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
-
+    
     wire [15:0] select = {
         select_sram[0][sram],
         select_sram[1][sram],
@@ -154,6 +143,25 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
     wire [15:0] packet_head_addr;
     wire [15:0] packet_tail_addr;
+
+    reg start_of_packet;
+
+    always @(posedge clk) begin
+        if(!rst_n || xfer_data_vld[idx]) begin
+            start_of_packet <= 0;
+        end else if(end_of_packet[idx]) begin
+            start_of_packet <= 1;
+        end 
+    end
+
+    always @(posedge clk) begin
+        if(start_of_packet && xfer_data_vld[idx]) begin
+            free_space[sram] <= free_space[sram] - xfer_data[idx][15:7];
+            packet_amount[sram][xfer_data[idx][3:0]] <= packet_amount[sram][xfer_data[idx][3:0]] + 1;
+        end
+    end
+
+    assign occupied[sram] = select != 0;
 
     sram_interface #(.SRAM_IDX(sram)) sram_interface(
         .clk(clk),
