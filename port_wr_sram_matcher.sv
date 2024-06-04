@@ -12,6 +12,7 @@ module port_wr_sram_matcher
     input [4:0] match_threshold,
 
     input match_enable,
+    input viscous,
     output reg [4:0] matching_next_sram,
     output reg [4:0] matching_best_sram,
     output reg match_end,
@@ -22,7 +23,7 @@ module port_wr_sram_matcher
     //SRAM剩余空间
     input [10:0] free_space,
     //SRAM是否被占用
-    input occupied,
+    input accessible,
     //SRAM中新包端口对应的数据包数量
     input [8:0] packet_amount
 );
@@ -40,8 +41,8 @@ always @(posedge clk) begin
     if(!rst_n) begin
         state <= 2'd0;
     end else if(state == 0 && match_enable == 1) begin
-        if(new_dest_port == old_dest_port && 
-           free_space[matching_best_sram] >= new_length) begin  //TODO FIXME: 判断是否仍然属于本端口
+        if(new_dest_port == old_dest_port && viscous &&
+           free_space[matching_best_sram] >= new_length) begin
             match_end <= 1;
             state <= 2'd2;
         end else begin
@@ -87,7 +88,7 @@ always @(posedge clk) begin
         matching_find <= 0;
         max_amount <= 0;
     end else if(free_space < new_length) begin
-    end else if(occupied == 1) begin
+    end else if(accessible == 1) begin
     end else if(packet_amount > max_amount) begin
         matching_best_sram <= matching_sram;
         max_amount <= packet_amount;

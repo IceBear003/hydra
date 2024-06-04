@@ -14,7 +14,11 @@ module sram_interface
 
     //包的首尾页地址，无需多选器
     output reg [15:0] packet_head_addr,
-    output reg [15:0] packet_tail_addr
+    output reg [15:0] packet_tail_addr,
+
+    input [3:0] check_port,
+    output [8:0] check_amount,
+    output reg [10:0] free_space
 );
 
 // 0 - idle
@@ -22,6 +26,22 @@ module sram_interface
 // 2 - packet writting the left pages
 reg [1:0] state;
 reg [2:0] wr_batch;
+
+reg [8:0] packet_amount [15:0];
+assign check_amount = packet_amount[check_port];
+
+integer port;
+always @(posedge clk) begin
+    if(!rst_n) begin
+        free_space <= 11'd2047;
+        for(port = 0; port < 16; port = port + 1) begin
+            packet_amount[port] <= 0;
+        end
+    end else if(state == 2'd0 && xfer_data_vld) begin
+        free_space <= free_space - xfer_data[15:7];
+        packet_amount[xfer_data[3:0]] <= packet_amount[xfer_data[3:0]] + 1;
+    end
+end
 
 always @(posedge clk) begin
     if(!rst_n) begin

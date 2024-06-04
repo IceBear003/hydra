@@ -35,7 +35,7 @@ module port_wr_frontend(
  *      2: Data of the new packet are being written.
  *      3: The writting process of the new packet is to be finished.
  */
-reg [2:0] wr_state;
+reg [1:0] wr_state;
 
 /*
  * xfer_state: 
@@ -56,15 +56,15 @@ reg [2:0] new_prior;
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
-        wr_state <= 3'd0;
-    end else if(wr_state == 3'd0 && wr_sop) begin
-        wr_state <= 3'd1;
-    end else if(wr_state == 3'd1 && wr_vld) begin
-        wr_state <= 3'd2;
-    end else if(wr_state == 3'd2 && wr_length == new_length) begin
-        wr_state <= 3'd3;
-    end else if(wr_state == 3'd3 && wr_eop) begin
-        wr_state <= 3'd0; 
+        wr_state <= 2'd0;
+    end else if(wr_state == 2'd0 && wr_sop) begin
+        wr_state <= 2'd1;
+    end else if(wr_state == 2'd1 && wr_vld) begin
+        wr_state <= 2'd2;
+    end else if(wr_state == 2'd2 && wr_length == new_length) begin
+        wr_state <= 2'd3;
+    end else if(wr_state == 2'd3 && wr_eop) begin
+        wr_state <= 2'd0; 
     end
 end
 
@@ -73,7 +73,7 @@ always @(posedge clk or negedge rst_n) begin
         wr_ptr <= 0;
     end else if(wr_vld) begin
         wr_ptr <= wr_ptr + 1;
-        if (wr_state == 3'd1) begin
+        if (wr_state == 2'd1) begin
             new_length <= wr_data[15:7];
             new_prior <= wr_data[6:4];
             new_dest_port <= wr_data[3:0];
@@ -82,7 +82,7 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 always @(posedge clk) begin
-    if(wr_vld && wr_state == 3'd1) begin
+    if(wr_vld && wr_state == 2'd1) begin
         match_enable <= 1;
     end else if (match_end == 1) begin
         match_enable <= 0;
@@ -98,13 +98,13 @@ end
 always @(posedge clk) begin
     if(~rst_n) begin
         end_ptr <= 8'hFF;
-    end else if(wr_state == 3'd3) begin
+    end else if(wr_state == 2'd3) begin
         end_ptr <= wr_ptr;
     end
 end
 
 always @(posedge clk) begin
-    if(wr_state == 3'd0) begin
+    if(wr_state == 2'd0) begin
         wr_length <= 0;
     end else if (wr_vld) begin
         wr_length <= wr_length + 1;
@@ -113,28 +113,28 @@ end
 
 always @(posedge clk) begin
     pause <= (wr_ptr + 6'd2 == xfer_ptr) || 
-             (wr_state == 3'd3 && match_enable) || 
-             (wr_state == 3'd0 && match_enable);
+             (wr_state == 2'd3 && match_enable) || 
+             (wr_state == 2'd0 && match_enable);
 end
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
-        xfer_state <= 3'd0;
-    end else if(xfer_state == 3'd0 && match_end) begin
-        xfer_state <= 3'd1;
-    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
-        xfer_state <= 3'd2;
-    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
-        xfer_state <= 3'd0;                                                 //TODO"持有的延迟"   
-    end else if(xfer_state == 3'd2 && xfer_ptr != wr_ptr) begin
-        xfer_state <= 3'd1;
+        xfer_state <= 2'd0;
+    end else if(xfer_state == 2'd0 && match_end) begin
+        xfer_state <= 2'd1;
+    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
+        xfer_state <= 2'd2;
+    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+        xfer_state <= 2'd0;                                                 //TODO"持有的延迟"   
+    end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
+        xfer_state <= 2'd1;
     end
 end
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
         end_of_packet <= 0;
-    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
         end_of_packet <= 1;
     end else begin
         end_of_packet <= 0;
@@ -145,7 +145,7 @@ always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
         xfer_ptr <= 0;
         xfer_data_vld <= 0;
-    end else if(xfer_state == 3'd1) begin
+    end else if(xfer_state == 2'd1) begin
         xfer_ptr <= xfer_ptr + 1;
         xfer_data_vld <= 1;
     end else begin
@@ -154,7 +154,7 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 always @(posedge clk) begin
-    if(xfer_state == 3'd1) begin
+    if(xfer_state == 2'd1) begin
         xfer_data <= buffer[xfer_ptr];
     end
 end

@@ -1,4 +1,5 @@
 `include "port_wr_frontend.sv"
+`include "port_rd_frontend.sv"
 `include "sram_interface.sv"
 `include "decoder_16_4.sv"
 `include "port_wr_sram_matcher.sv"
@@ -12,6 +13,7 @@ module hydra(
 
     input [4:0] match_threshold,
     input [1:0] match_mode,
+    input [3:0] match_viscosity,
 
     //Ports
     input [15:0] wr_sop,
@@ -31,17 +33,23 @@ module hydra(
 );
 
 //SRAM状态描述
-wire occupied [31:0];
-reg [10:0] free_space [31:0];
-reg [8:0] packet_amount [31:0] [15:0];
+wire match_accessible [31:0];
 
 //SRAM选PORT，16to4译码器
-reg [31:0] select_sram [15:0];
-//PORT传输给SRAM的信号
-wire xfer_data_vld [15:0];
-wire [15:0] xfer_data [15:0];
-wire end_of_packet [15:0];
+reg [31:0] wr_select_sram [15:0];
+wire wr_xfer_data_vld [15:0];
+wire [15:0] wr_xfer_data [15:0];
+wire wr_end_of_packet [15:0];
 
+//SRAM正在应答的端口
+reg [3:0] rd_select_port [31:0];
+//端口正在请求的SRAM
+reg [31:0] rd_select_sram [15:0];
+wire rd_xfer_data_vld [31:0];
+wire [15:0] rd_xfer_data [31:0];
+wire rd_end_of_packet [31:0];
+
+//16*8个队列的首尾地址
 reg [4:0] queue_head_sram [15:0] [7:0];
 reg [10:0] queue_head_page [15:0] [7:0];
 reg [4:0] queue_tail_sram [15:0] [7:0];
@@ -63,9 +71,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .wr_eop(wr_eop[port]),
         .pause(pause[port]),
 
-        .xfer_data_vld(xfer_data_vld[port]),
-        .xfer_data(xfer_data[port]),
-        .end_of_packet(end_of_packet[port]),
+        .xfer_data_vld(wr_xfer_data_vld[port]),
+        .xfer_data(wr_xfer_data[port]),
+        .end_of_packet(wr_end_of_packet[port]),
         
         .match_end(match_end),
         .match_enable(match_enable),
@@ -78,9 +86,17 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [4:0] matching_best_sram;
     wire match_end;
 
-    always@(posedge clk) begin
-        //TODO 粘滞选项
-        select_sram[port] <= 1 << matching_best_sram;
+    wire viscous;
+    reg [4:0] viscosity;
+    assign viscous = viscosity < match_viscosity;
+
+    //匹配时、写入时、粘滞时 FIXME
+    always @(posedge clk) begin
+        if(viscous) begin
+            wr_select_sram[port] <= 1 << matching_best_sram;
+        end else begin
+            wr_select_sram[port] <= 0;
+        end
     end
 
     port_wr_sram_matcher port_wr_sram_matcher(
@@ -91,80 +107,91 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .match_threshold(match_threshold),
     
         .match_enable(match_enable),
+        .viscous(viscous),
         .matching_next_sram(matching_next_sram),
         .matching_best_sram(matching_best_sram),
         .match_end(match_end),
-    
+     
         .new_dest_port(new_dest_port),
         .new_length(new_length),
     
         .free_space(free_space[matching_next_sram]),
-        .occupied(occupied[matching_next_sram]),
-        .packet_amount(packet_amount[matching_next_sram][new_dest_port])
+        .accessible(match_accessible[matching_next_sram]),
+        .packet_amount(check_amount[matching_next_sram])
+    );
+
+    reg [2:0] rd_prior;
+    wire rd_sram = queue_head_sram[port][rd_prior];
+
+    port_rd_frontend port_rd_frontend(
+        .clk(clk),
+        .rst_n(rst_n),
+    
+        .rd_sop(rd_sop[port]),
+        .rd_eop(rd_eop[port]),
+        .rd_vld(rd_vld[port]),
+        .rd_data(rd_data[port]),
+        .ready(ready[port]),
+    
+        .xfer_data_vld(rd_xfer_data_vld[rd_sram] & (rd_select_port[rd_sram] == port)),
+        .xfer_data(rd_xfer_data[rd_sram]),
+        .end_of_packet(rd_end_of_packet[rd_sram])
     );
 end endgenerate
+
+wire [10:0] free_space [31:0];
+wire [8:0] check_amount [31:0];
+wire [3:0] check_port [31:0];
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     
-    wire [15:0] select = {
-        select_sram[0][sram],
-        select_sram[1][sram],
-        select_sram[2][sram],
-        select_sram[3][sram],
-        select_sram[4][sram],
-        select_sram[5][sram],
-        select_sram[6][sram],
-        select_sram[7][sram],
-        select_sram[8][sram],
-        select_sram[9][sram],
-        select_sram[10][sram],
-        select_sram[11][sram],
-        select_sram[12][sram],
-        select_sram[13][sram],
-        select_sram[14][sram],
-        select_sram[15][sram]
+    wire [15:0] wr_select = {
+        wr_select_sram[0][sram],
+        wr_select_sram[1][sram],
+        wr_select_sram[2][sram],
+        wr_select_sram[3][sram],
+        wr_select_sram[4][sram],
+        wr_select_sram[5][sram],
+        wr_select_sram[6][sram],
+        wr_select_sram[7][sram],
+        wr_select_sram[8][sram],
+        wr_select_sram[9][sram],
+        wr_select_sram[10][sram],
+        wr_select_sram[11][sram],
+        wr_select_sram[12][sram],
+        wr_select_sram[13][sram],
+        wr_select_sram[14][sram],
+        wr_select_sram[15][sram]
     };
 
-    wire [3:0] idx;
+    wire [3:0] wr_port;
 
     decoder_16_4 decoder_16_4(
-        .select(select),
-        .idx(idx)
+        .select(wr_select),
+        .idx(wr_port)
     );
 
     wire [15:0] packet_head_addr;
     wire [15:0] packet_tail_addr;
 
-    reg start_of_packet;
-
-    always @(posedge clk) begin
-        if(!rst_n || xfer_data_vld[idx]) begin
-            start_of_packet <= 0;
-        end else if(end_of_packet[idx]) begin
-            start_of_packet <= 1;
-        end 
-    end
-
-    always @(posedge clk) begin
-        if(start_of_packet && xfer_data_vld[idx]) begin
-            free_space[sram] <= free_space[sram] - xfer_data[idx][15:7];
-            packet_amount[sram][xfer_data[idx][3:0]] <= packet_amount[sram][xfer_data[idx][3:0]] + 1;
-        end
-    end
-
-    assign occupied[sram] = select != 0;
+    assign match_accessible[sram] = wr_select != 0;
+    // assign check_port[sram] = new_dest_port[idx];
 
     sram_interface #(.SRAM_IDX(sram)) sram_interface(
         .clk(clk),
         .rst_n(rst_n),
 
-        .xfer_data_vld(xfer_data_vld[idx]),
-        .xfer_data(xfer_data[idx]),
-        .end_of_packet(end_of_packet[idx]),
+        .xfer_data_vld(wr_xfer_data_vld[wr_port]),
+        .xfer_data(wr_xfer_data[wr_port]),
+        .end_of_packet(wr_end_of_packet[wr_port]),
 
         .packet_head_addr(packet_head_addr),
-        .packet_tail_addr(packet_tail_addr)
+        .packet_tail_addr(packet_tail_addr),
+
+        .check_port(check_port[sram]),
+        .check_amount(check_amount[sram]),
+        .free_space(free_space[sram])
     );
 
 end endgenerate
