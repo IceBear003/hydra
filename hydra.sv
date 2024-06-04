@@ -3,6 +3,7 @@
 `include "port_rd_dispatch.sv"
 `include "port_rd_frontend.sv"
 
+`include "sram_rd_round.sv"
 `include "sram_interface.sv"
 `include "decoder_16_4.sv"
 `include "decoder_32_5.sv"
@@ -45,7 +46,7 @@ wire [15:0] wr_xfer_data [15:0];
 wire wr_end_of_packet [15:0];
 
 //SRAM正在应答的端口
-reg [3:0] rd_select_port [31:0];
+wire [3:0] rd_select_port [31:0];
 //端口正在请求的SRAM
 reg [31:0] rd_select_sram [15:0];
 wire [10:0] rd_page [15:0];
@@ -209,22 +210,54 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .idx(wr_port)
     );
 
-    wire [15:0] packet_head_addr;
-    wire [15:0] packet_tail_addr;
+    wire [15:0] wr_packet_head_addr;
+    wire [15:0] wr_packet_tail_addr;
+    //JT TODO
 
     assign match_accessible[sram] = wr_select != 0;
     // assign check_port[sram] = new_dest_port[idx];
+    //MATCH TODO
+
+    wire [15:0] rd_select = {
+        rd_select_sram[0][sram],
+        rd_select_sram[1][sram],
+        rd_select_sram[2][sram],
+        rd_select_sram[3][sram],
+        rd_select_sram[4][sram],
+        rd_select_sram[5][sram],
+        rd_select_sram[6][sram],
+        rd_select_sram[7][sram],
+        rd_select_sram[8][sram],
+        rd_select_sram[9][sram],
+        rd_select_sram[10][sram],
+        rd_select_sram[11][sram],
+        rd_select_sram[12][sram],
+        rd_select_sram[13][sram],
+        rd_select_sram[14][sram],
+        rd_select_sram[15][sram]
+    };
+
+    wire rd_round_next; //SRAM封装口连接
+
+    sram_rd_round sram_rd_round(
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .select(rd_select),
+        .next(rd_round_next),
+        .port(rd_select_sram[sram])
+    );
 
     sram_interface #(.SRAM_IDX(sram)) sram_interface(
         .clk(clk),
         .rst_n(rst_n),
 
-        .xfer_data_vld(wr_xfer_data_vld[wr_port]),
-        .xfer_data(wr_xfer_data[wr_port]),
-        .end_of_packet(wr_end_of_packet[wr_port]),
+        .wr_xfer_data_vld(wr_xfer_data_vld[wr_port]),
+        .wr_xfer_data(wr_xfer_data[wr_port]),
+        .wr_end_of_packet(wr_end_of_packet[wr_port]),
 
-        .packet_head_addr(packet_head_addr),
-        .packet_tail_addr(packet_tail_addr),
+        .wr_packet_head_addr(wr_packet_head_addr),
+        .wr_packet_tail_addr(wr_packet_tail_addr),
 
         .check_port(check_port[sram]),
         .check_amount(check_amount[sram]),

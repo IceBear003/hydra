@@ -8,13 +8,13 @@ module sram_interface
     input rst_n,
 
     //需要32组MUX16-1
-    input xfer_data_vld,
-    input [15:0] xfer_data,
-    input end_of_packet,
+    input wr_wr_xfer_data_vld,
+    input [15:0] wr_xfer_data,
+    input wr_end_of_packet,
 
     //包的首尾页地址，无需多选器
-    output reg [15:0] packet_head_addr,
-    output reg [15:0] packet_tail_addr,
+    output reg [15:0] wr_packet_head_addr,
+    output reg [15:0] wr_packet_tail_addr,
 
     input [3:0] check_port,
     output [8:0] check_amount,
@@ -37,28 +37,28 @@ always @(posedge clk) begin
         for(port = 0; port < 16; port = port + 1) begin
             packet_amount[port] <= 0;
         end
-    end else if(state == 2'd0 && xfer_data_vld) begin
-        free_space <= free_space - xfer_data[15:7];
-        packet_amount[xfer_data[3:0]] <= packet_amount[xfer_data[3:0]] + 1;
+    end else if(state == 2'd0 && wr_wr_xfer_data_vld) begin
+        free_space <= free_space - wr_xfer_data[15:7];
+        packet_amount[wr_xfer_data[3:0]] <= packet_amount[wr_xfer_data[3:0]] + 1;
     end
 end
 
 always @(posedge clk) begin
     if(!rst_n) begin
         state <= 2'd0;
-    end else if(state == 2'd0 && xfer_data_vld) begin
+    end else if(state == 2'd0 && wr_wr_xfer_data_vld) begin
         state <= 2'd1;
-    end else if(state == 2'd1 && wr_batch == 3'd7 && xfer_data_vld) begin
+    end else if(state == 2'd1 && wr_batch == 3'd7 && wr_wr_xfer_data_vld) begin
         state <= 2'd2;
-    end else if(state == 2'd2 && end_of_packet) begin
+    end else if(state == 2'd2 && wr_end_of_packet) begin
         state <= 2'd0;
     end
 end
 
 always @(posedge clk) begin
-    if(!rst_n || end_of_packet) begin
+    if(!rst_n || wr_end_of_packet) begin
         wr_batch <= 0;
-    end else if(xfer_data_vld) begin
+    end else if(wr_wr_xfer_data_vld) begin
         wr_batch <= wr_batch + 1;
     end
 end
@@ -103,9 +103,9 @@ reg [15:0] ecc_buffer [7:0];
 wire [7:0] ecc_result;
 
 always @(posedge clk) begin
-    if(xfer_data_vld == 0) begin
+    if(wr_wr_xfer_data_vld == 0) begin
     end else if(wr_batch == 3'd0) begin
-        ecc_buffer[0] <= xfer_data;
+        ecc_buffer[0] <= wr_xfer_data;
         ecc_buffer[1] <= 0;
         ecc_buffer[2] <= 0;
         ecc_buffer[3] <= 0;
@@ -114,12 +114,12 @@ always @(posedge clk) begin
         ecc_buffer[6] <= 0;
         ecc_buffer[7] <= 0;
     end else begin
-        ecc_buffer[wr_batch] <= xfer_data;
+        ecc_buffer[wr_batch] <= wr_xfer_data;
     end
 end
 
 always @(posedge clk) begin
-    if(wr_batch == 7 || end_of_packet) begin
+    if(wr_batch == 7 || wr_end_of_packet) begin
         es_wr_addr <= np_top;
         es_din <= ecc_result;
     end
@@ -141,21 +141,21 @@ end
 
 always @(posedge clk) begin
     if(state == 2'd1) begin
-        packet_head_addr <= np_top;
+        wr_packet_head_addr <= np_top;
     end else if(state != 2'd2) begin
-    end else if(end_of_packet == 0) begin
+    end else if(wr_end_of_packet == 0) begin
         jump_table[jt_wr_addr] <= np_top;
     end else begin
-        packet_tail_addr <= np_top;
+        wr_packet_tail_addr <= np_top;
     end
 end
 
 sram sram(
     .clk(clk),
     .rst_n(rst_n),
-    .wr_en(xfer_data_vld),
+    .wr_en(wr_wr_xfer_data_vld),
     .wr_addr({np_top, wr_batch}),
-    .din(xfer_data)/*,
+    .din(wr_xfer_data)/*,
     .rd_en(),
     .rd_addr(),
     .dout()*/
