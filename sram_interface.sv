@@ -177,10 +177,12 @@ sram_ecc_encoder sram_ecc_encoder(
 reg [10:0] ec_rd_addr;
 reg [7:0] ec_dout;
 reg [15:0] ecc_rd_buffer [7:0];
-reg [15:0] ecc_rd_data [7:0];
+wire [15:0] ecc_rd_data [7:0];
+
+//发送见上，拉UPDATE
 
 sram_ecc_decoder sram_ecc_decoder(
-    .update,
+    .update(),
     .data_0(ecc_rd_buffer[0]),
     .data_1(ecc_rd_buffer[1]),
     .data_2(ecc_rd_buffer[2]),
@@ -200,7 +202,10 @@ sram_ecc_decoder sram_ecc_decoder(
     .cr_data_7(ecc_rd_data[7])
 );
 
-//跳转表
+/*
+ * Sub-module "jump_table": record the next page's address of every page.
+ */
+
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [10:0] jt_wr_addr;
 
@@ -211,15 +216,28 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_state == 2'd1) begin
+    if(wr_state == 2'd1 && wr_batch == 3'd7) begin
         wr_packet_head_addr <= np_top;
-    end else if(wr_state != 2'd2) begin
-    end else if(wr_end_of_packet == 0) begin
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_state == 2'd2 && (wr_batch == 3'd7 || wr_end_of_packet)) begin
         jump_table[jt_wr_addr] <= np_top;
-    end else begin
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_state == 2'd2 && wr_end_of_packet) begin
         wr_packet_tail_addr <= np_top;
     end
 end
+
+//跳转表读取，替换page
+
+/*
+ * Statistics for every port.
+ */
 
 reg [8:0] packet_amount [15:0];
 assign check_amount = packet_amount[check_port];
@@ -244,7 +262,7 @@ sram sram(
     .wr_addr({np_top, wr_batch}),
     .din(wr_xfer_data)/*,
     .rd_en(),
-    .rd_addr(),
+    .rd_addr(), 注意时序！！！
     .dout()*/
 );
 

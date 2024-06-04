@@ -21,6 +21,7 @@ end
 
 wire [15:0] masked = mask & select;
 
+//急需优化 多路16to4译码器
 always @(posedge clk) begin
     if(!next) begin end
     else if(masked[0]) port <= 4'h0;
