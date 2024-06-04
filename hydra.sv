@@ -1,8 +1,11 @@
+`include "port_wr_sram_matcher.sv"
 `include "port_wr_frontend.sv"
+`include "port_rd_dispatch.sv"
 `include "port_rd_frontend.sv"
+
 `include "sram_interface.sv"
 `include "decoder_16_4.sv"
-`include "port_wr_sram_matcher.sv"
+`include "decoder_32_5.sv"
 
 module hydra(
     input clk,
@@ -45,15 +48,14 @@ wire wr_end_of_packet [15:0];
 reg [3:0] rd_select_port [31:0];
 //端口正在请求的SRAM
 reg [31:0] rd_select_sram [15:0];
+wire [10:0] rd_page [15:0];
 wire rd_xfer_data_vld [31:0];
 wire [15:0] rd_xfer_data [31:0];
 wire rd_end_of_packet [31:0];
 
 //16*8个队列的首尾地址
-reg [4:0] queue_head_sram [15:0] [7:0];
-reg [10:0] queue_head_page [15:0] [7:0];
-reg [4:0] queue_tail_sram [15:0] [7:0];
-reg [10:0] queue_tail_page [15:0] [7:0];
+reg [15:0] queue_head [15:0] [7:0];
+reg [15:0] queue_tail [15:0] [7:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -120,8 +122,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .packet_amount(check_amount[matching_next_sram])
     );
 
-    reg [2:0] rd_prior;
-    wire rd_sram = queue_head_sram[port][rd_prior];
+    //READ
+
+    wire rd_sram = queue_head[port][rd_prior][15:11];
+    assign rd_page = queue_head[port][rd_prior][10:0];
+
+    always @(posedge clk) begin
+        //if(READING)
+        rd_select_sram[port] <= 1 << rd_sram;
+    end
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),
@@ -136,6 +145,34 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .xfer_data_vld(rd_xfer_data_vld[rd_sram] & (rd_select_port[rd_sram] == port)),
         .xfer_data(rd_xfer_data[rd_sram]),
         .end_of_packet(rd_end_of_packet[rd_sram])
+    );
+
+    reg [7:0] queue_available;
+
+    always @(posedge clk) begin
+        queue_available <= {
+            queue_head[port][0] != queue_tail[port][0],
+            queue_head[port][1] != queue_tail[port][1],
+            queue_head[port][2] != queue_tail[port][2],
+            queue_head[port][3] != queue_tail[port][3],
+            queue_head[port][4] != queue_tail[port][4],
+            queue_head[port][5] != queue_tail[port][5],
+            queue_head[port][6] != queue_tail[port][6],
+            queue_head[port][7] != queue_tail[port][7]
+        };
+    end
+
+    wire rd_available = queue_available != 0;
+    reg [2:0] rd_prior;
+
+    port_rd_dispatch port_rd_dispatch(
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .wrr_en(wrr_en[port]),
+        .queue_available(queue_available),
+        .next(rd_end_of_packet[rd_sram] & (rd_select_port[rd_sram] == port)),
+        .prior(rd_prior)
     );
 end endgenerate
 
