@@ -126,12 +126,12 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     //READ
 
     wire rd_sram = queue_head[port][rd_prior][15:11];
-    assign rd_page = queue_head[port][rd_prior][10:0];
+    assign rd_page[port] = queue_head[port][rd_prior][10:0];
 
     always @(posedge clk) begin
         //if(READING)
         rd_select_sram[port] <= 1 << rd_sram;
-    end
+    end 
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),

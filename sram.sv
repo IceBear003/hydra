@@ -14,13 +14,13 @@ module sram
 
 (* ram_style = "block" *) reg [15:0] d_latches [16383:0];
 
-always @(negedge clk) begin
+always @(posedge clk) begin
     if(wr_en && rst_n) begin 
         d_latches[wr_addr] <= din;
     end
 end
 
-always @(negedge clk) begin
+always @(posedge clk) begin
     if(rd_en && rst_n) begin
         dout <= d_latches[rd_addr];
     end
