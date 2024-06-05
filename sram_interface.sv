@@ -14,11 +14,13 @@ module sram_interface
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
 
+    input rd_next,
     input [3:0] rd_port,
+    input [15:0] rd_packet_head_addr,
+    output [3:0] rd_xfer_port,
     output rd_xfer_data_vld,
     output [15:0] rd_xfer_data,
     output rd_end_of_packet,
-    input [15:0] rd_packet_head_addr,
     output reg [15:0] rd_next_packet_head_addr,
 
     input [3:0] check_port,
@@ -54,36 +56,16 @@ always @(posedge clk) begin
     end
 end
 
-//Per round(page)
+//READ
+
 reg [2:0] rd_batch;
+reg [2:0] rd_batch_1;
+reg [2:0] rd_batch_2;
 
-//Multi-port concurrent read status
-// 0 - idle
-// 1 - reading the first page(length not got)
-// 2 - reading the left pages(length got)
-reg [1:0] rd_state [15:0];
 reg [10:0] rd_page [15:0];
-reg [5:0] rd_length [15:0];
-
-integer idx;
-always @(posedge clk) begin
-    if(!rst_n) begin
-        for(idx = 0; idx < 16; idx = idx + 1) begin
-            rd_state[idx] <= 2'd0;
-        end
-    end else if (rd_state[rd_port] == 2'd0 && rd_length[rd_port] == 2'd0) begin
-        rd_state[rd_port] <= 2'd1;
-    end else if (rd_state[rd_port] == 2'd1 && rd_batch == 3'd7) begin
-        rd_state[rd_port] <= 2'd2;
-    end else if (rd_state[rd_port] == 2'd2) begin
-        rd_state[rd_port] <= 2'd0;
-    end
-end
 
 always @(posedge clk) begin
-    if(!rst_n) begin
-        rd_batch <= 0;
-    end else if(rd_length[rd_port] == 0) begin
+    if(~rst_n || rd_next) begin
         rd_batch <= 0;
     end else begin
         rd_batch <= rd_batch + 1;
@@ -91,10 +73,24 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(rd_state[rd_port] == 2'd1 && rd_batch == 3'd7) begin
-        rd_page[rd_port] <= jt_dout;
-    end
+    rd_batch_1 <= rd_batch;
+    rd_batch_2 <= rd_batch_1;
 end
+
+//需要记录长度！！！
+
+wire [15:0] sram_dout;
+
+sram sram(
+    .clk(clk),
+    .rst_n(rst_n),
+    .wr_en(wr_xfer_data_vld),
+    .wr_addr({np_top, wr_batch}),
+    .din(wr_xfer_data),
+    .rd_en(1'd1),
+    .rd_addr({rd_page[rd_port], rd_batch}),
+    .dout(sram_dout)
+);
 
 /*
  * Sub-module "null_pages": Recycling and reallocating data pages.
@@ -109,10 +105,10 @@ reg [10:0] np_top;
 always @(posedge clk) begin
     if(!rst_n) begin
         np_tail <= 0;
-    end /*else if(rd_batch[port] == 7) begin
-        null_pages[np_tail] <= rd_addr;
+    end else if(rd_batch[port] == 7) begin //多次为7
+        null_pages[np_tail] <= rd_page[port];
         np_tail <= np_tail + 1;
-    end */
+    end
 end
 
 always @(posedge clk) begin
@@ -136,6 +132,14 @@ end
  */
 
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
+
+ always @(posedge clk) begin
+     ecc_codes[ec_wr_addr] <= ec_din;
+ end
+ 
+ always @(posedge clk) begin
+     ec_dout <= ecc_codes[ec_rd_addr];
+ end
 
 reg [10:0] ec_wr_addr;
 reg [7:0] ec_din;
@@ -165,14 +169,6 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk) begin
-    ecc_codes[ec_wr_addr] <= ec_din;
-end
-
-always @(posedge clk) begin
-    ec_dout <= ecc_codes[ec_rd_addr];
-end
-
 sram_ecc_encoder sram_ecc_encoder( 
     .data_0(ecc_wr_buffer[0]),
     .data_1(ecc_wr_buffer[1]),
@@ -190,10 +186,29 @@ reg [7:0] ec_dout;
 reg [15:0] ecc_rd_buffer [7:0];
 wire [15:0] ecc_rd_data [7:0];
 
-//发送见上，拉UPDATE
+always @(posedge clk) begin
+    if(rd_batch_1 == 0) begin
+        ecc_rd_buffer[0] <= sram_dout;
+        ecc_rd_buffer[1] <= 16'h0000;
+        ecc_rd_buffer[2] <= 16'h0000;
+        ecc_rd_buffer[3] <= 16'h0000;
+        ecc_rd_buffer[4] <= 16'h0000;
+        ecc_rd_buffer[5] <= 16'h0000;
+        ecc_rd_buffer[6] <= 16'h0000;
+        ecc_rd_buffer[7] <= 16'h0000;
+    end else begin
+        ecc_rd_buffer[rd_batch_1] <= sram_dout;
+    end
+end
+
+always @(posedge clk) begin
+    if(rd_batch == 0) begin
+        ec_rd_addr <= rd_page[rd_port];
+    end
+end
 
 sram_ecc_decoder sram_ecc_decoder(
-    .update(),
+    .update(rd_batch_1 == 2'd0),
     .data_0(ecc_rd_buffer[0]),
     .data_1(ecc_rd_buffer[1]),
     .data_2(ecc_rd_buffer[2]),
@@ -250,6 +265,12 @@ always @(posedge clk) begin
     jt_dout <= jump_table[jt_rd_addr];
 end
 
+always @(posedge clk) begin
+    if(rd_batch == 3'd7) begin
+        rd_page[rd_port] <= jt_dout;
+    end
+end
+
 /*
  * Statistics for every port.
  */
@@ -269,20 +290,5 @@ always @(posedge clk) begin
         packet_amount[wr_xfer_data[3:0]] <= packet_amount[wr_xfer_data[3:0]] + 1;
     end
 end
-
-wire [15:0] sram_dout;
-
-sram sram(
-    .clk(clk),
-    .rst_n(rst_n),
-    .wr_en(wr_xfer_data_vld),
-    .wr_addr({np_top, wr_batch}),
-    .din(wr_xfer_data),
-    .rd_en(1'd1), //FIXME 也许可以节能？
-    .rd_addr(rd_length[rd_port] == 0 ? 
-                {rd_packet_head_addr[10:0], rd_batch} : 
-                {rd_page[rd_port], rd_batch}),
-    .dout(sram_dout)
-);
 
 endmodule
