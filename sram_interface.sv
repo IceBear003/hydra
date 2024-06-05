@@ -1,6 +1,7 @@
 `include "sram.sv"
 `include "sram_ecc_encoder.sv"
 `include "sram_ecc_decoder.sv"
+`include "sram_rd_round.sv"
 
 module sram_interface
 #(parameter SRAM_IDX = 0)
@@ -14,14 +15,17 @@ module sram_interface
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
 
-    input rd_next,
-    input [3:0] rd_port,
-    input [15:0] rd_packet_head_addr,
-    output [3:0] rd_xfer_port,
-    output rd_xfer_data_vld,
-    output [15:0] rd_xfer_data,
-    output rd_end_of_packet,
-    output reg [15:0] rd_next_packet_head_addr,
+    input rd_next,          //即将有一个读取请求
+    input [3:0] rd_port,    //正在读取哪个端口的数据包
+    input [15:0] rd_packet_head_addr,   //正在读取的数据包的头页地址
+
+    output reg [3:0] rd_xfer_port,  //正在发送哪个端口的数据
+    output rd_xfer_data_vld,    //发送有效信号
+    output [15:0] rd_xfer_data, //发送的数据
+    output rd_end_of_packet,    //发送结束
+    output reg [15:0] rd_next_packet_head_addr, //下一个数据包的头页地址
+                                                //FIXME 如果没有下一个，则应当指向自己
+                                                //这样可以让head=tail（很有趣的巧合）
 
     input [3:0] check_port,
     output [8:0] check_amount,
@@ -56,30 +60,101 @@ always @(posedge clk) begin
     end
 end
 
-//READ
-
+reg rd_en;
+reg rd_xfer_en;
 reg [2:0] rd_batch;
 reg [2:0] rd_batch_1;
 reg [2:0] rd_batch_2;
+reg [2:0] rd_xfer_batch;
 
 reg [10:0] rd_page [15:0];
+reg [8:0] rd_length [15:0];
+reg [8:0] rd_cur_length [15:0];
+reg [8:0] rd_xfer_length [15:0];
+reg [8:0] rd_cur_xfer_length [15:0];
 
 always @(posedge clk) begin
-    if(~rst_n || rd_next) begin
+    if(~rst_n) begin
+        rd_en <= 0;
+    end else if(rd_next) begin
+        rd_en <= 1;
+    end else if(rd_batch == 3'd7 || rd_cur_length[rd_port] == rd_length[rd_port]) begin
+        rd_en <= 0;
+    end
+end
+
+always @(posedge clk) begin
+    if(~rst_n) begin
         rd_batch <= 0;
-    end else begin
+    end else if(rd_next) begin
+        rd_batch <= 0;
+    end else if(rd_en) begin
         rd_batch <= rd_batch + 1;
     end
 end
 
 always @(posedge clk) begin
     rd_batch_1 <= rd_batch;
-    rd_batch_2 <= rd_batch_1;
+    rd_batch_2 <= rd_batch;
 end
 
-//需要记录长度！！！
+always @(posedge clk) begin
+    if(~rst_n) begin
+        rd_xfer_en <= 0;
+    end else if(1/*FIXME*/) begin
+        rd_xfer_en <= 1;
+    end else if(rd_xfer_batch == 3'd7 || rd_cur_xfer_length[rd_xfer_port] == rd_xfer_length[rd_xfer_port]) begin
+        rd_xfer_en <= 0;
+    end
+end
+
+always @(posedge clk) begin
+    if(~rst_n) begin
+        rd_xfer_batch <= 0;
+    end else if(rd_xfer_en) begin
+        rd_xfer_batch <= rd_xfer_batch + 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(rd_xfer_en) begin
+        rd_cur_xfer_length[rd_xfer_port] <= rd_cur_xfer_length[rd_xfer_port] + 1;
+    end else if(rd_batch_2 == 3'd7 && rd_xfer_length[last_rd_port] == 0) begin
+        rd_xfer_length[last_rd_port] <= ecc_rd_data[0][15:7];
+        rd_cur_xfer_length[last_rd_port] <= 0;
+    end
+end
+
+always @(posedge clk) begin
+    if(rd_en) begin
+        rd_cur_length[rd_port] <= rd_cur_length[rd_port] + 1;
+    end else if(rd_batch_2 == 3'd7 && rd_xfer_length[last_rd_port] == 0) begin
+        rd_length[last_rd_port] <= ecc_rd_data[0][15:7] - 8;
+        rd_cur_length[last_rd_port] <= 0;
+    end
+end
+
+reg [3:0] last_rd_port;
+always @(posedge clk) begin
+    if(rd_batch == 3'd7) begin
+        last_rd_port <= rd_port;
+    end
+end
+
+always @(posedge clk) begin
+    if(rd_batch_2 == 3'd7 /*FIXME*/) begin
+        rd_xfer_port <= last_rd_port;
+    end
+end
+
+assign rd_xfer_data_vld = rd_xfer_en;
+assign rd_xfer_data = ecc_rd_data[rd_xfer_batch];
+assign rd_end_of_packet = rd_xfer_length[rd_xfer_port] == 0;
+assign rd_next_packet_head_addr = jt_dout;
 
 wire [15:0] sram_dout;
+
+wire [13:0] sram_rd_addr = {rd_page[rd_port], rd_batch};
 
 sram sram(
     .clk(clk),
@@ -87,8 +162,8 @@ sram sram(
     .wr_en(wr_xfer_data_vld),
     .wr_addr({np_top, wr_batch}),
     .din(wr_xfer_data),
-    .rd_en(1'd1),
-    .rd_addr({rd_page[rd_port], rd_batch}),
+    .rd_en(rd_en),
+    .rd_addr(sram_rd_addr),
     .dout(sram_dout)
 );
 
@@ -105,8 +180,8 @@ reg [10:0] np_top;
 always @(posedge clk) begin
     if(!rst_n) begin
         np_tail <= 0;
-    end else if(rd_batch[port] == 7) begin //多次为7
-        null_pages[np_tail] <= rd_page[port];
+    end else if(rd_batch == 7 || rd_cur_length[rd_port] == rd_length[rd_port]) begin
+        null_pages[np_tail] <= rd_page[rd_port];
         np_tail <= np_tail + 1;
     end
 end
@@ -202,13 +277,13 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(rd_batch == 0) begin
+    if(rd_batch == 7 || rd_cur_length[rd_port] == rd_length[rd_port]) begin
         ec_rd_addr <= rd_page[rd_port];
     end
 end
 
 sram_ecc_decoder sram_ecc_decoder(
-    .update(rd_batch_1 == 2'd0),
+    .update(rd_batch_1 == 3'd0), //FIXME
     .data_0(ecc_rd_buffer[0]),
     .data_1(ecc_rd_buffer[1]),
     .data_2(ecc_rd_buffer[2]),
@@ -266,8 +341,16 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
+    if(rd_batch == 3'd7 && rd_xfer_length[rd_port] == 0) begin
+        jt_rd_addr <= rd_packet_head_addr[10:0];
+    end else begin
+        jt_rd_addr <= rd_page[rd_port];
+    end
+end
+
+always @(posedge clk) begin
     if(rd_batch == 3'd7) begin
-        rd_page[rd_port] <= jt_dout;
+        rd_page[rd_port] <= jt_dout[10:0];
     end
 end
 
@@ -278,16 +361,30 @@ end
 reg [8:0] packet_amount [15:0];
 assign check_amount = packet_amount[check_port];
 
-integer port;
 always @(posedge clk) begin
     if(!rst_n) begin
         free_space <= 11'd2047;
-        for(port = 0; port < 16; port = port + 1) begin
-            packet_amount[port] <= 0;
-        end
+        packet_amount[0] <= 0;
+        packet_amount[1] <= 0;
+        packet_amount[2] <= 0;
+        packet_amount[3] <= 0;
+        packet_amount[4] <= 0;
+        packet_amount[5] <= 0;
+        packet_amount[6] <= 0;
+        packet_amount[7] <= 0;
+        packet_amount[8] <= 0;
+        packet_amount[9] <= 0;
+        packet_amount[10] <= 0;
+        packet_amount[11] <= 0;
+        packet_amount[12] <= 0;
+        packet_amount[13] <= 0;
+        packet_amount[14] <= 0;
+        packet_amount[15] <= 0;
     end else if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        free_space <= free_space - wr_xfer_data[15:7];
+        free_space <= free_space - wr_xfer_data[15:7] + rd_en;
         packet_amount[wr_xfer_data[3:0]] <= packet_amount[wr_xfer_data[3:0]] + 1;
+    end else begin
+        free_space <= free_space + rd_en;
     end
 end
 
