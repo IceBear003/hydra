@@ -65,13 +65,18 @@ reg [1:0] rd_state [15:0];
 reg [10:0] rd_page [15:0];
 reg [5:0] rd_length [15:0];
 
+integer idx;
 always @(posedge clk) begin
     if(!rst_n) begin
-        
-    end else if(rd_length[rd_port] == 0) begin
-        
-    end else begin
-        
+        for(idx = 0; idx < 16; idx = idx + 1) begin
+            rd_state[idx] <= 2'd0;
+        end
+    end else if (rd_state[rd_port] == 2'd0 && rd_length[rd_port] == 2'd0) begin
+        rd_state[rd_port] <= 2'd1;
+    end else if (rd_state[rd_port] == 2'd1 && rd_batch == 3'd7) begin
+        rd_state[rd_port] <= 2'd2;
+    end else if (rd_state[rd_port] == 2'd2) begin
+        rd_state[rd_port] <= 2'd0;
     end
 end
 
@@ -82,6 +87,12 @@ always @(posedge clk) begin
         rd_batch <= 0;
     end else begin
         rd_batch <= rd_batch + 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(rd_state[rd_port] == 2'd1 && rd_batch == 3'd7) begin
+        rd_page[rd_port] <= jt_dout;
     end
 end
 
@@ -208,6 +219,8 @@ sram_ecc_decoder sram_ecc_decoder(
 
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [10:0] jt_wr_addr;
+reg [10:0] jt_rd_addr;
+reg [15:0] jt_dout;
 
 always @(posedge clk) begin
     if(wr_batch == 7) begin
@@ -217,23 +230,25 @@ end
 
 always @(posedge clk) begin
     if(wr_state == 2'd1 && wr_batch == 3'd7) begin
-        wr_packet_head_addr <= np_top;
+        wr_packet_head_addr <= {SRAM_IDX, np_top};
     end
 end
 
 always @(posedge clk) begin
     if(wr_state == 2'd2 && (wr_batch == 3'd7 || wr_end_of_packet)) begin
-        jump_table[jt_wr_addr] <= np_top;
+        jump_table[jt_wr_addr] <= {SRAM_IDX, np_top};
     end
 end
 
 always @(posedge clk) begin
     if(wr_state == 2'd2 && wr_end_of_packet) begin
-        wr_packet_tail_addr <= np_top;
+        wr_packet_tail_addr <= {SRAM_IDX, np_top};
     end
 end
 
-//跳转表读取，替换page
+always @(posedge clk) begin
+    jt_dout <= jump_table[jt_rd_addr];
+end
 
 /*
  * Statistics for every port.
@@ -255,15 +270,19 @@ always @(posedge clk) begin
     end
 end
 
+wire [15:0] sram_dout;
+
 sram sram(
     .clk(clk),
     .rst_n(rst_n),
     .wr_en(wr_xfer_data_vld),
     .wr_addr({np_top, wr_batch}),
-    .din(wr_xfer_data)/*,
-    .rd_en(),
-    .rd_addr(), 注意时序！！！
-    .dout()*/
+    .din(wr_xfer_data),
+    .rd_en(1'd1), //FIXME 也许可以节能？
+    .rd_addr(rd_length[rd_port] == 0 ? 
+                {rd_packet_head_addr[10:0], rd_batch} : 
+                {rd_page[rd_port], rd_batch}),
+    .dout(sram_dout)
 );
 
 endmodule

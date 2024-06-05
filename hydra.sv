@@ -245,7 +245,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
         .select(rd_select),
         .next(rd_round_next),
-        .port(rd_select_sram[sram])
+        .port(rd_select_port[sram])
     );
 
     sram_interface #(.SRAM_IDX(sram)) sram_interface(
