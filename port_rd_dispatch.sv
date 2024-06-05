@@ -8,11 +8,12 @@ module port_rd_dispatch(
     output reg [2:0] prior
 );
 
-//1 MUX + (4 DOORS / 0 DOORS)
+/* 使用掩码遮盖可用队列 */
 wire [7:0] masked = wrr_en ? wrr_mask & queue_available : queue_available;
-//4 DOORS + 1 MUX
+/* 若遮盖后无可用队列则使用不遮盖 */
 wire [7:0] fixed = (masked == 8'h00) ? queue_available : masked;
-//3 DOORS
+
+/* 获取最低(优先)位的队列 */
 always @(posedge clk) begin
     if(fixed[0]) prior <= 3'd0;
     else if(fixed[1]) prior <= 3'd1;
@@ -23,6 +24,12 @@ always @(posedge clk) begin
     else if(fixed[6]) prior <= 3'd6;
     else prior <= 3'd7;
 end
+
+/*
+ * wrr_mask WRR位掩码
+ *  通过wrr_start、wrr_end维护
+ *  实现O(1)复杂度的轮询WRR调度
+ */
 
 reg [7:0] wrr_mask;
 reg [2:0] wrr_start;
