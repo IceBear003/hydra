@@ -26,7 +26,7 @@ module port_wr_frontend(
      * |- match_end - 表示是否匹配完毕，可以开始发送缓冲区的数据
      * |- match_enable - 使能匹配进程的信号，在match_end拉高后置位
      * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
-     *                              用于匹配时判断SRAM对该数据包的喜好程度
+     *                                用于匹配时判断SRAM对该数据包的喜好程度
      */
     input match_end,
     output reg match_enable,
