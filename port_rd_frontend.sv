@@ -1,4 +1,4 @@
-module port_wr_frontend(
+module port_rd_frontend(
     input clk,
     input rst_n,
 
