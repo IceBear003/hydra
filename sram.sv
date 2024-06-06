@@ -12,6 +12,7 @@ module sram
     output reg [15:0] dout
 );
 
+/* 8*36Kbit BRAM */
 (* ram_style = "block" *) reg [15:0] d_latches [16383:0];
 
 always @(posedge clk) begin

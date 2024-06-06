@@ -4,27 +4,44 @@ module port_wr_sram_matcher
     input clk,
     input rst_n,
 
-    // code -     mode          - match_threshold(max)
-    // 0    -    static         - 1
-    // 1    -    semi-dynamic   - 17
-    // 2    -    dynamic        - 32
+    /*
+     * 可配置参数
+     * |- match_mode - SRAM分配模式
+     *      |- 0 - 静态分配模式
+     *      |- 1 - 半动态分配模式
+     *      |- 2/3 - 全动态分配模式
+     * |- match_threshold - 匹配阈值，当匹配时长超过该值后，一旦有任何可用的即完成匹配
+     *      |- 静态分配模式 最大为1
+     *      |- 半动态分配模式 最大为17
+     *      |- 全动态分配模式 最大为32
+     */
     input [1:0] match_mode,
     input [4:0] match_threshold,
 
+    /* 与前端交互的信号 */
+    input [3:0] new_dest_port,
+    input [8:0] new_length,
     input match_enable,
+    output reg match_end,
+
+    /*
+     * 与后端交互的信号 
+     * |- viscous - 端口是否处于粘滞状态
+     * |- matching_next_sram - 下一周期尝试匹配的SRAM
+     * |- matching_best_sram - 当前匹配到最优的SRAM
+     */
     input viscous,
     output reg [4:0] matching_next_sram,
     output reg [4:0] matching_best_sram,
-    output reg match_end,
 
-    input [3:0] new_dest_port,
-    input [8:0] new_length,
-
-    //SRAM剩余空间
+    /* 
+     * 当前锚定的SRAM的状态
+     * |- free_space - SRAM剩余空间（半字）
+     * |- accessible - SRAM是否可用
+     * |- packet_amount - SRAM中新包端口对应的数据包数量
+     */
     input [10:0] free_space,
-    //SRAM是否被占用
     input accessible,
-    //SRAM中新包端口对应的数据包数量
     input [8:0] packet_amount
 );
 

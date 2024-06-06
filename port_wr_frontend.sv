@@ -12,20 +12,20 @@ module port_wr_frontend(
     output reg pause,
 
     /*
-     * 前端向后端发送数据包的信号
-     *  xfer_data_vld - xfer_data是否有效
-     *  xfer_data - 当前周期传输的一半字数据
-     *  end_of_packet - 当前传输的半字是否为数据包最后半字
+     * 向后端发送数据包的信号
+     * |- xfer_data_vld - xfer_data是否有效
+     * |- xfer_data - 当前周期传输的一半字数据
+     * |- end_of_packet - 当前传输的半字是否为数据包最后半字
      */
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
 
     /*
-     * 前端与后端搭配实现动态匹配的信号
-     *  match_end - 表示后端是否匹配完毕，可以开始发送缓冲区的数据
-     *  match_enable - 控制后端匹配进程的信号，在match_end拉高后置位
-     *  new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
+     * 与匹配模块交互的信号
+     * |- match_end - 表示是否匹配完毕，可以开始发送缓冲区的数据
+     * |- match_enable - 使能匹配进程的信号，在match_end拉高后置位
+     * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
      *                              用于匹配时判断SRAM对该数据包的喜好程度
      */
     input match_end,
@@ -36,26 +36,26 @@ module port_wr_frontend(
 
 /*
  * wr_state - 数据包写入前端缓冲区的状态:
- *  0 - 当前无数据包写入(初始态或wr_eop拉高后)
- *  1 - 数据包即将写入(wr_sop拉高后)
- *  2 - 数据包正在写入(wr_vld第一次拉高后)
- *  3 - 数据包完成写入(传输完毕所有半字后)
+ * |- 0 - 当前无数据包写入(初始态或wr_eop拉高后)
+ * |- 1 - 数据包即将写入(wr_sop拉高后)
+ * |- 2 - 数据包正在写入(wr_vld第一次拉高后)
+ * |- 3 - 数据包完成写入(传输完毕所有半字后)
  */
 reg [1:0] wr_state;
 
 /*
  * xfer_state - 前端缓冲区向后端发送数据的状态
- *  0 - 当前未传输数据
- *  1 - 正在传输一个数据包的数据
- *  2 - 当前数据包传输暂停(wr_vld拉低过长时间，适用于缓冲区内数据发送完毕但数据包写入仍未完成的情况)
+ * |- 0 - 当前未传输数据
+ * |- 1 - 正在传输一个数据包的数据
+ * |- 2 - 当前数据包传输暂停(wr_vld拉低过长时间，适用于缓冲区内数据发送完毕但数据包写入仍未完成的情况)
  */
 reg [1:0] xfer_state;
 
 /* 前端缓冲区
- *  buffer - 缓冲区本体，宽16深64的FIFO结构
- *  wr_ptr - 写入指针
- *  xfer_ptr - 向后端发送数据的指针
- *  end_ptr - 数据包末尾指针
+ * |- buffer - 缓冲区本体，宽16深64的FIFO结构
+ * |- wr_ptr - 写入指针
+ * |- xfer_ptr - 向后端发送数据的指针
+ * |- end_ptr - 数据包末尾指针
  */
 reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
@@ -111,10 +111,10 @@ end
 
 always @(posedge clk) begin
     if(wr_vld && wr_state == 2'd1) begin
-        /* 使能后端的匹配过程 */
+        /* 使能匹配过程 */
         match_enable <= 1;
     end else if (match_end) begin
-        /* 后端匹配完成后使能置位 */
+        /* 匹配完成后使能置位 */
         match_enable <= 0;
     end
 end
@@ -162,7 +162,7 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 /*
- * pause - 暂停写入信号，以下三种情况会使写入暂停
+ * pause - 暂停写入信号，以下两种情况会使写入暂停
  *  I - 缓冲区即将被填满（提前两拍，保证外界响应前写入半字仍可被正常处理）
  *  II - 已经写入完成的数据包还未匹配到合适的SRAM（此时若不暂停，新写入的数据包将会干扰匹配过程）
  */
