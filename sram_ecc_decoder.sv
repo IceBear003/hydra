@@ -45,7 +45,7 @@ assign cur_code[7] = data_7[15];
 assign wrong_pos = cur_code ^ code;
 
 always@(posedge update) begin
-    cr_data = {data_0,data_1,data_2,data_3,data_4,data_5,data_6,data_7};
+    cr_data = {data_7,data_6,data_5,data_4,data_3,data_2,data_1,data_0};
     if(wrong_pos != 0)
         cr_data[wrong_pos-1] = !cr_data[wrong_pos-1];
 end
