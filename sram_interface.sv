@@ -188,4 +188,33 @@ sram_ecc_encoder sram_ecc_encoder(
     .din(wr_xfer_data)
 );
 
+/******************************************************************************
+ *                                  统计信息                                   *
+ ******************************************************************************/
+ 
+reg [8:0] packet_amount [15:0];
+assign check_amount = packet_amount[check_port];
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        free_space <= 11'd2047;
+        packet_amount[0] <= 0;
+        packet_amount[1] <= 0;
+        packet_amount[2] <= 0;
+        packet_amount[3] <= 0;
+        packet_amount[4] <= 0;
+        packet_amount[5] <= 0;
+        packet_amount[6] <= 0;
+        packet_amount[7] <= 0;
+        packet_amount[8] <= 0;
+        packet_amount[9] <= 0;
+        packet_amount[10] <= 0;
+        packet_amount[11] <= 0;
+        packet_amount[12] <= 0;
+        packet_amount[13] <= 0;
+        packet_amount[14] <= 0;
+        packet_amount[15] <= 0;
+    end
+end
+
 endmodule

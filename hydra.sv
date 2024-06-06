@@ -28,7 +28,7 @@ module hydra(
     input [15:0] wrr_en,
     input [4:0] match_threshold,
     input [1:0] match_mode,
-    input [3:0] match_viscosity
+    input [3:0] viscosity
 );
 
 reg [31:0] wr_select_sram [15:0];
@@ -55,13 +55,26 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire match_enable;
     wire match_end;
 
-    wire viscous;
     wire [4:0] matching_next_sram;
     wire [4:0] matching_best_sram;
 
     reg [4:0] wr_sram;
     //SRAM绑定
     //粘滞周期
+
+    reg viscous;
+    reg [4:0] idle_tick;
+
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            viscous <= 0;
+        end else if(match_end) begin
+            viscous <= 1;
+        end else if(idle_tick >= viscosity) begin
+        end
+    end
+
+    //WR SRAM的保留
 
     port_wr_frontend port_wr_frontend(
         .clk(clk),
@@ -139,9 +152,9 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .wr_xfer_data(wr_xfer_data[wr_port]),
         .wr_end_of_packet(wr_end_of_packet[wr_port]),
 
-        .wr_packet_dest_port(wr_packet_dest_port),
-        .wr_packet_head_addr(wr_packet_head_addr),
-        .wr_packet_tail_addr(wr_packet_tail_addr),
+        // .wr_packet_dest_port(wr_packet_dest_port),
+        // .wr_packet_head_addr(wr_packet_head_addr),
+        // .wr_packet_tail_addr(wr_packet_tail_addr),
 
         .check_port(check_port[match_port]),
         .check_amount(check_amount[sram]),
