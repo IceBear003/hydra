@@ -59,7 +59,7 @@ always @(posedge clk) begin
         state <= 2'd0;
     end else if(state == 0 && match_enable == 1) begin
         if(new_dest_port == old_dest_port && viscous &&
-           free_space[matching_best_sram] >= new_length) begin
+           free_space >= new_length) begin
             match_end <= 1;
             state <= 2'd2;
         end else begin
@@ -87,7 +87,7 @@ always @(posedge clk) begin
         matching_next_sram <= PORT_IDX;
     end else begin
         case(match_mode)
-            0: matching_next_sram <= {PORT_IDX, matching_next_sram == {PORT_IDX,1'b0} ? 1'b1 : 1'b1};
+            0: matching_next_sram <= {PORT_IDX, matching_next_sram == {PORT_IDX,1'b0} ? 1'b1 : 1'b0};
             1: if(matching_next_sram <= 15) matching_next_sram <= matching_next_sram + 16;
                else if(matching_next_sram == 31) matching_next_sram <= PORT_IDX;
                else matching_next_sram <= matching_next_sram + 1;
