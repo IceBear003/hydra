@@ -25,6 +25,10 @@ module sram_interface
     output reg [10:0] free_space
 );
 
+/******************************************************************************
+ *                                  重要存储                                   *
+ ******************************************************************************/
+
 /*
  * ECC编码存储器
  * 8*2048 = 16Kbit (1*18Kbit BRAM)
@@ -33,7 +37,7 @@ module sram_interface
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
 
 reg [10:0] ec_wr_addr;
-reg [7:0] ec_din;
+wire [7:0] ec_din;
 reg [10:0] ec_rd_addr;
 reg [7:0] ec_dout;
 
@@ -101,8 +105,8 @@ always @(posedge clk) begin
 end
 
 wire is_ctrl_batch = wr_state == 2'd0 && wr_xfer_data_vld;
-wire wr_page = null_pages[np_head];
-wire sram_wr_addr = {wr_page, wr_batch};
+wire [10:0] wr_page = null_pages[np_head];
+wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
 /* 数据包写入切片下标 */
 reg [2:0] wr_batch;
@@ -125,11 +129,63 @@ always @(posedge clk) begin
     end
 end
 
-reg [15:0] ecc_encoder_buffer;
+/*
+ * ECC编码器
+ * |- ecc_encoder_buffer - ECC输入缓冲
+ * |- wr_end_of_page - 当前是否为页末尾
+ */
+reg [15:0] ecc_encoder_buffer [7:0];
+wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
+
 always @(posedge clk) begin
     if(wr_xfer_data_vld) begin
-        ecc_encoder_buffer[wr_batch] <= xfer_data;
+        if(wr_batch == 0) begin
+            /* 页初时清理缓冲，以免脏数据影响ECC计算 */
+            ecc_encoder_buffer[1] <= 16'h0000;
+            ecc_encoder_buffer[2] <= 16'h0000;
+            ecc_encoder_buffer[3] <= 16'h0000;
+            ecc_encoder_buffer[4] <= 16'h0000;
+            ecc_encoder_buffer[5] <= 16'h0000;
+            ecc_encoder_buffer[6] <= 16'h0000;
+            ecc_encoder_buffer[7] <= 16'h0000;
+        end
+        ecc_encoder_buffer[wr_batch] <= wr_xfer_data;
     end
 end
+
+always @(posedge clk) begin
+    if(wr_end_of_page) begin
+        /* 页末时准备将结果写入ECC编码存储器 */
+        ec_wr_addr <= wr_page;
+    end
+end
+
+sram_ecc_encoder sram_ecc_encoder( 
+    .data_0(ecc_encoder_buffer[0]),
+    .data_1(ecc_encoder_buffer[1]),
+    .data_2(ecc_encoder_buffer[2]),
+    .data_3(ecc_encoder_buffer[3]),
+    .data_4(ecc_encoder_buffer[4]),
+    .data_5(ecc_encoder_buffer[5]),
+    .data_6(ecc_encoder_buffer[6]),
+    .data_7(ecc_encoder_buffer[7]),
+    .code(ec_din)
+);
+
+/******************************************************************************
+ *                                  读出处理                                   *
+ ******************************************************************************/
+
+/******************************************************************************
+ *                                  SRAM本体                                   *
+ ******************************************************************************/
+
+ sram sram(
+    .clk(clk),
+    .rst_n(rst_n),
+    .wr_en(wr_xfer_data_vld),
+    .wr_addr(sram_wr_addr),
+    .din(wr_xfer_data)
+);
 
 endmodule
