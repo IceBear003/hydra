@@ -36,12 +36,12 @@ module port_wr_sram_matcher
 
     /* 
      * 当前锚定的SRAM的状态
-     * |- free_space - SRAM剩余空间（半字）
      * |- accessible - SRAM是否可用
+     * |- free_space - SRAM剩余空间（半字）
      * |- packet_amount - SRAM中新包端口对应的数据包数量
      */
-    input [10:0] free_space,
     input accessible,
+    input [10:0] free_space,
     input [8:0] packet_amount
 );
 
