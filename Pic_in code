@@ -4,10 +4,10 @@
   { name:"wr_sop",wave:"010...|.....10.."},
   { name:"wr_eop",wave:"0.....|........."},
   { name:"wr_vld",wave:"0.1...|.0......."},
-  { name:"wr_data",wave:"2.2222|2........", data:["","#0","#1","#2","","#last"],node:'..a'},
-  { name:"wr_state",wave:"0.22..|.2....0..", node:'.0......d....' ,data:["1","2","3"]},
-  { name:"wr_length",wave:"0..222|2........",node:'..0....c', data:["1","2","","length"]},
-  { name:"new_legth",wave:"0..2..|.........",data:["length"],node:'..0b'}],
+  { name:"wr_data",wave:"x.2222|2........", data:["#0","#1","#2","","#last"],node:'..a'},
+  { name:"wr_state",wave:"0.22..|.2....0..", node:'........d....' ,data:["1","2","3"]},
+  { name:"wr_length",wave:"0..222|2........",node:'.......c', data:["1","2","","length"]},
+  { name:"new_legth",wave:"0..2..|.........",data:["length"],node:'...b'}],
   edge:['a-~>b','c-~>d'     
 ]                                                                                                                                                                                                                                                                                               
 }
