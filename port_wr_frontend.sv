@@ -16,10 +16,12 @@ module port_wr_frontend(
      * |- xfer_data_vld - xfer_data是否有效
      * |- xfer_data - 当前周期传输的一半字数据
      * |- end_of_packet - 当前传输的半字是否为数据包最后半字
+     * |- packet_amount - 当前缓冲区中有几个数据包（包含不完整包）
      */
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
+    output reg [1:0] packet_amount,
 
     /*
      * 与匹配模块交互的信号
@@ -110,7 +112,9 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_vld && wr_state == 2'd1) begin
+    if(~rst_n) begin
+        match_enable <= 0;
+    end else if(wr_vld && wr_state == 2'd1) begin
         /* 使能匹配过程 */
         match_enable <= 1;
     end else if (match_end) begin
@@ -119,17 +123,17 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         xfer_state <= 2'd0;
     end else if(xfer_state == 2'd0 && match_end) begin
         /* 匹配完毕，开始传输数据 */
         xfer_state <= 2'd1;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
-        /* 当前可传输的数据即将传输完毕，进入传输暂停态 */
+        /* 当前可传输的数据传输完毕，进入传输暂停态 */
         xfer_state <= 2'd2;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
-        /* 数据包即将传输完毕，进入传输空闲态 */
+        /* 数据包传输完毕，进入传输空闲态 */
         xfer_state <= 2'd0;
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
         /* 有新的可传输的数据，从传输暂停态脱离 */
@@ -137,7 +141,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         end_of_packet <= 0;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
@@ -148,7 +152,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         xfer_ptr <= 0;
         xfer_data_vld <= 0;
@@ -161,14 +165,27 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
+always @(posedge clk) begin
+    if(~rst_n) begin
+        packet_amount <= 0;
+    end else begin
+        /* 
+         * 数据包传输完毕，数据包数量减少
+         * 新数据包将写入，数据包数量增加
+         */
+        packet_amount <= packet_amount - (xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr)
+                                       + (wr_state == 2'd0 && wr_sop);
+    end
+end
+
 /*
  * pause - 暂停写入信号，以下两种情况会使写入暂停
  *  I - 缓冲区即将被填满（提前两拍，保证外界响应前写入半字仍可被正常处理）
- *  II - 已经写入完成的数据包还未匹配到合适的SRAM（此时若不暂停，新写入的数据包将会干扰匹配过程）
+ *  II - 缓冲区中存在两个数据包的数据（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
  */
  always @(posedge clk) begin
     pause <= (wr_ptr + 6'd2 == xfer_ptr) || 
-             ((wr_state == 2'd3 || wr_state == 2'd0) && match_enable);
+             ((wr_state == 2'd0 || wr_state == 2'd3) && packet_amount == 2'd2);
 end
 
 endmodule

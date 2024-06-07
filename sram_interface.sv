@@ -4,10 +4,10 @@
 `include "sram_rd_round.sv"
 
 module sram_interface
-#(parameter SRAM_IDX = 0)
 (
     input clk,
     input rst_n,
+    input [4:0] sram_idx, //TODO记得还原
 
     /*
      * 写入数据
@@ -22,7 +22,10 @@ module sram_interface
 
     input [3:0] check_port,
     output [8:0] check_amount,
-    output reg [10:0] free_space
+    output reg [10:0] free_space,
+
+    input [15:0] concatenate_tail,
+    input [15:0] concatenate_head
 );
 
 /******************************************************************************
@@ -80,6 +83,18 @@ reg np_init;
 reg [10:0] np_head;
 reg [10:0] np_tail;
 
+reg [10:0] np_top;
+reg [10:0] np_dout;
+reg [5:0] np_offset;
+
+always @(posedge clk) begin
+    if(wr_state == 2'd1 && wr_batch == 3'd1) begin
+        np_dout <= null_pages[np_head + np_offset];
+    end else begin
+        np_top <= null_pages[np_head];
+    end
+end
+
 /******************************************************************************
  *                                  写入处理                                   *
  ******************************************************************************/
@@ -105,8 +120,7 @@ always @(posedge clk) begin
 end
 
 wire is_ctrl_batch = wr_state == 2'd0 && wr_xfer_data_vld;
-wire [10:0] wr_page = null_pages[np_head];
-wire [13:0] sram_wr_addr = {wr_page, wr_batch};
+wire [13:0] sram_wr_addr = {np_top, wr_batch};
 
 /* 数据包写入切片下标 */
 reg [2:0] wr_batch;
@@ -123,9 +137,15 @@ end
 
 /* 数据包开始写入时，获取其头尾地址 */
 always @(posedge clk) begin
-    if(is_ctrl_batch) begin
-        wr_packet_head_addr <= {SRAM_IDX, wr_page};
-        wr_packet_tail_addr <= {SRAM_IDX, null_pages[wr_page + wr_xfer_data[15:10]]};
+    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+        np_offset <= wr_xfer_data[15:10];
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_state == 2'd1 && wr_batch == 3'd2) begin
+        wr_packet_head_addr <= {sram_idx, np_top};
+        wr_packet_tail_addr <= {sram_idx, np_dout};
     end
 end
 
@@ -156,7 +176,7 @@ end
 always @(posedge clk) begin
     if(wr_end_of_page) begin
         /* 页末时准备将结果写入ECC编码存储器 */
-        ec_wr_addr <= wr_page;
+        ec_wr_addr <= np_top;
     end
 end
 
@@ -191,13 +211,13 @@ sram_ecc_encoder sram_ecc_encoder(
 /******************************************************************************
  *                                  统计信息                                   *
  ******************************************************************************/
- 
+
 reg [8:0] packet_amount [15:0];
 assign check_amount = packet_amount[check_port];
 
 always @(posedge clk) begin
-    if(!rst_n) begin
-        free_space <= 11'd2047;
+    if(~rst_n) begin
+        free_space <= sram_idx; //TODO RETURN
         packet_amount[0] <= 0;
         packet_amount[1] <= 0;
         packet_amount[2] <= 0;

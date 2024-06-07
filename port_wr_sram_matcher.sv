@@ -1,8 +1,9 @@
 module port_wr_sram_matcher
-#(parameter PORT_IDX = 0) /* 本匹配器所属的端口编号(0~15) */
+// #(parameter PORT_IDX = 0) /* 本匹配器所属的端口编号(0~15) */ TODO还原
 (
     input clk,
     input rst_n,
+    input [3:0] PORT_IDX,
 
     /*
      * 可配置参数
@@ -28,10 +29,12 @@ module port_wr_sram_matcher
      * 与后端交互的信号 
      * |- viscous - 端口是否处于粘滞状态
      * |- matching_next_sram - 下一周期尝试匹配的SRAM
+     * |- matching_sram - 当前尝试匹配的SRAM(matching_next_sram打一拍)
      * |- matching_best_sram - 当前匹配到最优的SRAM
      */
     input viscous,
     output reg [4:0] matching_next_sram,
+    output reg [4:0] matching_sram,
     output reg [4:0] matching_best_sram,
 
     /* 
@@ -51,18 +54,16 @@ module port_wr_sram_matcher
  * |- 1 - 匹配中(落后于match_enable一拍)
  * |- 2 - 匹配完成(与match_end同步拉高)
  */
-reg [1:0] state;
+reg [1:0] match_state;
 
 /* 
  * 匹配信号
  * |- matching_find - 是否已经匹配到可用的SRAM
  * |- matching_tick - 当前匹配时长
- * |- matching_sram - 当前尝试匹配的SRAM(matching_next_sram打一拍)
  * |- max_amount - 当前最优SRAM中目的端口的数据量
  */
 reg matching_find;
 reg [7:0] matching_tick;
-reg [4:0] matching_sram;
 reg [8:0] max_amount;
 
 /* 粘性匹配支持
@@ -74,31 +75,32 @@ reg [10:0] old_free_space;
 
 always @(posedge clk) begin
     if(~rst_n) begin
-        state <= 2'd0;
-    end else if(state == 2'd0 && match_enable == 1) begin
+        match_state <= 2'd0;
+        match_end <= 0;
+    end else if(match_state == 2'd0 && match_enable) begin
         if(new_dest_port == old_dest_port && old_free_space >= new_length && viscous) begin
             /* 粘滞匹配成功(新旧目的端口相同，SRAM有足够空间且仍处于粘滞状态)，直接跳过常规匹配阶段 */
             match_end <= 1;
-            state <= 2'd2;
+            match_state <= 2'd2;
             old_free_space <= old_free_space - new_length;
         end else begin
             match_end <= 0;
-            state <= 2'd1;
+            match_state <= 2'd1;
         end
-    end else if(state == 2'd1 && matching_find && matching_tick >= match_threshold) begin
+    end else if(match_state == 2'd1 && matching_find && matching_tick >= match_threshold) begin
         /* 常规匹配成功(时间达到阈值且有结果) */
         match_end <= 1;
-        state <= 2'd2;
+        match_state <= 2'd2;
         old_free_space <= free_space - new_length;
         old_dest_port <= new_dest_port;
-    end else if(state == 2'd2) begin
+    end else if(match_state == 2'd2) begin
         match_end <= 0;
-        state <= 2'd0;
+        match_state <= 2'd0;
     end
 end
 
 always @(posedge clk) begin
-    if(state == 2'd1) begin
+    if(match_enable) begin
         matching_tick <= matching_tick + 1;
     end else begin
         matching_tick <= 0;
@@ -136,10 +138,10 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(state != 2'd1) begin
+    if(~match_enable || match_end) begin
         matching_find <= 0;
         max_amount <= 0;
-    end else if(accessible) begin                   /* 未被占用 */
+    end else if(~accessible) begin                  /* 未被占用 */
     end else if(free_space < new_length) begin      /* 空间足够 */
     end else if(packet_amount >= max_amount) begin  /* 比当前更优 */
         matching_best_sram <= matching_sram;
