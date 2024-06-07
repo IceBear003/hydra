@@ -2,6 +2,13 @@ module port_rd_dispatch(
     input clk,
     input rst_n,
 
+    /*
+     * WRR模式
+     * |- 0 - 经典轮询模式
+     * |- 1 - 平方轮询模式
+     */
+    input wrr_mode,
+
     input wrr_en,
     input [7:0] queue_available,
     input next,
@@ -41,9 +48,16 @@ always @(posedge clk) begin
         wrr_start <= 3'd0;
         wrr_end <= 3'd7;
     end else if(next) begin
-        if(wrr_start != wrr_end) begin
-            wrr_start <= wrr_start + 1;
-            wrr_mask[wrr_start] <= 0;
+        if(wrr_start < wrr_end) begin
+            if(wrr_mode) begin
+                /* 传统轮询模式下wrr_start将会直接变为上一次仲裁结果的高一位 */
+                wrr_start <= prior + 1;
+                wrr_mask <= wrr_mask & (8'hFE << prior);
+            end else begin
+                /* 平方轮询模式下wrr_start将会缓慢向高位移动 */
+                wrr_start <= wrr_start + 1;
+                wrr_mask[wrr_start] <= 0;
+            end
         end else if(wrr_end == 3'd0) begin
             wrr_mask <= 8'hFF;
             wrr_start <= 3'd0;
