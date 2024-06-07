@@ -15,6 +15,7 @@ end
 always #2 clk = ~clk;
 
 wire wrr_en = 1;
+wire wrr_mode = 1;
 
 reg next = 1;
 reg [7:0] queue_available;
@@ -46,6 +47,7 @@ port_rd_dispatch port_rd_dispatch_inst
     .wrr_en(wrr_en),
     .queue_available(queue_available),
     .next(next),
+    .wrr_mode(wrr_mode),
 
     .prior(prior)
 

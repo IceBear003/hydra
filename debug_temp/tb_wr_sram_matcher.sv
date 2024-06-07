@@ -14,8 +14,8 @@ end
 
 always #2 clk = ~clk;
 
-reg [1:0] match_mode = 2;
-reg [4:0] match_threshold = 31;
+reg [1:0] match_mode = 1;
+reg [4:0] match_threshold = 10;
 
 reg [3:0] new_dest_port;
 reg [8:0] new_length;
