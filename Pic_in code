@@ -13,3 +13,19 @@
 }
 
 #2
+{ signal: [
+  { name: "clk",  wave: "p....|..........." },
+  {                              node: 'IJ........G.H', phase:0},
+  {                              node: '.ABCD......EF', },
+  { name:"wr_state",wave:"022..|......2....0..", node:'............' ,data:["1","2","3"]},
+  { name:"new_length",wave:"xx2..|..............",node:'.......', data:["包长度"]},
+  { name:"new_dest_port",wave:"xx2..|..............",data:["目的端口"]},
+  { name:"match_enable",wave:"0.2..|....0.........",data:"匹配中     "},
+  { name:"match_end",wave:"0....|...10........."},
+  { name:"match_tick",wave:"0..22|.2220.........",data:[1,"","T-1","T","T+1"]},
+  { name:"match_state",wave:"0..2.|...20.........",data:["  匹配中","2"],data:["  1    匹配中                                     ","2"]}],                                                                
+   edge: [
+    'I+J wr_sop拉高','A+B 控制帧','C+D 数据帧','E+F 最后一帧','G+H wr_eop拉高',
+  ],
+ 
+}
