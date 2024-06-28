@@ -21,12 +21,11 @@ module port_wr_frontend(
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
-    output reg [1:0] packet_amount,
 
     /*
      * 与匹配模块交互的信号
-     * |- match_end - 表示是否匹配完毕，可以开始发送缓冲区的数据
-     * |- match_enable - 使能匹配进程的信号，在match_end拉高后置位
+     * |- match_end - 匹配完毕信号，可以开始发送缓冲区的数据
+     * |- match_enable - 使能匹配进程的信号
      * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
      *                                用于匹配时判断SRAM对该数据包的喜好程度
      */
@@ -88,8 +87,8 @@ always @(posedge clk or negedge rst_n) begin
         wr_ptr <= wr_ptr + 1;
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
-            new_length <= wr_data[15:7];
             new_dest_port <= wr_data[3:0];
+            new_length <= wr_data[15:7];
         end
     end
 end
@@ -117,8 +116,8 @@ always @(posedge clk) begin
     end else if(wr_vld && wr_state == 2'd1) begin
         /* 使能匹配过程 */
         match_enable <= 1;
-    end else if (match_end) begin
-        /* 匹配完成后使能置位 */
+    end else if(match_end) begin
+        /* 重置 */
         match_enable <= 0;
     end
 end
@@ -165,27 +164,16 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk) begin
-    if(~rst_n) begin
-        packet_amount <= 0;
-    end else begin
-        /* 
-         * 数据包传输完毕，数据包数量减少
-         * 新数据包将写入，数据包数量增加
-         */
-        packet_amount <= packet_amount - (xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr)
-                                       + (wr_state == 2'd0 && wr_sop);
-    end
-end
-
 /*
  * pause - 暂停写入信号，以下两种情况会使写入暂停
  *  I - 缓冲区即将被填满（提前两拍，保证外界响应前写入半字仍可被正常处理）
- *  II - 缓冲区中存在两个数据包的数据（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
+ *  II - 缓冲区中存在仍未匹配到SRAM的数据包（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
  */
  always @(posedge clk) begin
-    pause <= (wr_ptr + 6'd2 == xfer_ptr) || 
-             ((wr_state == 2'd0 || wr_state == 2'd3) && packet_amount == 2'd2);
+    pause <= (wr_ptr + 6'd2 == xfer_ptr) ||
+             (wr_ptr + 6'd1 == xfer_ptr) ||
+             (wr_ptr == xfer_ptr) ||
+             (wr_state == 2'd0 && match_enable && ~match_end);
 end
 
 endmodule

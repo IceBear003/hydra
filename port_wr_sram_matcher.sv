@@ -1,9 +1,6 @@
-module port_wr_sram_matcher
-// #(parameter PORT_IDX = 0) /* 本匹配器所属的端口编号(0~15) */ TODO还原
-(
+module port_wr_sram_matcher(
     input clk,
     input rst_n,
-    input [3:0] PORT_IDX,
 
     /*
      * 可配置参数
@@ -28,13 +25,11 @@ module port_wr_sram_matcher
     /*
      * 与后端交互的信号 
      * |- viscous - 端口是否处于粘滞状态
-     * |- matching_next_sram - 下一周期尝试匹配的SRAM
-     * |- matching_sram - 当前尝试匹配的SRAM(matching_next_sram打一拍)
+     * |- matching_sram - 当前尝试匹配的SRAM
      * |- matching_best_sram - 当前匹配到最优的SRAM
      */
     input viscous,
-    output reg [4:0] matching_next_sram,
-    output reg [4:0] matching_sram,
+    input [4:0] matching_sram,
     output reg [4:0] matching_best_sram,
 
     /* 
@@ -105,36 +100,6 @@ always @(posedge clk) begin
     end else begin
         matching_tick <= 0;
     end
-end
-
-/*
- * 预先生成下一周期要尝试匹配的SRAM编号
- * 生成后的编号传入后端，反馈得到匹配所需的free_space等信号
- *
- * PORT_IDX的参与保证同一周期每个端口总尝试匹配不同的SRAM，避免进一步的仲裁
- */
-always @(posedge clk) begin
-    if(~rst_n) begin
-        case(match_mode)
-            1: matching_next_sram <= 5'd16 + PORT_IDX;
-            default: matching_next_sram <= {PORT_IDX, 1'b0};
-        endcase;
-    end else begin
-        case(match_mode)
-            /* 静态分配模式，在端口绑定的2块SRAM之间来回搜索 */
-            0: matching_next_sram <= matching_next_sram ^ 5'b00001;
-            /* 半动态分配模式，在端口绑定的1块SRAM和16块共享的SRAM中轮流搜索 */
-            1: if(matching_next_sram <= 15) matching_next_sram <= matching_next_sram + 16;
-               else if(matching_next_sram == 31) matching_next_sram <= {1'b0, PORT_IDX};
-               else matching_next_sram <= matching_next_sram + 1;
-            /* 全动态分配模式，在32块共享的SRAM中轮流搜索 */
-            default: matching_next_sram <= matching_next_sram + 1;
-        endcase
-    end
-end
-
-always @(posedge clk) begin
-    matching_sram <= matching_next_sram;
 end
 
 always @(posedge clk) begin

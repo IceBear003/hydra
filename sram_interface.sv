@@ -7,7 +7,10 @@ module sram_interface
 (
     input clk,
     input rst_n,
-    input [4:0] sram_idx, //TODO记得还原
+
+    input [1:0] match_mode,
+    input [4:0] time_stamp,
+    input [4:0] SRAM_IDX, //TODO记得还原
 
     /*
      * 写入数据
@@ -20,8 +23,8 @@ module sram_interface
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
 
-    input [3:0] check_port,
-    output [8:0] check_amount,
+    input [3:0] matching_port,
+    output [8:0] packet_amount,
     output reg [10:0] free_space,
 
     input [15:0] concatenate_tail,
@@ -144,8 +147,8 @@ end
 
 always @(posedge clk) begin
     if(wr_state == 2'd1 && wr_batch == 3'd2) begin
-        wr_packet_head_addr <= {sram_idx, np_top};
-        wr_packet_tail_addr <= {sram_idx, np_dout};
+        wr_packet_head_addr <= {SRAM_IDX, np_top};
+        wr_packet_tail_addr <= {SRAM_IDX, np_dout};
     end
 end
 
@@ -212,28 +215,20 @@ sram_ecc_encoder sram_ecc_encoder(
  *                                  统计信息                                   *
  ******************************************************************************/
 
-reg [8:0] packet_amount [15:0];
-assign check_amount = packet_amount[check_port];
+reg [8:0] packet_amounts [15:0];
+assign packet_amount = packet_amounts[matching_port];
+
+// always @(posedge clk) begin
+//     case(match_mode)
+//         0: matching_port <= SRAM_IDX[3:0];
+//         1: matching_port <= SRAM_IDX[4] ? SRAM_IDX[3:0] : (time_stamp[4:1] - SRAM_IDX[3:0]);
+//         default: matching_port <= time_stamp - SRAM_IDX;
+//     endcase
+// end
 
 always @(posedge clk) begin
     if(~rst_n) begin
-        free_space <= sram_idx; //TODO RETURN
-        packet_amount[0] <= 0;
-        packet_amount[1] <= 0;
-        packet_amount[2] <= 0;
-        packet_amount[3] <= 0;
-        packet_amount[4] <= 0;
-        packet_amount[5] <= 0;
-        packet_amount[6] <= 0;
-        packet_amount[7] <= 0;
-        packet_amount[8] <= 0;
-        packet_amount[9] <= 0;
-        packet_amount[10] <= 0;
-        packet_amount[11] <= 0;
-        packet_amount[12] <= 0;
-        packet_amount[13] <= 0;
-        packet_amount[14] <= 0;
-        packet_amount[15] <= 0;
+        free_space <= 2047;
     end
 end
 
