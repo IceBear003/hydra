@@ -31,6 +31,7 @@ module port_wr_sram_matcher(
     input viscous,
     input [4:0] matching_sram,
     output reg [4:0] matching_best_sram,
+    output update_matched_sram,
 
     /* 
      * 当前锚定的SRAM的状态
@@ -68,6 +69,8 @@ reg [8:0] max_amount;
 reg [3:0] old_dest_port;
 reg [10:0] old_free_space;
 reg [10:0] best_free_space;
+
+assign update_matched_sram = match_enable && ~match_suc && matching_find;
 
 always @(posedge clk) begin
     if(~rst_n) begin

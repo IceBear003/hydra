@@ -9,7 +9,6 @@ module sram_interface
     input rst_n,
 
     input [1:0] match_mode,
-    input [4:0] time_stamp,
     input [4:0] SRAM_IDX, //TODO记得还原
 
     /*
@@ -20,12 +19,9 @@ module sram_interface
     input wr_end_of_packet,
 
     output reg [3:0] wr_packet_dest_port,
+    output reg [2:0] wr_packet_prior,
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
-
-    input [3:0] matching_port,
-    output [8:0] packet_amount,
-    output reg [10:0] free_space,
 
     input [15:0] concatenate_tail,
     input [15:0] concatenate_head
@@ -35,66 +31,66 @@ module sram_interface
  *                                  重要存储                                   *
  ******************************************************************************/
 
-/*
- * ECC编码存储器
- * 8*2048 = 16Kbit (1*18Kbit BRAM)
- */
-
+/* ECC编码存储器 */
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
-
 reg [10:0] ec_wr_addr;
 wire [7:0] ec_din;
 reg [10:0] ec_rd_addr;
 reg [7:0] ec_dout;
+always @(posedge clk) begin ecc_codes[ec_wr_addr] <= ec_din; end
+always @(posedge clk) begin ec_dout <= ecc_codes[ec_rd_addr]; end
 
-always @(posedge clk) begin
-    ecc_codes[ec_wr_addr] <= ec_din;
-end
-
-always @(posedge clk) begin
-    ec_dout <= ecc_codes[ec_rd_addr];
-end
-
-/*
- * 跳转表
- * 16*2048 = 32Kbit (1*36Kbit BRAM)
- */
-
+/* 跳转表 */
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
-
 reg [10:0] jt_wr_addr;
 reg [15:0] jt_din;
 reg [10:0] jt_rd_addr;
 reg [15:0] jt_dout;
+always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
+always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
 
-always @(posedge clk) begin
-    jump_table[jt_wr_addr] <= jt_din;
-end
-
-always @(posedge clk) begin
-    jt_dout <= jump_table[jt_rd_addr];
-end
-
-/*
- * 空闲队列
- * LUTRAM
- */
-
+/* 空闲队列 */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
-
-reg np_init;
-reg [10:0] np_head;
-reg [10:0] np_tail;
-
-reg [10:0] np_top;
+reg [10:0] np_wr_addr;
+reg [10:0] np_din;
+reg [10:0] np_rd_addr;
 reg [10:0] np_dout;
-reg [5:0] np_offset;
+always @(posedge clk) begin null_pages[np_wr_addr] <= np_din; end
+always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
+
+reg [10:0] np_head_ptr;
+reg [10:0] np_tail_ptr;
+reg [11:0] np_init;
 
 always @(posedge clk) begin
-    if(wr_state == 2'd1 && wr_batch == 3'd1) begin
-        np_dout <= null_pages[np_head + np_offset];
+    if(!rst_n) begin
+        np_head_ptr <= 0;
+    end if(wr_end_of_page) begin
+        np_head_ptr <= np_head_ptr + 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+        np_rd_addr <= np_head_ptr + wr_xfer_data[15:10] - wr_xfer_data[9:7] == 0;
     end else begin
-        np_top <= null_pages[np_head];
+        np_rd_addr <= np_head_ptr;
+    end
+end
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        np_tail_ptr <= 1;
+        np_init <= 1;
+        np_wr_addr <= 0;
+        np_din <= 0;
+    end else if(0 /* 读出页 */) begin
+        np_tail_ptr <= np_tail_ptr + 1;
+    end else if(np_init != 12'd2048) begin
+        np_tail_ptr <= np_tail_ptr + 1;
+        np_init <= np_init + 1;
+        np_wr_addr <= np_tail_ptr;
+        np_din <= np_init;
     end
 end
 
@@ -122,8 +118,18 @@ always @(posedge clk) begin
     end
 end
 
-wire is_ctrl_batch = wr_state == 2'd0 && wr_xfer_data_vld;
-wire [13:0] sram_wr_addr = {np_top, wr_batch};
+wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
+reg [10:0] wr_page;
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        wr_page <= 0;
+    end else if(wr_end_of_page) begin
+        wr_page <= np_dout;
+    end
+end
+
+wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
 /* 数据包写入切片下标 */
 reg [2:0] wr_batch;
@@ -138,16 +144,13 @@ always @(posedge clk) begin
     end
 end
 
-/* 数据包开始写入时，获取其头尾地址 */
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        np_offset <= wr_xfer_data[15:10];
+        wr_packet_dest_port <= wr_xfer_data[3:0];
+        wr_packet_prior <= wr_xfer_data[6:4];
+        wr_packet_head_addr <= {SRAM_IDX, wr_page};
     end
-end
-
-always @(posedge clk) begin
     if(wr_state == 2'd1 && wr_batch == 3'd2) begin
-        wr_packet_head_addr <= {SRAM_IDX, np_top};
         wr_packet_tail_addr <= {SRAM_IDX, np_dout};
     end
 end
@@ -158,7 +161,6 @@ end
  * |- wr_end_of_page - 当前是否为页末尾
  */
 reg [15:0] ecc_encoder_buffer [7:0];
-wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
 
 always @(posedge clk) begin
     if(wr_xfer_data_vld) begin
@@ -179,7 +181,7 @@ end
 always @(posedge clk) begin
     if(wr_end_of_page) begin
         /* 页末时准备将结果写入ECC编码存储器 */
-        ec_wr_addr <= np_top;
+        ec_wr_addr <= wr_page;
     end
 end
 
@@ -209,19 +211,5 @@ sram_ecc_encoder sram_ecc_encoder(
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
     .din(wr_xfer_data)
-);
-
-/******************************************************************************
- *                                  统计信息                                   *
- ******************************************************************************/
-
-reg [8:0] packet_amounts [15:0];
-assign packet_amount = packet_amounts[matching_port];
-
-always @(posedge clk) begin
-    if(~rst_n) begin
-        free_space <= 2047;
-    end
-end
-
+ );
 endmodule

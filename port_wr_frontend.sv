@@ -18,6 +18,7 @@ module port_wr_frontend(
      * |- end_of_packet - 当前传输的半字是否为数据包最后半字
      * |- packet_amount - 当前缓冲区中有几个数据包（包含不完整包）
      */
+    output ready_to_xfer,
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
@@ -156,6 +157,8 @@ always @(posedge clk) begin
         xfer_state <= 2'd1;
     end
 end
+
+assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
 
 always @(posedge clk) begin
     if(~rst_n) begin
