@@ -218,14 +218,6 @@ sram_ecc_encoder sram_ecc_encoder(
 reg [8:0] packet_amounts [15:0];
 assign packet_amount = packet_amounts[matching_port];
 
-// always @(posedge clk) begin
-//     case(match_mode)
-//         0: matching_port <= SRAM_IDX[3:0];
-//         1: matching_port <= SRAM_IDX[4] ? SRAM_IDX[3:0] : (time_stamp[4:1] - SRAM_IDX[3:0]);
-//         default: matching_port <= time_stamp - SRAM_IDX;
-//     endcase
-// end
-
 always @(posedge clk) begin
     if(~rst_n) begin
         free_space <= 2047;

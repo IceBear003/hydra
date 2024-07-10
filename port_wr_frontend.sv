@@ -24,12 +24,12 @@ module port_wr_frontend(
 
     /*
      * 与匹配模块交互的信号
-     * |- match_end - 匹配完毕信号，可以开始发送缓冲区的数据
+     * |- match_suc - 匹配完毕信号，可以开始发送缓冲区的数据
      * |- match_enable - 使能匹配进程的信号
      * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
      *                                用于匹配时判断SRAM对该数据包的喜好程度
      */
-    input match_end,
+    input match_suc,
     output reg match_enable,
     output reg [3:0] new_dest_port,
     output reg [8:0] new_length
@@ -116,16 +116,33 @@ always @(posedge clk) begin
     end else if(wr_vld && wr_state == 2'd1) begin
         /* 使能匹配过程 */
         match_enable <= 1;
-    end else if(match_end) begin
+    end else if(match_suc) begin
         /* 重置 */
         match_enable <= 0;
+    end
+end
+
+/* 
+ * 假设先后来了A,B两个数据包
+ * 如果B数据包已经完成匹配，但A数据包并没有完全传输完毕 
+ * 则需要一个持久化的match_suc启动B数据包的传输（match_suc仅拉高一周期）
+ */
+reg pst_match_suc;
+
+always @(posedge clk) begin
+    if(~rst_n) begin
+        pst_match_suc <= 0;
+    end else if(xfer_state == 3'd0) begin
+        pst_match_suc <= 0;
+    end else if(match_suc) begin
+        pst_match_suc <= 1;
     end
 end
 
 always @(posedge clk) begin
     if(~rst_n) begin
         xfer_state <= 2'd0;
-    end else if(xfer_state == 2'd0 && match_end) begin
+    end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin
         /* 匹配完毕，开始传输数据 */
         xfer_state <= 2'd1;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
@@ -173,7 +190,7 @@ end
     pause <= (wr_ptr + 6'd2 == xfer_ptr) ||
              (wr_ptr + 6'd1 == xfer_ptr) ||
              (wr_ptr == xfer_ptr) ||
-             (wr_state == 2'd0 && match_enable && ~match_end);
+             (wr_state == 2'd0 && match_enable && ~match_suc);
 end
 
 endmodule

@@ -133,7 +133,7 @@ always @(posedge clk or negedge rst_n) begin
     end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
         xfer_state <= 3'd2;
     end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
-        xfer_state <= 3'd0;                                                 //TODO"³ÖÓÐµÄÑÓ³Ù"   
+        xfer_state <= 3'd0;                                                 //TODO"ï¿½ï¿½ï¿½Ðµï¿½ï¿½Ó³ï¿½"   
     end else if(xfer_state == 3'd2 && xfer_ptr != wr_ptr) begin
         xfer_state <= 3'd1;
     end
