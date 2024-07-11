@@ -121,6 +121,7 @@ end
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n) begin
+<<<<<<< HEAD
         xfer_state <= 2'd0;
     end else if(xfer_state == 2'd0 && match_end) begin
         /* 匹配完毕，开始传输数据 */
@@ -134,6 +135,20 @@ always @(posedge clk or negedge rst_n) begin
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
         /* 有新的可传输的数据，从传输暂停态脱离 */
         xfer_state <= 2'd1;
+=======
+        xfer_state <= 3'd0;
+    end else if(xfer_state == 3'd0 && match_suc) begin
+        xfer_state <= 3'd1;
+        cur_length <= new_length;
+        cur_prior <= new_prior;
+        cur_dest_port <= new_dest_port;
+    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
+        xfer_state <= 3'd2;
+    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+        xfer_state <= 3'd0;                                                 //TODO"���е��ӳ�"   
+    end else if(xfer_state == 3'd2 && xfer_ptr != wr_ptr) begin
+        xfer_state <= 3'd1;
+>>>>>>> 75346a9907d92d78c8ff057390a8d14472b95db1
     end
 end
 

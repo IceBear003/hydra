@@ -29,7 +29,7 @@ always @(posedge clk) begin
     else if(fixed[4]) prior <= 3'd4;
     else if(fixed[5]) prior <= 3'd5;
     else if(fixed[6]) prior <= 3'd6;
-    else prior <= 3'd7;
+    else if(fixed[7]) prior <= 3'd7;
 end
 
 /*
