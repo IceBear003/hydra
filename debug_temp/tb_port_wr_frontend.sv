@@ -11,11 +11,13 @@ reg        wr_vld  ;
 reg    [15:0]   wr_data ;
 reg match_suc;
 
+integer file;
 
 //reg    [15:0]   ready   ;
 
 initial
     begin
+        file = $fopen("in.txt","r+");
         clk     =   1'b1;
         rst_n   <=  1'b0;
         wr_sop      <=  1'b0;
@@ -26,6 +28,8 @@ initial
         rst_n   <=  1'b1;
       #40
         wr_sop  <= 1;
+      #300
+        $fclose(file);
     end
 
 always #2 clk =   ~clk;
@@ -62,6 +66,12 @@ always@(posedge clk or  negedge rst_n)
 reg    [8:0]  data_up ;
 
 //assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
+
+always@(posedge clk or  negedge rst_n) begin
+    if(rst_n) begin
+        $fdisplay("%b %b %b %b",wr_sop,wr_eop,wr_vld,wr_data);
+    end
+end
 
 always@(posedge clk or  negedge rst_n)
     if(state == RD_CTRL) begin
@@ -150,14 +160,14 @@ always@(posedge clk or  negedge rst_n)
 wire [3:0] new_dest_port;
 wire [2:0] new_prior;
 wire [8:0] new_length;
-wire [3:0] cur_dest_port;
-wire [2:0] cur_prior;
-wire [8:0] cur_length;
+//wire [3:0] cur_dest_port;
+//wire [2:0] cur_prior;
+//wire [8:0] cur_length;
 wire pause;
 wire [15:0] xfer_data;
 wire xfer_data_vld;
-wire [2:0] wr_state;
-wire [1:0] xfer_state;
+//wire [2:0] wr_state;
+//wire [1:0] xfer_state;
 
 port_wr_frontend port_wr_frontend_inst
 (
@@ -173,14 +183,7 @@ port_wr_frontend port_wr_frontend_inst
     .xfer_data (xfer_data),
     .xfer_data_vld (xfer_data_vld),
     .new_length (new_length),
-    .new_prior (new_prior),
-    .cur_dest_port (cur_dest_port),
-    .cur_prior (cur_prior),
-    .cur_length (cur_length),
-    .pause (pause),
-    .match_suc (match_suc),
-    .wr_state (wr_state),
-    .xfer_state (xfer_state)
+    .pause (pause)
 
 );
 
