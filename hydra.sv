@@ -107,11 +107,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
         free_space <= free_space[next_matching_sram];
-        packet_amount <= packet_amounts[next_matching_sram][port];
+        packet_amount <= packet_amounts[next_matching_sram][new_dest_port];
     end
 
     reg [3:0] viscous_tick;
-    wire viscous = viscous_tick > 0;
+    wire viscous = viscous_tick != 0;
 
     always @(posedge clk) begin
         if(!rst_n) begin
@@ -184,7 +184,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     reg [3:0] matching_port;
 
     wire [15:0] select_wr = {wr_sram[0] == sram, wr_sram[1] == sram, wr_sram[2] == sram, wr_sram[3] == sram, wr_sram[4] == sram, wr_sram[5] == sram, wr_sram[6] == sram, wr_sram[7] == sram, wr_sram[8] == sram, wr_sram[9] == sram, wr_sram[10] == sram, wr_sram[11] == sram, wr_sram[12] == sram, wr_sram[13] == sram, wr_sram[14] == sram, wr_sram[15] == sram};
-    wire [15:0] select_matched = {wr_sram[0] == sram, wr_sram[1] == sram, wr_sram[2] == sram, wr_sram[3] == sram, wr_sram[4] == sram, wr_sram[5] == sram, wr_sram[6] == sram, wr_sram[7] == sram, wr_sram[8] == sram, wr_sram[9] == sram, wr_sram[10] == sram, wr_sram[11] == sram, wr_sram[12] == sram, wr_sram[13] == sram, wr_sram[14] == sram, wr_sram[15] == sram};
+    wire [15:0] select_matched = {matched_sram[0] == sram, matched_sram[1] == sram, matched_sram[2] == sram, matched_sram[3] == sram, matched_sram[4] == sram, matched_sram[5] == sram, matched_sram[6] == sram, matched_sram[7] == sram, matched_sram[8] == sram, matched_sram[9] == sram, matched_sram[10] == sram, matched_sram[11] == sram, matched_sram[12] == sram, matched_sram[13] == sram, matched_sram[14] == sram, matched_sram[15] == sram};
     
     always @(posedge clk) begin
         accessibilities[sram] <= select_wr == 0 && select_matched == 0;
