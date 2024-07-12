@@ -23,8 +23,9 @@ module sram_interface
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
 
-    input [15:0] concatenate_tail,
-    input [15:0] concatenate_head
+    input concatenate_enable,
+    input [15:0] concatenate_head,
+    input [15:0] concatenate_tail
 );
 
 /******************************************************************************
@@ -48,6 +49,16 @@ reg [10:0] jt_rd_addr;
 reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
+
+always @(posedge clk) begin
+    if(concatenate_enable) begin
+        jt_wr_addr <= concatenate_head;
+        jt_din <= concatenate_tail;
+    end else begin
+        jt_wr_addr <= wr_page;
+        jt_din <= np_dout;
+    end
+end
 
 /* 空闲队列 */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
