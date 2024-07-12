@@ -14,75 +14,80 @@ end
 
 always #2 clk = ~clk;
 
-reg [1:0] match_mode = 1;
-reg [4:0] match_threshold = 10;
+genvar port;
+generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
-reg [3:0] new_dest_port;
-reg [8:0] new_length;
-reg match_enable;
+    reg [1:0] match_mode = 1;
+    reg [4:0] match_threshold = 10;
 
-reg match_end;
+    reg [3:0] new_dest_port;
+    reg [8:0] new_length;
+    reg match_enable;
 
-always @(posedge clk) begin
-    if(!rst_n) begin
-        match_enable <= 0;
-        new_dest_port <= 0;
-        new_length <= 0;
-    end else if(match_end) begin
-        match_enable <= 0;
-        new_dest_port <= 0;
-        new_length <= 0;
-    end else if(!match_enable) begin
-        match_enable <= 1;
-        new_dest_port <= $random;
-        new_length <= $random;
+    reg match_end;
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            match_enable <= 0;
+            new_dest_port <= 0;
+            new_length <= 0;
+        end else if(match_end) begin
+            match_enable <= 0;
+            new_dest_port <= 0;
+            new_length <= 0;
+        end else if(!match_enable) begin
+            match_enable <= 1;
+            new_dest_port <= $random;
+            new_length <= $random;
+        end
     end
-end
 
-reg [10:0] free_space;
-reg accessible;
-reg [8:0] packet_amount;
-reg [10:0] cnt;
+    reg [10:0] free_space;
+    reg accessible;
+    reg [8:0] packet_amount;
+    reg [10:0] cnt;
 
-always @(posedge clk) begin
-    cnt <= $random;
-end
-
-always @(posedge clk) begin
-    if(!rst_n) begin
-        free_space <= 0;
-        accessible <= 0;
-        packet_amount <= 0;
-    end else begin
-        free_space <= cnt;
-        accessible <= cnt;
-        packet_amount <= cnt;
+    always @(posedge clk) begin
+        cnt <= $random;
     end
-end
 
-wire [4:0] matching_next_sram;
-wire [4:0] matching_best_sram;
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            free_space <= 0;
+            accessible <= 0;
+            packet_amount <= 0;
+        end else begin
+            free_space <= cnt;
+            accessible <= cnt;
+            packet_amount <= cnt;
+        end
+    end
 
-port_wr_sram_matcher port_wr_sram_matcher(
-    .clk(clk),
-    .rst_n(rst_n),
-    
-    .match_mode(match_mode),
-    .match_threshold(match_threshold),
+    wire [4:0] matching_next_sram;
+    wire [4:0] matching_best_sram;
 
-    .match_enable(match_enable),
-    //.viscous(viscous),
-    .matching_next_sram(matching_next_sram),
-    .matching_best_sram(matching_best_sram),
-    .match_end(match_end),
- 
-    .new_dest_port(new_dest_port),
-    .new_length(new_length),
+    port_wr_sram_matcher  #(.PORT_IDX(port)) port_wr_sram_matcher(
+        .clk(clk),
+        .rst_n(rst_n),
+        
+        .match_mode(match_mode),
+        .match_threshold(match_threshold),
+
+        .match_enable(match_enable),
+        //.viscous(viscous),
+        .matching_next_sram(matching_next_sram),
+        .matching_best_sram(matching_best_sram),
+        .match_end(match_end),
     
-    .free_space(free_space),
-    .accessible(accessible),
-    .packet_amount(packet_amount)
-    
-);
+        .new_dest_port(new_dest_port),
+        .new_length(new_length),
+        
+        .free_space(free_space),
+        .accessible(accessible),
+        .packet_amount(packet_amount)
+        
+    );
+
+end endgenerate
 
 endmodule
