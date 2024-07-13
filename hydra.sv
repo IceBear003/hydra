@@ -29,12 +29,17 @@ module hydra
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
     input [1:0] match_mode,
+    //也许可以加个动态粘性？
     input [3:0] viscosity
 );
 
 reg [4:0] time_stamp;
 always @(posedge clk) begin
-    time_stamp <= time_stamp + 1;
+    if(~rst_n) begin
+        time_stamp <= 0;
+    end else begin
+        time_stamp <= time_stamp + 1;
+    end
 end
 
 reg [5:0] wr_sram [15:0];
@@ -104,8 +109,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
-        free_space <= free_space[next_matching_sram];
-        packet_amount <= packet_amounts[next_matching_sram][new_dest_port];
+        free_space <= /*free_space[next_matching_sram];*/ 100 + next_matching_sram;
+        packet_amount <= packet_amounts[next_matching_sram][wr_data[port][3:0]];    //这里使用wr data是因为如果用new dest port会慢一拍
         accessibility <= accessibilities[next_matching_sram];
     end
 
@@ -130,7 +135,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin
             wr_sram[port] <= matching_best_sram;
-        end else if(end_of_packet) begin
+        end else if(end_of_packet) begin //TODO FIX: 粘性需要额外的占用记录
             wr_sram[port] <= 6'd32;
         end
     end
@@ -202,7 +207,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
     
     always @(posedge clk) begin
-        if(cat_enable == 1 && ~ queue_empty[cat_prior]) begin
+        if(cat_enable == 1 && ~queue_empty[cat_prior]) begin
             cat_request[port] <= 1'b1;
         end else if(cat_tick == 0) begin
             cat_request[port] <= 1'b0;
@@ -210,7 +215,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     always @(posedge clk) begin
-        if(cat_enable == 1 && ~ queue_empty[cat_prior]) begin
+        if(cat_enable == 1 && ~queue_empty[cat_prior]) begin
             cat_tick <= 4'd15;
         end else if(cat_tick != 0) begin
             cat_tick <= cat_tick - 1;
@@ -232,14 +237,17 @@ wire [2:0] wr_packet_prior [31:0];
 wire [15:0] wr_packet_head_addr [31:0];
 wire [15:0] wr_packet_tail_addr [31:0];
 wire [31:0] packet_cat_request;
-wire [4:0] packet_time_stamp [31:0];
+wire [5:0] packet_time_stamp [31:0];
 
 reg [4:0] ts_fifo [31:0];
 reg [4:0] ts_head_ptr;
 reg [4:0] ts_tail_ptr;
-reg [5:0] processing_time_stamp;
+//时序超过12个门，需要拆一个周期出来，具体综合的时候再调整
+//这边刚好空余出一个周期来
+wire [5:0] processing_time_stamp = ts_head_ptr == ts_tail_ptr ? 6'd33 : ts_fifo[ts_head_ptr];
 
-wire [31:0] processing_cat_request_select = {packet_cat_request[31] & processing_time_stamp[31] == processing_time_stamp, packet_cat_request[30] & processing_time_stamp[30] == processing_time_stamp, packet_cat_request[29] & processing_time_stamp[29] == processing_time_stamp, packet_cat_request[28] & processing_time_stamp[28] == processing_time_stamp, packet_cat_request[27] & processing_time_stamp[27] == processing_time_stamp, packet_cat_request[26] & processing_time_stamp[26] == processing_time_stamp, packet_cat_request[25] & processing_time_stamp[25] == processing_time_stamp, packet_cat_request[24] & processing_time_stamp[24] == processing_time_stamp, packet_cat_request[23] & processing_time_stamp[23] == processing_time_stamp, packet_cat_request[22] & processing_time_stamp[22] == processing_time_stamp, packet_cat_request[21] & processing_time_stamp[21] == processing_time_stamp, packet_cat_request[20] & processing_time_stamp[20] == processing_time_stamp, packet_cat_request[19] & processing_time_stamp[19] == processing_time_stamp, packet_cat_request[18] & processing_time_stamp[18] == processing_time_stamp, packet_cat_request[17] & processing_time_stamp[17] == processing_time_stamp, packet_cat_request[16] & processing_time_stamp[16] == processing_time_stamp, packet_cat_request[15] & processing_time_stamp[15] == processing_time_stamp, packet_cat_request[14] & processing_time_stamp[14] == processing_time_stamp, packet_cat_request[13] & processing_time_stamp[13] == processing_time_stamp, packet_cat_request[12] & processing_time_stamp[12] == processing_time_stamp, packet_cat_request[11] & processing_time_stamp[11] == processing_time_stamp, packet_cat_request[10] & processing_time_stamp[10] == processing_time_stamp, packet_cat_request[9] & processing_time_stamp[9] == processing_time_stamp, packet_cat_request[8] & processing_time_stamp[8] == processing_time_stamp, packet_cat_request[7] & processing_time_stamp[7] == processing_time_stamp, packet_cat_request[6] & processing_time_stamp[6] == processing_time_stamp, packet_cat_request[5] & processing_time_stamp[5] == processing_time_stamp, packet_cat_request[4] & processing_time_stamp[4] == processing_time_stamp, packet_cat_request[3] & processing_time_stamp[3] == processing_time_stamp, packet_cat_request[2] & processing_time_stamp[2] == processing_time_stamp, packet_cat_request[1] & processing_time_stamp[1] == processing_time_stamp, packet_cat_request[0] & processing_time_stamp[0] == processing_time_stamp};
+reg [31:0] processing_cat_mask;
+wire [31:0] processing_cat_request_select = processing_cat_mask & {packet_time_stamp[31] == processing_time_stamp, packet_time_stamp[30] == processing_time_stamp, packet_time_stamp[29] == processing_time_stamp, packet_time_stamp[28] == processing_time_stamp, packet_time_stamp[27] == processing_time_stamp, packet_time_stamp[26] == processing_time_stamp, packet_time_stamp[25] == processing_time_stamp, packet_time_stamp[24] == processing_time_stamp, packet_time_stamp[23] == processing_time_stamp, packet_time_stamp[22] == processing_time_stamp, packet_time_stamp[21] == processing_time_stamp, packet_time_stamp[20] == processing_time_stamp, packet_time_stamp[19] == processing_time_stamp, packet_time_stamp[18] == processing_time_stamp, packet_time_stamp[17] == processing_time_stamp, packet_time_stamp[16] == processing_time_stamp, packet_time_stamp[15] == processing_time_stamp, packet_time_stamp[14] == processing_time_stamp, packet_time_stamp[13] == processing_time_stamp, packet_time_stamp[12] == processing_time_stamp, packet_time_stamp[11] == processing_time_stamp, packet_time_stamp[10] == processing_time_stamp, packet_time_stamp[9] == processing_time_stamp, packet_time_stamp[8] == processing_time_stamp, packet_time_stamp[7] == processing_time_stamp, packet_time_stamp[6] == processing_time_stamp, packet_time_stamp[5] == processing_time_stamp, packet_time_stamp[4] == processing_time_stamp, packet_time_stamp[3] == processing_time_stamp, packet_time_stamp[2] == processing_time_stamp, packet_time_stamp[1] == processing_time_stamp, packet_time_stamp[0] == processing_time_stamp};
 wire [4:0] processing_cat_request;
 decoder_32_5 decoder_32_5(
     .select(processing_cat_request_select),
@@ -247,10 +255,10 @@ decoder_32_5 decoder_32_5(
 );
 
 always @(posedge clk) begin
-    if(ts_head_ptr == ts_tail_ptr) begin
-        processing_time_stamp <= 6'd32;
+    if(processing_cat_request_select == 0) begin
+        processing_cat_mask <= 32'hFFFFFFFF;
     end else begin
-        processing_time_stamp <= ts_fifo[ts_head_ptr];
+        processing_cat_mask[processing_cat_request] <= 0;
     end
 end
 
@@ -258,7 +266,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         ts_tail_ptr <= 0;
     end else if(packet_cat_request != 0) begin
-        ts_fifo[ts_tail_ptr] <= time_stamp;
+        ts_fifo[ts_tail_ptr] <= time_stamp - 5'd1;
         ts_tail_ptr <= ts_tail_ptr + 1;
     end
 end
@@ -266,7 +274,8 @@ end
 always @(posedge clk) begin
     if(!rst_n) begin
         ts_head_ptr <= 0;
-    end else if(processing_cat_request_select == 0 && ts_head_ptr != ts_tail_ptr) begin
+    end else if(processing_cat_request_select == 0 && 
+                ts_head_ptr != ts_tail_ptr) begin
         ts_head_ptr <= ts_head_ptr + 1;
     end
 end
@@ -282,8 +291,8 @@ reg accessibilities [31:0];
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
-    wire [15:0] select_wr = {wr_sram[0] == sram, wr_sram[1] == sram, wr_sram[2] == sram, wr_sram[3] == sram, wr_sram[4] == sram, wr_sram[5] == sram, wr_sram[6] == sram, wr_sram[7] == sram, wr_sram[8] == sram, wr_sram[9] == sram, wr_sram[10] == sram, wr_sram[11] == sram, wr_sram[12] == sram, wr_sram[13] == sram, wr_sram[14] == sram, wr_sram[15] == sram};
-    wire [15:0] select_matched = {matched_sram[0] == sram, matched_sram[1] == sram, matched_sram[2] == sram, matched_sram[3] == sram, matched_sram[4] == sram, matched_sram[5] == sram, matched_sram[6] == sram, matched_sram[7] == sram, matched_sram[8] == sram, matched_sram[9] == sram, matched_sram[10] == sram, matched_sram[11] == sram, matched_sram[12] == sram, matched_sram[13] == sram, matched_sram[14] == sram, matched_sram[15] == sram};
+    wire [15:0] select_wr = {wr_sram[15] == sram, wr_sram[14] == sram, wr_sram[13] == sram, wr_sram[12] == sram, wr_sram[11] == sram, wr_sram[10] == sram, wr_sram[9] == sram, wr_sram[8] == sram, wr_sram[7] == sram, wr_sram[6] == sram, wr_sram[5] == sram, wr_sram[4] == sram, wr_sram[3] == sram, wr_sram[2] == sram, wr_sram[1] == sram, wr_sram[0] == sram};
+    wire [15:0] select_matched = {matched_sram[15] == sram, matched_sram[14] == sram, matched_sram[13] == sram, matched_sram[12] == sram, matched_sram[11] == sram, matched_sram[10] == sram, matched_sram[9] == sram, matched_sram[8] == sram, matched_sram[7] == sram, matched_sram[6] == sram, matched_sram[5] == sram, matched_sram[4] == sram, matched_sram[3] == sram, matched_sram[2] == sram, matched_sram[1] == sram, matched_sram[0] == sram};
     always @(posedge clk) begin
         accessibilities[sram] <= select_wr == 0 && select_matched == 0;
     end
@@ -310,11 +319,22 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    integer port;
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            for(port = 0; port < 16; port = port + 1) begin
+                packet_amounts[sram][port] <= 32 - sram;
+            end
+            free_spaces[sram] <= 100 + sram;
+        end
+    end
+
     sram_interface sram_interface(
         .clk(clk),
         .rst_n(rst_n), 
 
         .SRAM_IDX(sram[4:0]),
+        .time_stamp(time_stamp),
         .match_mode(match_mode),
 
         .wr_xfer_data_vld(wr_xfer_data_vld[wr_port]),
@@ -325,6 +345,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .wr_packet_prior(wr_packet_prior[sram]),
         .wr_packet_head_addr(wr_packet_head_addr[sram]),
         .wr_packet_tail_addr(wr_packet_tail_addr[sram]),
+        .packet_cat_request(packet_cat_request[sram]),
+        .packet_time_stamp(packet_time_stamp[sram]),
 
         .concatenate_enable(concatenate_enable),
         .concatenate_head(concatenate_head), 
