@@ -140,8 +140,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(!rst_n) begin
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
-            wr_sram[port] <= matching_best_sram; //TODO FIX 忽略了粘滞
-        end else if(end_of_packet) begin /* 数据包传输完毕，写占用取消 */
+            wr_sram[port] <= matching_best_sram;
+        end else if(viscous_tick == 4'd1) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end
@@ -244,7 +244,7 @@ reg [4:0] ts_fifo [31:0];
 reg [4:0] ts_head_ptr;
 reg [4:0] ts_tail_ptr;
 
-//TODO FIX 时序超过12个门，需要拆一个周期出来，具体综合的时候再调整
+//TODO 时序超过12个门，需要拆一个周期出来，具体综合的时候再调整
 //这边刚好空余出一个周期来
 
 /* 正在处理的时间戳 */
@@ -319,7 +319,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     );
 
     /* 跳转表拼接处理 */
-    reg concatenate_enable;
+    reg concatenate_en; 
     reg [15:0] concatenate_head;
     reg [15:0] concatenate_tail;
 
@@ -330,9 +330,9 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             //TODO 这边组合逻辑虽然在可控范围内但是仍然比较可怕，如果不能过约束，则可以把head、tail变为wire接入SRAM
             concatenate_head <= concatenate_previous[processing_concatenate_port];
             concatenate_tail <= concatenate_subsequent[processing_concatenate_port];
-            concatenate_enable <= 1;
+            concatenate_en <= 1;
         end else begin
-            concatenate_enable <= 0;
+            concatenate_en <= 0;
         end
     end
 
@@ -340,9 +340,9 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     always @(posedge clk) begin
         if(~rst_n) begin
             for(port = 0; port < 16; port = port + 1) begin
-                packet_amounts[sram][port] <= 32 - sram; /* 9'd0 */
+                packet_amounts[sram][port] <= 32 - sram; /* DEBUG 此为调试用数据吗，实际应该是 9'd0 */
             end
-            free_spaces[sram] <= 100 + sram; /* 11'd2047 */
+            free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
         end
     end
 
@@ -365,7 +365,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .wr_packet_join_request(wr_packet_join_request[sram]),
         .wr_packet_join_time_stamp(wr_packet_join_time_stamp[sram]),
 
-        .concatenate_enable(concatenate_enable),
+        .concatenate_enable(concatenate_en),
         .concatenate_head(concatenate_head), 
         .concatenate_tail(concatenate_tail)
     );
