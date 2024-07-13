@@ -16,19 +16,21 @@ module port_wr_frontend(
      * |- xfer_data_vld - xfer_data是否有效
      * |- xfer_data - 当前周期传输的一半字数据
      * |- end_of_packet - 当前传输的半字是否为数据包最后半字
+     * |- packet_amount - 当前缓冲区中有几个数据包（包含不完整包）
      */
+    output ready_to_xfer,
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
 
     /*
      * 与匹配模块交互的信号
-     * |- match_end - 表示是否匹配完毕，可以开始发送缓冲区的数据
-     * |- match_enable - 使能匹配进程的信号，在match_end拉高后置位
+     * |- match_suc - 匹配完毕信号，可以开始发送缓冲区的数据
+     * |- match_enable - 使能匹配进程的信号
      * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
      *                                用于匹配时判断SRAM对该数据包的喜好程度
      */
-    input match_end,
+    input match_suc,
     output reg match_enable,
     output reg [3:0] new_dest_port,
     output reg [8:0] new_length
@@ -86,8 +88,8 @@ always @(posedge clk or negedge rst_n) begin
         wr_ptr <= wr_ptr + 1;
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
-            new_length <= wr_data[15:7];
             new_dest_port <= wr_data[3:0];
+            new_length <= wr_data[15:7];
         end
     end
 end
@@ -110,49 +112,55 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_vld && wr_state == 2'd1) begin
+    if(~rst_n) begin
+        match_enable <= 0;
+    end else if(wr_vld && wr_state == 2'd1) begin
         /* 使能匹配过程 */
         match_enable <= 1;
-    end else if (match_end) begin
-        /* 匹配完成后使能置位 */
+    end else if(match_suc) begin
+        /* 重置 */
         match_enable <= 0;
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+/* 
+ * 假设先后来了A,B两个数据包
+ * 如果B数据包已经完成匹配，但A数据包并没有完全传输完毕 
+ * 则需要一个持久化的match_suc启动B数据包的传输（match_suc仅拉高一周期）
+ */
+reg pst_match_suc;
+
+always @(posedge clk) begin
     if(~rst_n) begin
-<<<<<<< HEAD
+        pst_match_suc <= 0;
+    end else if(xfer_state == 3'd0) begin
+        pst_match_suc <= 0;
+    end else if(match_suc) begin
+        pst_match_suc <= 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(~rst_n) begin
         xfer_state <= 2'd0;
-    end else if(xfer_state == 2'd0 && match_end) begin
+    end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin
         /* 匹配完毕，开始传输数据 */
         xfer_state <= 2'd1;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
-        /* 当前可传输的数据即将传输完毕，进入传输暂停态 */
+        /* 当前可传输的数据传输完毕，进入传输暂停态 */
         xfer_state <= 2'd2;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
-        /* 数据包即将传输完毕，进入传输空闲态 */
+        /* 数据包传输完毕，进入传输空闲态 */
         xfer_state <= 2'd0;
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
         /* 有新的可传输的数据，从传输暂停态脱离 */
         xfer_state <= 2'd1;
-=======
-        xfer_state <= 3'd0;
-    end else if(xfer_state == 3'd0 && match_suc) begin
-        xfer_state <= 3'd1;
-        cur_length <= new_length;
-        cur_prior <= new_prior;
-        cur_dest_port <= new_dest_port;
-    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
-        xfer_state <= 3'd2;
-    end else if(xfer_state == 3'd1 && xfer_ptr + 6'd1 == end_ptr) begin
-        xfer_state <= 3'd0;                                                 //TODO"���е��ӳ�"   
-    end else if(xfer_state == 3'd2 && xfer_ptr != wr_ptr) begin
-        xfer_state <= 3'd1;
->>>>>>> 75346a9907d92d78c8ff057390a8d14472b95db1
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
+
+always @(posedge clk) begin
     if(~rst_n) begin
         end_of_packet <= 0;
     end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
@@ -163,7 +171,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         xfer_ptr <= 0;
         xfer_data_vld <= 0;
@@ -179,11 +187,13 @@ end
 /*
  * pause - 暂停写入信号，以下两种情况会使写入暂停
  *  I - 缓冲区即将被填满（提前两拍，保证外界响应前写入半字仍可被正常处理）
- *  II - 已经写入完成的数据包还未匹配到合适的SRAM（此时若不暂停，新写入的数据包将会干扰匹配过程）
+ *  II - 缓冲区中存在仍未匹配到SRAM的数据包（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
  */
  always @(posedge clk) begin
-    pause <= (wr_ptr + 6'd2 == xfer_ptr) || 
-             ((wr_state == 2'd3 || wr_state == 2'd0) && match_enable);
+    pause <= (wr_ptr + 6'd2 == xfer_ptr) ||
+             (wr_ptr + 6'd1 == xfer_ptr) ||
+             (wr_ptr == xfer_ptr) ||
+             (wr_state == 2'd0 && match_enable && ~match_suc);
 end
 
 endmodule

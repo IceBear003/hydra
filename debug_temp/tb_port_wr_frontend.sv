@@ -66,18 +66,21 @@ always@(posedge clk or  negedge rst_n)
 reg    [8:0]  data_up ;
 
 //assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
-
+/*
 always@(posedge clk or  negedge rst_n) begin
     if(rst_n) begin
         $fdisplay("%b %b %b %b",wr_sop,wr_eop,wr_vld,wr_data);
     end
 end
-
+*/
 always@(posedge clk or  negedge rst_n)
     if(state == RD_CTRL) begin
-        data_up = 35;
+        data_up = ($random);
+        if(data_up > 100)
+            data_up = data_up % 100;
         if(data_up < 32)
             data_up = 32;
+        
     end
 
 always@(posedge clk or  negedge rst_n)
@@ -122,11 +125,11 @@ reg     [3:0]   eop_t;
 reg     [3:0]   eop_ti;
 
 always@(posedge clk or  negedge rst_n)
-    if(rst_n == 0 || match_suc == 1) begin
-        match_suc <= 0;
-    end else if(cnt == 43) begin
+    if(cnt == 31) begin
         match_suc <= 1;
-    end
+    end else 
+        match_suc <= 0;
+
 
 always@(posedge clk or  negedge rst_n)
     if(rst_n == 0)
@@ -149,6 +152,7 @@ always@(posedge clk or  negedge rst_n)
     begin
         eop_ti <= 0;
         wr_sop <= 1;
+        //match_suc <= 1;
     end
     
 always@(posedge clk or  negedge rst_n)
@@ -158,7 +162,7 @@ always@(posedge clk or  negedge rst_n)
     end
 
 wire [3:0] new_dest_port;
-wire [2:0] new_prior;
+//wire [2:0] new_prior;
 wire [8:0] new_length;
 //wire [3:0] cur_dest_port;
 //wire [2:0] cur_prior;
@@ -166,6 +170,9 @@ wire [8:0] new_length;
 wire pause;
 wire [15:0] xfer_data;
 wire xfer_data_vld;
+wire ready_to_xfer;
+wire match_en;
+wire end_of_packet;
 //wire [2:0] wr_state;
 //wire [1:0] xfer_state;
 
@@ -180,9 +187,13 @@ port_wr_frontend port_wr_frontend_inst
     .wr_data (wr_data),
 
     .new_dest_port (new_dest_port),
+    .match_suc (match_suc),
     .xfer_data (xfer_data),
     .xfer_data_vld (xfer_data_vld),
+    .ready_to_xfer (ready_to_xfer),
     .new_length (new_length),
+    .match_enable(match_en),
+    .end_of_packet(end_of_packet),
     .pause (pause)
 
 );
