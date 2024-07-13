@@ -23,8 +23,8 @@ module sram_interface
     output reg [2:0] wr_packet_prior,
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
-    output reg packet_cat_request,
-    output reg [5:0] packet_time_stamp,
+    output reg wr_packet_join_request,
+    output reg [5:0] wr_packet_join_time_stamp,
 
     input concatenate_enable,
     input [15:0] concatenate_head,
@@ -178,7 +178,7 @@ reg [10:0] wr_page;
 always @(posedge clk) begin
     if(!rst_n) begin
         wr_page <= 0;
-    end else if(wr_end_of_page || ~wr_xfer_data_vld) begin /* 在上页末时更新wr_page到新页 */
+    end else if(wr_end_of_page) begin /* 在上页末时更新wr_page到新页 */ //TODO FIX: 最后一页长度小于3时会出错
         wr_page <= np_dout;
     end
 end
@@ -217,20 +217,20 @@ end
 /* 在数据包刚写入时发起入队请求 */
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        packet_cat_request <= 1;
+        wr_packet_join_request <= 1;
     end else begin
-        packet_cat_request <= 0;
+        wr_packet_join_request <= 0;
     end
 end
 
 /* 入队请求时间戳 */
 always @(posedge clk) begin
     if(~rst_n) begin 
-        packet_time_stamp <= 6'd32;
+        wr_packet_join_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        packet_time_stamp <= time_stamp + 5'd1; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
-    end else if(time_stamp + 5'd1 == packet_time_stamp) begin
-        packet_time_stamp <= 6'd32;
+        wr_packet_join_time_stamp <= time_stamp + 5'd1; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
+    end else if(time_stamp + 5'd1 == wr_packet_join_time_stamp) begin
+        wr_packet_join_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
     end
 end
 
