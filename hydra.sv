@@ -109,7 +109,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
-        free_space <= /*free_space[next_matching_sram];*/ 100 + next_matching_sram;
+        free_space <= free_spaces[next_matching_sram];
         packet_amount <= packet_amounts[next_matching_sram][wr_data[port][3:0]];    //这里使用wr data是因为如果用new dest port会慢一拍
         accessibility <= accessibilities[next_matching_sram];
     end
@@ -178,16 +178,12 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     reg cat_enable;
     reg [2:0] cat_prior;
-    reg [15:0] cat_head_addr;
-    reg [15:0] cat_tail_addr;
     reg [3:0] cat_tick;
 
     always @(posedge clk) begin
         if(wr_packet_dest_port[processing_cat_request] == port) begin
             cat_enable <= 1;
             cat_prior <= wr_packet_prior[processing_cat_request];
-            cat_head_addr <= wr_packet_head_addr[processing_cat_request];
-            cat_tail_addr <= wr_packet_tail_addr[processing_cat_request];
         end else begin
             cat_enable <= 0;
         end
@@ -196,13 +192,13 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(cat_enable == 0) begin
         end else if(queue_empty[cat_prior]) begin
-            queue_head[cat_prior] <= cat_head_addr;
-            queue_tail[cat_prior] <= cat_tail_addr;
+            queue_head[cat_prior] <= wr_packet_head_addr[processing_cat_request];
+            queue_tail[cat_prior] <= wr_packet_tail_addr[processing_cat_request];
         end else begin
-            queue_tail[cat_prior] <= cat_tail_addr;
+            queue_tail[cat_prior] <= wr_packet_tail_addr[processing_cat_request];
             cat_request[port] <= 1'b1;
             cat_previous[port] <= queue_tail[cat_prior];
-            cat_subsequent[port] <= cat_head_addr;
+            cat_subsequent[port] <= wr_packet_head_addr[processing_cat_request];
         end
     end
     
@@ -266,7 +262,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         ts_tail_ptr <= 0;
     end else if(packet_cat_request != 0) begin
-        ts_fifo[ts_tail_ptr] <= time_stamp - 5'd1;
+        ts_fifo[ts_tail_ptr] <= time_stamp;
         ts_tail_ptr <= ts_tail_ptr + 1;
     end
 end

@@ -16,7 +16,6 @@ module port_wr_frontend(
      * |- xfer_data_vld - xfer_data是否有效
      * |- xfer_data - 当前周期传输的一半字数据
      * |- end_of_packet - 当前传输的半字是否为数据包最后半字
-     * |- packet_amount - 当前缓冲区中有几个数据包（包含不完整包）
      */
     output ready_to_xfer,
     output reg xfer_data_vld,
