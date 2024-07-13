@@ -62,7 +62,7 @@ reg [1:0] xfer_state;
 reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
 reg [5:0] xfer_ptr;
-reg [7:0] end_ptr;
+reg [6:0] end_ptr;
 
 reg [8:0] wr_length;
 
@@ -100,6 +100,8 @@ always @(posedge clk) begin
     end else if(wr_state == 2'd3) begin
         /* 传输完所有半字后，wr_ptr即为当前数据包的末端位置 */
         end_ptr <= wr_ptr;
+    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+        end_ptr <= 7'd64;
     end
 end
 

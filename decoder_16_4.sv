@@ -21,7 +21,7 @@ always @(select) begin
         16'h2000: idx = 4'd13;
         16'h4000: idx = 4'd14;
         16'h8000: idx = 4'd15;
-        default: idx = 4'd15;
+        default: idx = 'dx;
     endcase
 end
 

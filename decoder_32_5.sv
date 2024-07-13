@@ -37,7 +37,7 @@ always @(select) begin
         32'h20000000: idx = 5'd29;
         32'h40000000: idx = 5'd30;
         32'h80000000: idx = 5'd31;
-        default: idx = 5'd0;
+        default: idx = 'dx;
     endcase
 end
 

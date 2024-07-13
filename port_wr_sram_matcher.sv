@@ -105,7 +105,7 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk) begin
+always @(posedge clk) begin //TODO FIX：和粘滞搜索冲突
     if(~match_enable || match_suc) begin
         matching_find <= 0;
         max_amount <= 0;

@@ -9,6 +9,7 @@ module sram_interface
     input rst_n,
 
     input [1:0] match_mode,
+    input [4:0] time_stamp,
     input [4:0] SRAM_IDX, //TODO记得还原
 
     /*
@@ -22,9 +23,12 @@ module sram_interface
     output reg [2:0] wr_packet_prior,
     output reg [15:0] wr_packet_head_addr,
     output reg [15:0] wr_packet_tail_addr,
+    output reg packet_cat_request,
+    output reg [5:0] packet_time_stamp,
 
-    input [15:0] concatenate_tail,
-    input [15:0] concatenate_head
+    input concatenate_enable,
+    input [15:0] concatenate_head,
+    input [15:0] concatenate_tail
 );
 
 /******************************************************************************
@@ -49,6 +53,16 @@ reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
 
+always @(posedge clk) begin
+    if(concatenate_enable) begin
+        jt_wr_addr <= concatenate_head;
+        jt_din <= concatenate_tail;
+    end else begin
+        jt_wr_addr <= wr_page;
+        jt_din <= np_dout;
+    end
+end
+
 /* 空闲队列 */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
 reg [10:0] np_wr_addr;
@@ -72,7 +86,7 @@ end
 
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        np_rd_addr <= np_head_ptr + wr_xfer_data[15:10] - wr_xfer_data[9:7] == 0;
+        np_rd_addr <= np_head_ptr + wr_xfer_data[15:10] - (wr_xfer_data[9:7] == 0);
     end else begin
         np_rd_addr <= np_head_ptr;
     end
@@ -152,6 +166,24 @@ always @(posedge clk) begin
     end
     if(wr_state == 2'd1 && wr_batch == 3'd2) begin
         wr_packet_tail_addr <= {SRAM_IDX, np_dout};
+    end
+end
+
+always @(posedge clk) begin
+    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+        packet_cat_request <= 1;
+    end else begin
+        packet_cat_request <= 0;
+    end
+end
+
+always @(posedge clk) begin
+    if(~rst_n) begin
+        packet_time_stamp <= 6'd32;
+    end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+        packet_time_stamp <= time_stamp;
+    end else if(time_stamp + 5'd1 == packet_time_stamp) begin
+        packet_time_stamp <= 6'd32;
     end
 end
 

@@ -30,8 +30,8 @@ module tb_test;
         .wr_vld(wr_vld),
         .wr_data(wr_data),
         .pause(pause),
-        .wrr_en(16'hFFFF),
-        .match_threshold(5'd31),
+        .wrr_enable(16'hFFFF),
+        .match_threshold(5'd20),
         .match_mode(2'd2),
         .viscosity(4'd15)
     );
