@@ -355,6 +355,11 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
                 packet_amounts[sram][port] <= 32 - sram; /* DEBUG 此为调试用数据吗，实际应该是 9'd0 */
             end
             free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
+        end else if(wr_end_of_packet[wr_port]) begin
+            packet_amounts[sram][wr_port] <= packet_amounts[sram][wr_port] + 1;
+            free_spaces[sram] <= free_spaces[sram] - 1; //TODO FIXME 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
+        end else if(0) begin
+            // packet_amounts[sram][rd_port] <= packet_amounts[sram][rd_port] - 1;
         end
     end
 
