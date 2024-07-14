@@ -141,7 +141,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
             wr_sram[port] <= matching_best_sram;
-        end else if(viscous_tick == 4'd1 || viscosity == 0) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
+        end else if(viscous_tick == 4'd1 || (viscosity == 0 && end_of_packet)) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end
