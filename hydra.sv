@@ -141,7 +141,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
             wr_sram[port] <= matching_best_sram;
-        end else if(viscous_tick == 4'd1) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
+        end else if(viscous_tick == 4'd1 || viscosity == 0) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end
@@ -184,10 +184,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [15:0] queue_tail [7:0];
     wire [7:0] queue_empty = {queue_head[7] == queue_tail[7], queue_head[6] == queue_tail[6], queue_head[5] == queue_tail[5], queue_head[4] == queue_tail[4], queue_head[3] == queue_tail[3], queue_head[2] == queue_tail[2], queue_head[1] == queue_tail[1], queue_head[0] == queue_tail[0]};
 
+    wire [15:0] debug_head = queue_head[4];
+    wire [15:0] debug_tail = queue_tail[4];
+
     /* 是否即将处理入队请求 */
     reg join_enable;
     /* 即将处理入队请求的优先级 */
     reg [2:0] join_prior;
+    /* 即将处理入队请求的SRAM下标 */
+    reg [2:0] join_request;
     /* 跳转表拼接倒计时，归零时一定拼接完毕，可重置Port->SRAM的concatenate_enable */
     reg [3:0] concatenate_tick;
 
@@ -196,20 +201,27 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(wr_packet_dest_port[processing_join_request] == port) begin
             join_enable <= 1;
             join_prior <= wr_packet_prior[processing_join_request];
+            join_request <= processing_join_request;
         end else begin
             join_enable <= 0;
         end
     end
 
+    integer prior;
     always @(posedge clk) begin
-        if(join_enable == 0) begin
+        if(~rst_n) begin
+            for(prior = 0; prior < 8; prior = prior + 1) begin
+                queue_head[prior] <= 16'd0;
+                queue_tail[prior] <= 16'd0;
+            end
+        end if(join_enable == 0) begin
         end else if(queue_empty[join_prior]) begin /* 队列为空时入队只需 头->头 + 尾->尾 */
-            queue_head[join_prior] <= wr_packet_head_addr[processing_join_request];
-            queue_tail[join_prior] <= wr_packet_tail_addr[processing_join_request];
+            queue_head[join_prior] <= wr_packet_head_addr[join_request];
+            queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
         end else begin /* 队列不为空时入队需 发起跳转表拼接 + 尾->尾 */
-            queue_tail[join_prior] <= wr_packet_tail_addr[processing_join_request];
+            queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
             concatenate_previous[port] <= queue_tail[join_prior];
-            concatenate_subsequent[port] <= wr_packet_head_addr[processing_join_request];
+            concatenate_subsequent[port] <= wr_packet_head_addr[join_request];
         end
     end
     
@@ -286,7 +298,7 @@ always @(posedge clk) begin
 end
 
 /* Port->SRAM 跳转表拼接请求 */
-wire processing_concatenate_port = time_stamp[3:0];
+wire [3:0] processing_concatenate_port = time_stamp[3:0];
 reg concatenate_enable [15:0];
 reg [15:0] concatenate_previous [15:0];
 reg [15:0] concatenate_subsequent [15:0];

@@ -209,7 +209,7 @@ always @(posedge clk) begin
         wr_packet_prior <= wr_xfer_data[6:4];
         wr_packet_head_addr <= {SRAM_IDX, wr_page};
     end
-    if(wr_state == 2'd1 && wr_batch == 3'd2) begin
+    if(wr_state == 2'd1 && wr_batch == 3'd1) begin
         wr_packet_tail_addr <= {SRAM_IDX, np_dout};
     end
 end
