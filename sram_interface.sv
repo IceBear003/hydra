@@ -228,7 +228,7 @@ always @(posedge clk) begin
     if(~rst_n) begin 
         wr_packet_join_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        wr_packet_join_time_stamp <= time_stamp + 5'd1; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
+        wr_packet_join_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
     end else if(time_stamp + 5'd1 == wr_packet_join_time_stamp) begin
         wr_packet_join_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
     end
@@ -242,13 +242,13 @@ end
  *                                  SRAM本体                                   *
  ******************************************************************************/
 
- wire [13:0] sram_wr_addr = {wr_page, wr_batch};
+wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
- sram sram(
+sram sram(
     .clk(clk),
     .rst_n(rst_n),
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
     .din(wr_xfer_data)
- );
+);
 endmodule

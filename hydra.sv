@@ -192,7 +192,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /* 即将处理入队请求的优先级 */
     reg [2:0] join_prior;
     /* 即将处理入队请求的SRAM下标 */
-    reg [2:0] join_request;
+    reg [4:0] join_request;
     /* 跳转表拼接倒计时，归零时一定拼接完毕，可重置Port->SRAM的concatenate_enable */
     reg [3:0] concatenate_tick;
 
@@ -338,7 +338,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     always @(posedge clk) begin
         if(concatenate_enable[processing_concatenate_port] /* 正在处理拼接请求的端口刚好有拼接请求，且拼接目标是该SRAM */
             && concatenate_previous[processing_concatenate_port][15:11] == sram) begin
-            
             //TODO 这边组合逻辑虽然在可控范围内但是仍然比较可怕，如果不能过约束，则可以把head、tail变为wire接入SRAM
             concatenate_head <= concatenate_previous[processing_concatenate_port];
             concatenate_tail <= concatenate_subsequent[processing_concatenate_port];
