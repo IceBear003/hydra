@@ -61,7 +61,7 @@ end
 
 /* 端口正在交互的SRAM的下标*/
 reg [5:0] wr_sram [15:0]; /* 写入占用 */
-reg [5:0] matched_sram [15:0]; /* 较优匹配 */
+wire [5:0] matched_sram [15:0]; /* 较优匹配 */
 reg [5:0] rd_sram [15:0]; /* 读出占用 */
 
 /* 写入时端口与SRAM传输信息的通道 */
@@ -175,16 +175,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     wire update_matched_sram;
-
-    always @(posedge clk) begin
-        if(!rst_n) begin
-            matched_sram[port] <= 6'd32;
-        end else if(update_matched_sram) begin
-            matched_sram[port] <= matching_best_sram; /* 同步优匹配SRAM，将会一直执行该操作直到匹配结束（匹配占用取消，转变为写占用） */
-        end else begin
-            matched_sram[port] <= 6'd32;
-        end
-    end
+    assign matched_sram[port] = update_matched_sram ? matching_best_sram : 6'd32; /* 同步优匹配SRAM，将会一直执行该操作直到匹配结束（匹配占用取消，转变为写占用） */
     
     port_wr_sram_matcher port_wr_sram_matcher(
         .clk(clk),
@@ -375,6 +366,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     reg concatenate_en; 
     reg [15:0] concatenate_head;
     reg [15:0] concatenate_tail;
+    reg [15:0] pst_concatenate_head;
+    reg [15:0] pst_concatenate_tail;
 
     wire [3:0] concatenate_port;
     decoder_16_4 decoder_concatenate(
@@ -390,6 +383,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     always @(posedge clk) begin
         if(concatenate_head[15:11] == sram) begin
             concatenate_en <= 1;
+            pst_concatenate_head <= concatenate_head;
+            pst_concatenate_tail <= concatenate_tail;
         end else begin
             concatenate_en <= 0;
         end
@@ -426,8 +421,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .wr_packet_join_time_stamp(wr_packet_join_time_stamp[sram]),
 
         .concatenate_enable(concatenate_en),
-        .concatenate_head(concatenate_head), 
-        .concatenate_tail(concatenate_tail)
+        .concatenate_head(pst_concatenate_head), 
+        .concatenate_tail(pst_concatenate_tail)
     );
 end endgenerate 
 endmodule
