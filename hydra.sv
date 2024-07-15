@@ -127,6 +127,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [8:0] packet_amount;
     reg accessibility;
 
+    //TODO DEBUG:这是调试用初始化，之后会放到别的地方去
     integer sram;
     always @(posedge clk) begin
         if(~rst_n) begin
