@@ -201,8 +201,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     reg [15:0] queue_head [7:0];
     reg [15:0] queue_tail [7:0];
-    //TODO FIXME 可能存在垃圾跳转信息，使得empty错误
-    //应当维护每个队列的数据包量，根据量是否为0判断队列是否为空
     wire [7:0] queue_empty = {queue_head[7] == queue_tail[7], queue_head[6] == queue_tail[6], queue_head[5] == queue_tail[5], queue_head[4] == queue_tail[4], queue_head[3] == queue_tail[3], queue_head[2] == queue_tail[2], queue_head[1] == queue_tail[1], queue_head[0] == queue_tail[0]};
 
     wire [15:0] debug_head = queue_head[4];
@@ -395,7 +393,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         if(~rst_n) begin
             free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
         end else if(wr_end_of_packet[wr_port]) begin
-            free_spaces[sram] <= free_spaces[sram] - 1; //TODO FIXME 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
+            free_spaces[sram] <= free_spaces[sram] - 1; //TODO 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
         end else if(0) begin
             // packet_amounts[sram][rd_port] <= packet_amounts[sram][rd_port] - 1;
         end
