@@ -1,7 +1,8 @@
-`include "port_wr_sram_matcher.sv"
 `include "port_wr_frontend.sv"
+`include "port_wr_sram_matcher.sv"
+`include "port_rd_frontend.sv"
+`include "port_rd_dispatch.sv"
 `include "sram_interface.sv"
-`include "decoder_8_3.sv"
 `include "decoder_16_4.sv"
 `include "decoder_32_5.sv"
 
@@ -30,7 +31,7 @@ module hydra
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
     input [1:0] match_mode,
-    //也许可以加个动态粘性？
+    //TODO 也许可以加个动态粘性？
     input [3:0] viscosity
 );
 
@@ -44,21 +45,6 @@ always @(posedge clk) begin
     end
 end
 
-/* WRR掩码集 */
-reg [7:0] wrr_mask_set [7:0];
-always @(posedge clk) begin
-    if(~rst_n) begin
-        wrr_mask_set[7] <= 8'hFF;
-        wrr_mask_set[6] <= 8'h7F;
-        wrr_mask_set[5] <= 8'h3F;
-        wrr_mask_set[4] <= 8'h1F;
-        wrr_mask_set[3] <= 8'h0F;
-        wrr_mask_set[2] <= 8'h07;
-        wrr_mask_set[1] <= 8'h03;
-        wrr_mask_set[0] <= 8'h01;
-    end
-end
-
 /* 端口正在交互的SRAM的下标*/
 reg [5:0] wr_sram [15:0]; /* 写入占用 */
 wire [5:0] matched_sram [15:0]; /* 较优匹配 */
@@ -69,7 +55,8 @@ wire wr_xfer_data_vld [15:0];
 wire [15:0] wr_xfer_data [15:0];
 wire wr_end_of_packet [15:0];
 
-/* 读出时SRAM与端口传输信息的通道 */
+/* 读出时端口与SRAM传输信息的通道 */
+reg [10:0] rd_page [15:0]; /* 读出占用 */
 wire [4:0] rd_port [31:0];
 wire rd_xfer_data_vld [31:0];
 wire [15:0] rd_xfer_data [31:0];
@@ -251,26 +238,46 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             concatenate_enable[port] <= 0;
         end
     end
+ 
+    /* 读出，ready只高一个周期 */
+ 
+    wire [3:0] rd_prior;
 
-    
-    wire [7:0] select_mask;
-    // always @(posedge clk) begin
-    //     if(~rst_n) begin
-    //         select_mask_next <= 8'd0;
-    //     end else if() begin
-    //         select_mask_next <= 8'd1;
-    //     end else begin
-    //         select_mask_next <= 8'd0;
-    //     end
-    // end
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            rd_sram[port] <= 6'd32;
+        end else if(rd_eop[port]) begin
+            rd_sram[port] <= 6'd32;
+        end else if(rd_sop[port]) begin
+            rd_sram[port] <= queue_head[rd_prior][15:11];
+            rd_page[port] <= queue_head[rd_prior][10:0];
+        end
+    end
 
-    wire [7:0] queue_read_select = queue_empty || select_mask;
-    wire [2:0] read_queue;
-    decoder_8_3 decoder_8_3(
-        .select(queue_read_select),
-        .idx(read_queue)    //TODO FIX 'dx
+    port_rd_dispatch port_rd_dispatch(
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .wrr_en(wrr_enable[port]),
+        .queue_empty(queue_empty),
+        .next(rd_sop[port]),
+        .rd_prior(rd_prior)
     );
 
+    port_rd_frontend port_rd_frontend(
+        .clk(clk),
+        .rst_n(rst_n),
+    
+        .rd_sop(rd_sop[port]),
+        .rd_eop(rd_eop[port]),
+        .rd_vld(rd_vld[port]),
+        .rd_data(rd_data[port]),
+        .ready(ready[port])
+    
+        // .xfer_data_vld(xfer_data_vld),
+        // .xfer_data(),
+        // .end_of_packet()
+    );
 
 end endgenerate
 
@@ -388,6 +395,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end
     end
 
+    //TODO FREESPACE更新
+
     integer port;
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -398,6 +407,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             // packet_amounts[sram][rd_port] <= packet_amounts[sram][rd_port] - 1;
         end
     end
+
+    /* 读出模块 */
 
     sram_interface sram_interface(
         .clk(clk),
