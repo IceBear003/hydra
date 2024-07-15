@@ -346,7 +346,7 @@ wire [15:0] concatenate_select = {concatenate_enable[15] == 1, concatenate_enabl
  */ 
 
 reg [10:0] free_spaces [31:0];
-reg accessibilities [31:0];
+wire accessibilities [31:0];
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
@@ -355,14 +355,12 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     wire [15:0] select_wr = {wr_sram[15] == sram, wr_sram[14] == sram, wr_sram[13] == sram, wr_sram[12] == sram, wr_sram[11] == sram, wr_sram[10] == sram, wr_sram[9] == sram, wr_sram[8] == sram, wr_sram[7] == sram, wr_sram[6] == sram, wr_sram[5] == sram, wr_sram[4] == sram, wr_sram[3] == sram, wr_sram[2] == sram, wr_sram[1] == sram, wr_sram[0] == sram};
     /* 匹配占用选通信号 */
     wire [15:0] select_matched = {matched_sram[15] == sram, matched_sram[14] == sram, matched_sram[13] == sram, matched_sram[12] == sram, matched_sram[11] == sram, matched_sram[10] == sram, matched_sram[9] == sram, matched_sram[8] == sram, matched_sram[7] == sram, matched_sram[6] == sram, matched_sram[5] == sram, matched_sram[4] == sram, matched_sram[3] == sram, matched_sram[2] == sram, matched_sram[1] == sram, matched_sram[0] == sram};
-    always @(posedge clk) begin
-        /* 当SRAM既没有正被任一端口写入数据，也没有被任一端口当作较优的匹配结果，则认为该SRAM可被匹配 */
-        accessibilities[sram] <= select_wr == 0 && select_matched == 0;
-    end
+    /* 当SRAM既没有正被任一端口写入数据，也没有被任一端口当作较优的匹配结果，则认为该SRAM可被匹配 */
+    assign accessibilities[sram] = select_wr == 0 && select_matched == 0;
     
     /* 当前正向该SRAM写入的端口号，由写选通信号经过16-4解码器得到 */
     wire [3:0] wr_port;
-    decoder_16_4 decoder_16_4(
+    decoder_16_4 decoder_wr_select(
         .select(select_wr),
         .idx(wr_port)
     );
@@ -409,6 +407,15 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     end
 
     /* 读出模块 */
+    /* 写占用选通信号 */
+    wire [15:0] select_rd = {rd_sram[15] == sram, rd_sram[14] == sram, rd_sram[13] == sram, rd_sram[12] == sram, rd_sram[11] == sram, rd_sram[10] == sram, rd_sram[9] == sram, rd_sram[8] == sram, rd_sram[7] == sram, rd_sram[6] == sram, rd_sram[5] == sram, rd_sram[4] == sram, rd_sram[3] == sram, rd_sram[2] == sram, rd_sram[1] == sram, rd_sram[0] == sram};
+
+    /* 当前正向该SRAM写入的端口号，由写选通信号经过16-4解码器得到 */
+    wire [3:0] processing_port;
+    decoder_16_4 decoder_rd_select(
+        .select(select_rd),
+        .idx(processing_port)
+    );
 
     sram_interface sram_interface(
         .clk(clk),

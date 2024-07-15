@@ -13,7 +13,7 @@ module sram_interface
     input [4:0] SRAM_IDX,
 
     /*
-     * 写入数据
+     * 写入
      */
     input wr_xfer_data_vld,
     input [15:0] wr_xfer_data,
@@ -28,7 +28,16 @@ module sram_interface
 
     input concatenate_enable,
     input [15:0] concatenate_head,
-    input [15:0] concatenate_tail
+    input [15:0] concatenate_tail,
+
+    /*
+     * 读出
+     */
+    input [10:0] rd_page,
+
+    output reg rd_xfer_data_vld,
+    output reg [15:0] rd_xfer_data,
+    output reg [15:0] rd_next_page
 );
 
 /******************************************************************************
@@ -64,7 +73,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_end_of_page) begin
+    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin
         /* 页末时准备将结果写入ECC编码存储器 */
         ec_wr_addr <= wr_page;
     end
@@ -170,15 +179,25 @@ always @(posedge clk) begin
     end
 end
 
-/* 当前是否为页末 */
-wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
 /* 正在写入的页 */
 reg [10:0] wr_page;
+/* 在数据包传输完毕之后的第二个周期重新获取新的wr_page，以规避最后一页数据量过少导致的np_dout还未刷新到新的空闲页的问题 */
+reg [1:0] regain_wr_page_tick;
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        regain_wr_page_tick <= 2'd0;
+    end else if(wr_end_of_packet) begin
+        regain_wr_page_tick <= 2'd3;
+    end else if(regain_wr_page_tick != 0) begin
+        regain_wr_page_tick <= regain_wr_page_tick - 1;
+    end
+end
 
 always @(posedge clk) begin
     if(!rst_n) begin
         wr_page <= 0;
-    end else if(wr_end_of_page) begin /* 在上页末时更新wr_page到新页 */ //TODO FIX: 最后一页长度小于3时会出错
+    end else if((wr_batch == 3'd7 && wr_xfer_data_vld) || regain_wr_page_tick == 2'd1) begin /* 更新wr_page到新页 */
         wr_page <= np_dout;
     end
 end
