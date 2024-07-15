@@ -1,6 +1,7 @@
 `include "port_wr_sram_matcher.sv"
 `include "port_wr_frontend.sv"
 `include "sram_interface.sv"
+`include "decoder_8_3.sv"
 `include "decoder_16_4.sv"
 `include "decoder_32_5.sv"
 
@@ -43,14 +44,41 @@ always @(posedge clk) begin
     end
 end
 
+/* WRR掩码集 */
+reg [7:0] wrr_mask_set [7:0];
+always @(posedge clk) begin
+    if(~rst_n) begin
+        wrr_mask_set[7] <= 8'hFF;
+        wrr_mask_set[6] <= 8'h7F;
+        wrr_mask_set[5] <= 8'h3F;
+        wrr_mask_set[4] <= 8'h1F;
+        wrr_mask_set[3] <= 8'h0F;
+        wrr_mask_set[2] <= 8'h07;
+        wrr_mask_set[1] <= 8'h03;
+        wrr_mask_set[0] <= 8'h01;
+    end
+end
+
 /* 端口正在交互的SRAM的下标*/
 reg [5:0] wr_sram [15:0]; /* 写入占用 */
 reg [5:0] matched_sram [15:0]; /* 较优匹配 */
+reg [5:0] rd_sram [15:0]; /* 读出占用 */
 
-/* 端口与SRAM传输信息的通道 */
+/* 写入时端口与SRAM传输信息的通道 */
 wire wr_xfer_data_vld [15:0];
 wire [15:0] wr_xfer_data [15:0];
 wire wr_end_of_packet [15:0];
+
+/* 读出时SRAM与端口传输信息的通道 */
+wire [4:0] rd_port [31:0];
+wire rd_xfer_data_vld [31:0];
+wire [15:0] rd_xfer_data [31:0];
+wire rd_end_of_packet [31:0];
+wire [7:0] rd_ecc_code [31:0];  /* 校验码，用于纠错 */
+wire [15:0] rd_next_page [31:0]; /* 下一页地址，用于更新queue_head */
+
+/* 端口在对应SRAM的数据包存量 */
+reg [8:0] packet_amounts [15:0][31:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -106,7 +134,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /* 提前生成下周期要匹配的SRAM，便于提前获取SRAM状态，减少组合逻辑复杂度 */
     reg [4:0] next_matching_sram;
     reg [4:0] matching_sram;
-    /* SRAM状态缓存 */
+
+    /* 提前抓取下周期匹配所需的信号，避免匹配组合逻辑堆积 */
     reg [10:0] free_space;
     reg [8:0] packet_amount;
     reg accessibility;
@@ -114,8 +143,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
         free_space <= free_spaces[next_matching_sram];
-        //TODO 对packet_amounts的访问需要过两个多选器，如果时序无法通过，则需要再提前一个周期
-        packet_amount <= packet_amounts[next_matching_sram][wr_data[port][3:0]];
+        packet_amount <= packet_amounts[wr_data[port][3:0]][next_matching_sram];
         accessibility <= accessibilities[next_matching_sram];
     end
     
@@ -182,6 +210,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     reg [15:0] queue_head [7:0];
     reg [15:0] queue_tail [7:0];
+    //TODO FIXME 可能存在垃圾跳转信息，使得empty错误
+    //应当维护每个队列的数据包量，根据量是否为0判断队列是否为空
     wire [7:0] queue_empty = {queue_head[7] == queue_tail[7], queue_head[6] == queue_tail[6], queue_head[5] == queue_tail[5], queue_head[4] == queue_tail[4], queue_head[3] == queue_tail[3], queue_head[2] == queue_tail[2], queue_head[1] == queue_tail[1], queue_head[0] == queue_tail[0]};
 
     wire [15:0] debug_head = queue_head[4];
@@ -227,19 +257,31 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     
     always @(posedge clk) begin
         if(join_enable == 1 && ~queue_empty[join_prior]) begin /* 队列不为空时入队需 发起跳转表拼接 + 尾->尾 */
-            concatenate_enable[port] <= 1'b1;
-        end else if(concatenate_tick == 0) begin
-            concatenate_enable[port] <= 1'b0;
+            concatenate_enable[port] <= 1;
+        end else if(concatenate_enable[port]) begin
+            concatenate_enable[port] <= 0;
         end
     end
 
-    always @(posedge clk) begin
-        if(join_enable == 1 && ~queue_empty[join_prior]) begin
-            concatenate_tick <= 4'd15;
-        end else if(concatenate_tick != 0) begin
-            concatenate_tick <= concatenate_tick - 1;
-        end
-    end
+    
+    wire [7:0] select_mask;
+    // always @(posedge clk) begin
+    //     if(~rst_n) begin
+    //         select_mask_next <= 8'd0;
+    //     end else if() begin
+    //         select_mask_next <= 8'd1;
+    //     end else begin
+    //         select_mask_next <= 8'd0;
+    //     end
+    // end
+
+    wire [7:0] queue_read_select = queue_empty || select_mask;
+    wire [2:0] read_queue;
+    decoder_8_3 decoder_8_3(
+        .select(queue_read_select),
+        .idx(read_queue)    //TODO FIX 'dx
+    );
+
 
 end endgenerate
 
@@ -298,16 +340,15 @@ always @(posedge clk) begin
 end
 
 /* Port->SRAM 跳转表拼接请求 */
-wire [3:0] processing_concatenate_port = time_stamp[3:0];
 reg concatenate_enable [15:0];
 reg [15:0] concatenate_previous [15:0];
 reg [15:0] concatenate_subsequent [15:0];
+wire [15:0] concatenate_select = {concatenate_enable[15] == 1, concatenate_enable[14] == 1, concatenate_enable[13] == 1, concatenate_enable[12] == 1, concatenate_enable[11] == 1, concatenate_enable[10] == 1, concatenate_enable[9] == 1, concatenate_enable[8] == 1, concatenate_enable[7] == 1, concatenate_enable[6] == 1, concatenate_enable[5] == 1, concatenate_enable[4] == 1, concatenate_enable[3] == 1, concatenate_enable[2] == 1, concatenate_enable[1] == 1, concatenate_enable[0] == 1}; 
 
 /*
  * SRAM
  */ 
 
-reg [8:0] packet_amounts [31:0][15:0];
 reg [10:0] free_spaces [31:0];
 reg accessibilities [31:0];
 
@@ -335,12 +376,19 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     reg [15:0] concatenate_head;
     reg [15:0] concatenate_tail;
 
+    wire [3:0] concatenate_port;
+    decoder_16_4 decoder_concatenate(
+        .select(concatenate_select),
+        .idx(concatenate_port)
+    );
+
     always @(posedge clk) begin
-        if(concatenate_enable[processing_concatenate_port] /* 正在处理拼接请求的端口刚好有拼接请求，且拼接目标是该SRAM */
-            && concatenate_previous[processing_concatenate_port][15:11] == sram) begin
-            //TODO 这边组合逻辑虽然在可控范围内但是仍然比较可怕，如果不能过约束，则可以把head、tail变为wire接入SRAM
-            concatenate_head <= concatenate_previous[processing_concatenate_port];
-            concatenate_tail <= concatenate_subsequent[processing_concatenate_port];
+        concatenate_head <= concatenate_previous[concatenate_port];
+        concatenate_tail <= concatenate_subsequent[concatenate_port];
+    end
+
+    always @(posedge clk) begin
+        if(concatenate_head[15:11] == sram) begin
             concatenate_en <= 1;
         end else begin
             concatenate_en <= 0;
@@ -350,12 +398,8 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     integer port;
     always @(posedge clk) begin
         if(~rst_n) begin
-            for(port = 0; port < 16; port = port + 1) begin
-                packet_amounts[sram][port] <= 32 - sram; /* DEBUG 此为调试用数据吗，实际应该是 9'd0 */
-            end
             free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
         end else if(wr_end_of_packet[wr_port]) begin
-            packet_amounts[sram][wr_port] <= packet_amounts[sram][wr_port] + 1;
             free_spaces[sram] <= free_spaces[sram] - 1; //TODO FIXME 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
         end else if(0) begin
             // packet_amounts[sram][rd_port] <= packet_amounts[sram][rd_port] - 1;
