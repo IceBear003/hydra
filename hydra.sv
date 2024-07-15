@@ -22,10 +22,10 @@ module hydra
     output reg almost_full,
 
     input [15:0] ready,
-    output reg [15:0] rd_sop,
-    output reg [15:0] rd_eop,
-    output reg [15:0] rd_vld,
-    output reg [15:0] [15:0] rd_data,
+    output [15:0] rd_sop,
+    output [15:0] rd_eop,
+    output [15:0] rd_vld,
+    output [15:0] [15:0] rd_data,
 
     //配置IO口
     input [15:0] wrr_enable,
@@ -126,6 +126,14 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [10:0] free_space;
     reg [8:0] packet_amount;
     reg accessibility;
+
+    integer sram;
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            for(sram = 0; sram < 32; sram = sram + 1)
+                packet_amounts[port][sram] <= 0;
+        end
+    end
 
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
