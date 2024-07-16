@@ -158,6 +158,19 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         endcase
     end
 
+    /* 在数据包传输完毕之后的第二个周期重新获取新的wr_page，以规避最后一页数据量过少导致的np_dout还未刷新到新的空闲页的问题 */
+    reg [1:0] regain_wr_page_tick;
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            regain_wr_page_tick <= 2'd0;
+        end else if(end_of_packet) begin
+            regain_wr_page_tick <= 2'd3;
+        end else if(regain_wr_page_tick != 0) begin
+            regain_wr_page_tick <= regain_wr_page_tick - 1;
+        end
+    end
+
     wire [4:0] matching_best_sram;
 
     always @(posedge clk) begin
@@ -165,7 +178,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
             wr_sram[port] <= matching_best_sram;
-        end else if(viscous_tick == 4'd1 || (viscosity == 0 && end_of_packet)) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
+        end else if(viscous_tick == 4'd1 || (~viscosity && regain_wr_page_tick)) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end

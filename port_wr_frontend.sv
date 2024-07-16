@@ -91,7 +91,7 @@ always @(posedge clk or negedge rst_n) begin
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
             new_dest_port <= wr_data[3:0];
-            new_length <= wr_data[15:7];
+            new_length <= wr_data[15:7] - 1;
         end
     end
 end
