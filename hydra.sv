@@ -417,8 +417,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
         end else if(wr_end_of_packet[wr_port]) begin
             free_spaces[sram] <= free_spaces[sram] - 1; //TODO 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
-        end else if(0) begin
-            // packet_amounts[sram][rd_port] <= packet_amounts[sram][rd_port] - 1;
         end
     end
 
@@ -439,7 +437,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
         .SRAM_IDX(sram[4:0]),
         .time_stamp(time_stamp),
-        .match_mode(match_mode),
 
         .wr_xfer_data_vld(wr_xfer_data_vld[wr_port]),
         .wr_xfer_data(wr_xfer_data[wr_port]),
@@ -454,7 +451,13 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
         .concatenate_enable(concatenate_en),
         .concatenate_head(pst_concatenate_head), 
-        .concatenate_tail(pst_concatenate_tail)
+        .concatenate_tail(pst_concatenate_tail),
+
+        .rd_another_page(),
+        .rd_page(),
+        .rd_xfer_data(),
+        .rd_next_page(),
+        .rd_ecc_code()
     );
 end endgenerate 
 endmodule
