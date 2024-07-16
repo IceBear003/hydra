@@ -2,18 +2,6 @@ module port_wr_sram_matcher(
     input clk,
     input rst_n,
 
-    /*
-     * 可配置参数
-     * |- match_mode - SRAM分配模式
-     *      |- 0 - 静态分配模式
-     *      |- 1 - 半动态分配模式
-     *      |- 2/3 - 全动态分配模式
-     * |- match_threshold - 匹配阈值，当匹配时长超过该值后，一旦有任何可用的即完成匹配
-     *      |- 静态分配模式 最大为0
-     *      |- 半动态分配模式 最大为16
-     *      |- 全动态分配模式 最大为30
-     */
-    input [1:0] match_mode,
     input [4:0] match_threshold,
 
     /* 与前端交互的信号 */
@@ -68,7 +56,7 @@ always @(posedge clk) begin
         match_suc <= 0;
     end else if(match_state == 2'd0 && match_enable) begin
         match_state <= 2'd1;
-    end else if(match_state == 2'd1 && matching_find && matching_tick >= match_threshold) begin
+    end else if(match_state == 2'd1 && matching_find && matching_tick == match_threshold) begin
         /* 常规匹配成功(时间达到阈值且有结果) */
         match_suc <= 1;
         match_state <= 2'd2;
@@ -79,14 +67,14 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(match_enable) begin
+    if(match_enable && matching_tick != match_threshold) begin
         matching_tick <= matching_tick + 1;
     end else begin
         matching_tick <= 0;
     end
 end
 
-always @(posedge clk) begin //TODO FIX：和粘滞搜索冲突
+always @(posedge clk) begin
     if(~match_enable || match_suc) begin
         matching_find <= 0;
         max_amount <= 0;
@@ -100,5 +88,3 @@ always @(posedge clk) begin //TODO FIX：和粘滞搜索冲突
 end
 
 endmodule
-
-//粘滞碰撞问题

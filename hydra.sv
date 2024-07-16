@@ -27,7 +27,19 @@ module hydra
     output [15:0] rd_vld,
     output [15:0] [15:0] rd_data,
 
-    //配置IO口
+    
+    /*
+     * 可配置参数
+     * |- wrr_enable - 端口是否启用WRR调度
+     * |- match_mode - SRAM分配模式
+     *      |- 0 - 静态分配模式
+     *      |- 1 - 半动态分配模式
+     *      |- 2/3 - 全动态分配模式
+     * |- match_threshold - 匹配阈值，当匹配时长超过该值后，一旦有任何可用的即完成匹配
+     *      |- 静态分配模式 最大为0
+     *      |- 半动态分配模式 最大为16
+     *      |- 全动态分配模式 最大为30
+     */
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
     input [1:0] match_mode
@@ -173,8 +185,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     port_wr_sram_matcher port_wr_sram_matcher(
         .clk(clk),
         .rst_n(rst_n),
-    
-        .match_mode(match_mode),
+
         .match_threshold(match_threshold),
 
         .new_dest_port(new_dest_port),
@@ -432,7 +443,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
         .wr_xfer_data_vld(wr_xfer_data_vld[wr_port]),
         .wr_xfer_data(wr_xfer_data[wr_port]),
-        .wr_end_of_packet(wr_end_of_packet[wr_port]), 
+        .wr_end_of_packet(wr_end_of_packet[wr_port]),
 
         .wr_packet_dest_port(wr_packet_dest_port[sram]),
         .wr_packet_prior(wr_packet_prior[sram]),

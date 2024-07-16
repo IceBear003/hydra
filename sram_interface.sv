@@ -1,14 +1,11 @@
 `include "sram.sv"
 `include "sram_ecc_encoder.sv"
-`include "sram_ecc_decoder.sv"
-`include "sram_rd_round.sv"
 
 module sram_interface
 (
     input clk,
     input rst_n,
 
-    input [1:0] match_mode,
     input [4:0] time_stamp,
     input [4:0] SRAM_IDX,
 
@@ -31,13 +28,21 @@ module sram_interface
     input [15:0] concatenate_tail,
 
     /*
-     * 读出
+     * 读出(即时响应，rd_page生效1周期后即可得到第一半字的信息)
      */
+    input rd_another_page,
     input [10:0] rd_page,
-
-    output reg rd_xfer_data_vld,
-    output reg [15:0] rd_xfer_data,
-    output reg [15:0] rd_next_page
+    output [15:0] rd_xfer_data,
+    output [15:0] rd_next_page,
+    output [7:0] rd_ecc_code
+    
+    // ,output wr_en,
+    // output [13:0] wr_addr,
+    // output [15:0] din,
+    
+    // output rd_en,
+    // output [13:0] rd_addr,
+    // input [15:0] dout
 );
 
 /******************************************************************************
@@ -91,6 +96,10 @@ sram_ecc_encoder sram_ecc_encoder(
     .code(ec_din)
 );
 
+/* 页刚开始读出时生成本页的校验码 */
+assign ec_rd_addr = rd_page;
+assign rd_ecc_code = ec_dout;
+
 /* 跳转表 */
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [10:0] jt_wr_addr;
@@ -110,6 +119,10 @@ always @(posedge clk) begin
         jt_din <= {SRAM_IDX, np_dout};
     end
 end
+
+/* 页刚开始读出时生成下一页的地址 */
+assign jt_rd_addr = rd_page;
+assign rd_next_page = jt_dout;
 
 /* 空闲队列 FIFO结构的RAM */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
@@ -143,10 +156,12 @@ assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld)
 
 always @(posedge clk) begin
     if(!rst_n) begin
-        np_perfusion_process <= 0;  /* 灌注从1开始 */
+        np_perfusion_process <= 0;  /* 灌注从0开始 */
         np_tail_ptr <= 0;
-    end else if(0 /* 读出页，未完成 */) begin
+    end else if(rd_another_page) begin /* 回收读出的页 */
         np_tail_ptr <= np_tail_ptr + 1;
+        np_wr_addr <= np_tail_ptr;
+        np_din <= rd_page;
     end else if(np_perfusion_process != 12'd2048) begin /* 灌注到2047结束 */
         np_tail_ptr <= np_tail_ptr + 1;
         np_perfusion_process <= np_perfusion_process + 1;
@@ -257,6 +272,17 @@ end
  *                                  读出处理                                   *
  ******************************************************************************/
 
+reg [2:0] rd_batch; /* 读出切片下标 */
+wire [13:0] sram_rd_addr = {rd_page, rd_another_page ? 3'd0 : rd_batch};  /* 读取页刚切换时，切片下标应为0，其他时刻则为rd_batch */
+
+always @(posedge clk) begin
+    if(rd_another_page) begin
+        rd_batch <= 1; /* 读取页切换时，下一刻batch应为1 */
+    end else begin
+        rd_batch <= rd_batch + 1; /* 永远自增 */
+    end
+end
+
 /******************************************************************************
  *                                  SRAM本体                                   *
  ******************************************************************************/
@@ -268,6 +294,17 @@ sram sram(
     .rst_n(rst_n),
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
-    .din(wr_xfer_data)
+    .din(wr_xfer_data),
+    .rd_en(1'b1),
+    .rd_addr(sram_rd_addr),
+    .dout(rd_xfer_data)
 );
+
+// assign wr_en = wr_xfer_data_vld;
+// assign wr_addr = sram_wr_addr;
+// assign din = wr_xfer_data;
+// assign rd_en = 1'b1;
+// assign rd_addr = sram_rd_addr;
+// assign dout = rd_xfer_data;
+
 endmodule
