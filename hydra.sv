@@ -30,9 +30,7 @@ module hydra
     //配置IO口
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
-    input [1:0] match_mode,
-    //TODO 也许可以加个动态粘性？
-    input [3:0] viscosity
+    input [1:0] match_mode
 );
 
 /* 时间戳 */
@@ -104,20 +102,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .new_length(new_length)
     );
 
-    /* 粘滞倒计时，为0时则不再粘滞 */
-    reg [3:0] viscous_tick;
-    wire viscous = viscous_tick != 0;
-
-    always @(posedge clk) begin
-        if(!rst_n) begin
-            viscous_tick <= 4'd0;
-        end else if(wr_sram[port] != 6'd32) begin //数据包开始写的时候启动粘滞倒计时
-            viscous_tick <= viscosity;
-        end else if(viscous_tick > 0) begin
-            viscous_tick <= viscous_tick - 1;
-        end
-    end
-
     /* 提前生成下周期要匹配的SRAM，便于提前获取SRAM状态，减少组合逻辑复杂度 */
     reg [4:0] next_matching_sram;
     reg [4:0] matching_sram;
@@ -178,7 +162,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
             wr_sram[port] <= matching_best_sram;
-        end else if(viscous_tick == 4'd1 || (~viscosity && regain_wr_page_tick)) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
+        end else if(regain_wr_page_tick) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end
@@ -198,7 +182,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .match_enable(match_enable),
         .match_suc(match_suc),
 
-        .viscous(viscous),
         .matching_sram(matching_sram),
         .matching_best_sram(matching_best_sram),
         .update_matched_sram(update_matched_sram),
