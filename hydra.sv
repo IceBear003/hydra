@@ -111,7 +111,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(!rst_n) begin
             viscous_tick <= 4'd0;
-        end else if(end_of_packet) begin //数据包写完后启动粘滞倒计时
+        end else if(wr_sram[port] != 6'd32) begin //数据包开始写的时候启动粘滞倒计时
             viscous_tick <= viscosity;
         end else if(viscous_tick > 0) begin
             viscous_tick <= viscous_tick - 1;

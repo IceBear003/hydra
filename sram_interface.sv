@@ -105,9 +105,9 @@ always @(posedge clk) begin
     if(concatenate_enable) begin /* 优先进行不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else begin
+    end else if(wr_xfer_data_vld) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
         jt_wr_addr <= wr_page;
-        jt_din <= np_dout;
+        jt_din <= {SRAM_IDX, np_dout};
     end
 end
 
