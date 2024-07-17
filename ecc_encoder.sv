@@ -1,4 +1,4 @@
-module sram_ecc_encoder(
+module ecc_encoder(
     input [15:0] data_0,
     input [15:0] data_1,
     input [15:0] data_2,

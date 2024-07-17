@@ -1,5 +1,5 @@
 `include "sram.sv"
-`include "sram_ecc_encoder.sv"
+`include "ecc_encoder.sv"
 
 module sram_interface
 (
@@ -36,6 +36,7 @@ module sram_interface
     output [15:0] rd_next_page,
     output [7:0] rd_ecc_code
     
+    /* SRAM引出，综合用 */
     // ,output wr_en,
     // output [13:0] wr_addr,
     // output [15:0] din,
@@ -84,7 +85,7 @@ always @(posedge clk) begin
     end
 end
 
-sram_ecc_encoder sram_ecc_encoder( 
+ecc_encoder ecc_encoder( 
     .data_0(ecc_encoder_buffer[0]),
     .data_1(ecc_encoder_buffer[1]),
     .data_2(ecc_encoder_buffer[2]),
@@ -204,7 +205,7 @@ always @(posedge clk) begin
         regain_wr_page_tick <= 2'd0;
     end else if(wr_end_of_packet) begin
         regain_wr_page_tick <= 2'd3;
-    end else if(regain_wr_page_tick != 0) begin
+    end else if(regain_wr_page_tick != 0) begin 
         regain_wr_page_tick <= regain_wr_page_tick - 1;
     end
 end
@@ -289,6 +290,7 @@ end
 
 wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
+// /* SRAM不引出，调试用
 sram sram(
     .clk(clk),
     .rst_n(rst_n),
@@ -298,8 +300,10 @@ sram sram(
     .rd_en(1'b1),
     .rd_addr(sram_rd_addr),
     .dout(rd_xfer_data)
-);
+); 
+// */
 
+/* SRAM引出，综合用 */
 // assign wr_en = wr_xfer_data_vld;
 // assign wr_addr = sram_wr_addr;
 // assign din = wr_xfer_data;

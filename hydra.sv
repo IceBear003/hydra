@@ -3,6 +3,7 @@
 `include "port_rd_frontend.sv"
 `include "port_rd_dispatch.sv"
 `include "sram_interface.sv"
+`include "sram_interface.sv"
 `include "decoder_16_4.sv"
 `include "decoder_32_5.sv"
 
@@ -66,11 +67,10 @@ wire [15:0] wr_xfer_data [15:0];
 wire wr_end_of_packet [15:0];
 
 /* 读出时端口与SRAM传输信息的通道 */
-reg [10:0] rd_page [15:0]; /* 读出占用 */
-wire [4:0] rd_port [31:0];
-wire rd_xfer_data_vld [31:0];
+reg [10:0] rd_page [15:0];
+reg [4:0] rd_port [31:0];
+wire [15:0] rd_xfer_data_vld [31:0];
 wire [15:0] rd_xfer_data [31:0];
-wire rd_end_of_packet [31:0];
 wire [7:0] rd_ecc_code [31:0];  /* 校验码，用于纠错 */
 wire [15:0] rd_next_page [31:0]; /* 下一页地址，用于更新queue_head */
 
@@ -259,6 +259,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
  
     wire [3:0] rd_prior;
 
+    reg [6:0] rd_page_amount;
+    reg [2:0] rd_batch_end;
+
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_sram[port] <= 6'd32;
@@ -269,6 +272,30 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_page[port] <= queue_head[rd_prior][10:0];
         end
     end
+
+    always @(posedge clk) begin
+        if(rd_sop[port]) begin
+            rd_page_amount <= 7'd64;
+            rd_batch_end <= 0;
+        end else if(rd_page_amount == 7'd64) begin
+            //TODO
+        end
+    end
+
+    reg [15:0] ecc_decoder_buffer [7:0];
+    reg [7:0] ecc_code;
+
+    ecc_decoder ecc_decoder(
+        .data_0(ecc_decoder_buffer[0]),
+        .data_1(ecc_decoder_buffer[1]),
+        .data_2(ecc_decoder_buffer[2]),
+        .data_3(ecc_decoder_buffer[3]),
+        .data_4(ecc_decoder_buffer[4]),
+        .data_5(ecc_decoder_buffer[5]),
+        .data_6(ecc_decoder_buffer[6]),
+        .data_7(ecc_decoder_buffer[7]),
+        .code(ecc_code)
+    );
 
     port_rd_dispatch port_rd_dispatch(
         .clk(clk),
@@ -431,6 +458,27 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .idx(processing_port)
     );
 
+    reg [3:0] rd_batch;
+    reg rd_another_page;
+    assign rd_xfer_data_vld[sram] = rd_batch != 4'd9;
+
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            rd_batch <= 4'd9;
+            rd_another_page <= 0;
+        end else if(~rd_batch[3]) begin
+            rd_batch <= rd_batch + 1;
+            rd_another_page <= 0;
+        end else if(rd_batch[3] && select_rd != 16'd0) begin
+            rd_batch <= 4'd1;
+            rd_another_page <= 1;
+            rd_port[sram] <= processing_port;
+        end else begin
+            rd_batch <= 4'd9;
+            rd_port[sram] <= 5'd16;
+        end
+    end
+
     sram_interface sram_interface(
         .clk(clk),
         .rst_n(rst_n), 
@@ -453,11 +501,11 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .concatenate_head(pst_concatenate_head), 
         .concatenate_tail(pst_concatenate_tail),
 
-        .rd_another_page(),
-        .rd_page(),
-        .rd_xfer_data(),
-        .rd_next_page(),
-        .rd_ecc_code()
+        .rd_another_page(rd_another_page),
+        .rd_page(rd_page[rd_port]),
+        .rd_xfer_data(rd_xfer_data[sram]),
+        .rd_next_page(rd_xfer_data[sram]),
+        .rd_ecc_code(rd_xfer_data[ecc_code])
     );
 end endgenerate 
 endmodule
