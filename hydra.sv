@@ -3,7 +3,6 @@
 `include "port_rd_frontend.sv"
 `include "port_rd_dispatch.sv"
 `include "sram_interface.sv"
-`include "sram_interface.sv"
 `include "decoder_16_4.sv"
 `include "decoder_32_5.sv"
 
@@ -59,7 +58,7 @@ end
 /* 端口正在交互的SRAM的下标*/
 reg [5:0] wr_sram [15:0]; /* 写入占用 */
 wire [5:0] matched_sram [15:0]; /* 较优匹配 */
-reg [5:0] rd_sram [15:0]; /* 读出占用 */
+wire [5:0] rd_sram [15:0]; /* 读出占用 */
 
 /* 写入时端口与SRAM传输信息的通道 */
 wire wr_xfer_data_vld [15:0];
@@ -67,9 +66,9 @@ wire [15:0] wr_xfer_data [15:0];
 wire wr_end_of_packet [15:0];
 
 /* 读出时端口与SRAM传输信息的通道 */
-reg [10:0] rd_page [15:0];
+wire [10:0] rd_page [15:0];
 reg [4:0] rd_port [31:0];
-wire [15:0] rd_xfer_data_vld [31:0];
+reg rd_xfer_data_vld [31:0];
 wire [15:0] rd_xfer_data [31:0];
 wire [7:0] rd_ecc_code [31:0];  /* 校验码，用于纠错 */
 wire [15:0] rd_next_page [31:0]; /* 下一页地址，用于更新queue_head */
@@ -238,7 +237,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             end
         end if(join_enable == 0) begin
         end else if(queue_empty[join_prior]) begin /* 队列为空时入队只需 头->头 + 尾->尾 */
-            queue_head[join_prior] <= wr_packet_head_addr[join_request];
+            queue_head[join_prior] <= wr_packet_head_addr[join_request]; //TODO UPDATE
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
         end else begin /* 队列不为空时入队需 发起跳转表拼接 + 尾->尾 */
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
@@ -259,17 +258,38 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
  
     wire [3:0] rd_prior;
 
-    reg [6:0] rd_page_amount;
-    reg [2:0] rd_batch_end;
+    reg [5:0] read_sram;
+    reg [10:0] read_page;
+    assign rd_sram[port] = read_sram;
+    assign rd_page[port] = read_page;
 
     always @(posedge clk) begin
         if(~rst_n) begin
-            rd_sram[port] <= 6'd32;
-        end else if(rd_eop[port]) begin
-            rd_sram[port] <= 6'd32;
+            read_sram <= 6'd32;
+        end else if(rd_page_amount == 0) begin //TODO FIXME
+            read_sram <= 6'd32;
         end else if(rd_sop[port]) begin
-            rd_sram[port] <= queue_head[rd_prior][15:11];
-            rd_page[port] <= queue_head[rd_prior][10:0];
+            read_sram <= queue_head[rd_prior][15:11];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(rd_sop[port]) begin
+            read_page <= queue_head[rd_prior][10:0];
+        end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin
+            read_page <= rd_next_page[read_sram];
+        end
+    end
+
+    reg [6:0] rd_page_amount;
+    reg [2:0] rd_batch_end;
+    reg [2:0] rd_batch;
+    
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            rd_batch <= 3'd0;
+        end else if(rd_xfer_data_vld[read_sram]) begin
+            rd_batch <= rd_batch + 1;
         end
     end
 
@@ -277,33 +297,24 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(rd_sop[port]) begin
             rd_page_amount <= 7'd64;
             rd_batch_end <= 0;
-        end else if(rd_page_amount == 7'd64) begin
-            //TODO
+        end else if(rd_page_amount == 7'd64 && rd_xfer_data_vld[read_sram]) begin
+            rd_page_amount <= rd_xfer_data[read_sram][15:10];
+            rd_batch_end <= rd_xfer_data[read_sram][9:7];
+        end else if(rd_batch == 3'd7) begin
+            rd_page_amount <= rd_page_amount - 1;
         end
     end
 
-    reg [15:0] ecc_decoder_buffer [7:0];
-    reg [7:0] ecc_code;
-
-    ecc_decoder ecc_decoder(
-        .data_0(ecc_decoder_buffer[0]),
-        .data_1(ecc_decoder_buffer[1]),
-        .data_2(ecc_decoder_buffer[2]),
-        .data_3(ecc_decoder_buffer[3]),
-        .data_4(ecc_decoder_buffer[4]),
-        .data_5(ecc_decoder_buffer[5]),
-        .data_6(ecc_decoder_buffer[6]),
-        .data_7(ecc_decoder_buffer[7]),
-        .code(ecc_code)
-    );
+    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end;
 
     port_rd_dispatch port_rd_dispatch(
         .clk(clk),
         .rst_n(rst_n),
 
         .wrr_en(wrr_enable[port]),
+
         .queue_empty(queue_empty),
-        .next(rd_sop[port]),
+        .update(rd_sop[port]),
         .rd_prior(rd_prior)
     );
 
@@ -315,11 +326,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .rd_eop(rd_eop[port]),
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
-        .ready(ready[port])
+        .ready(ready[port]),
     
-        // .xfer_data_vld(xfer_data_vld),
-        // .xfer_data(),
-        // .end_of_packet()
+        .xfer_data_vld(rd_xfer_data_vld[read_sram]),
+        .xfer_data(rd_xfer_data[read_sram]),
+        .end_of_packet(end_of_packet)
     );
 
 end endgenerate
@@ -329,7 +340,7 @@ wire [3:0] wr_packet_dest_port [31:0];
 wire [2:0] wr_packet_prior [31:0];
 wire [15:0] wr_packet_head_addr [31:0];
 wire [15:0] wr_packet_tail_addr [31:0];
-wire [31:0] wr_packet_join_request; //TODO 这里把下标提前了，不知道行不行，不行的话就后置，然后新建一个wire把它们并起来
+wire [31:0] wr_packet_join_request;
 wire [5:0] wr_packet_join_time_stamp [31:0];
 
 /* 时间序列 */ 
@@ -460,7 +471,10 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
 
     reg [3:0] rd_batch;
     reg rd_another_page;
-    assign rd_xfer_data_vld[sram] = rd_batch != 4'd9;
+    
+    always @(posedge clk) begin
+        rd_xfer_data_vld[sram] <= rd_batch != 4'd9;
+    end
 
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -502,10 +516,10 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .concatenate_tail(pst_concatenate_tail),
 
         .rd_another_page(rd_another_page),
-        .rd_page(rd_page[rd_port]),
+        .rd_page(rd_page[rd_port[sram]]),
         .rd_xfer_data(rd_xfer_data[sram]),
         .rd_next_page(rd_xfer_data[sram]),
-        .rd_ecc_code(rd_xfer_data[ecc_code])
+        .rd_ecc_code(rd_ecc_code[sram])
     );
 end endgenerate 
 endmodule

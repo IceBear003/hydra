@@ -32,8 +32,7 @@ module tb_test;
         .pause(pause),
         .wrr_enable(16'hFFFF),
         .match_threshold(5'd20),
-        .match_mode(2'd2),
-        .viscosity(4'd15)
+        .match_mode(2'd2)
     );
 
     always @(posedge clk) begin

@@ -54,7 +54,7 @@ module sram_interface
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
 reg [10:0] ec_wr_addr;
 wire [7:0] ec_din;
-reg [10:0] ec_rd_addr;
+wire [10:0] ec_rd_addr;
 reg [7:0] ec_dout;
 always @(posedge clk) begin ecc_codes[ec_wr_addr] <= ec_din; end
 always @(posedge clk) begin ec_dout <= ecc_codes[ec_rd_addr]; end
@@ -105,7 +105,7 @@ assign rd_ecc_code = ec_dout;
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [10:0] jt_wr_addr;
 reg [15:0] jt_din;
-reg [10:0] jt_rd_addr;
+wire [10:0] jt_rd_addr;
 reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
