@@ -18,8 +18,8 @@ module hydra
     input [15:0] [15:0] wr_data,
     input [15:0] pause,
 
-    output reg full,
-    output reg almost_full,
+    // output reg full,
+    // output reg almost_full,      //TODO
 
     input [15:0] ready,
     output [15:0] rd_sop,
@@ -43,6 +43,15 @@ module hydra
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
     input [1:0] match_mode
+    
+    /* SRAM引出，综合用 */
+    // ,output [31:0] wr_en,
+    // output [31:0] [13:0] wr_addr,
+    // output [31:0] [15:0] din,
+    
+    // output [31:0] rd_en,
+    // output [31:0] [13:0] rd_addr,
+    // input [31:0] [15:0] dout
 );
 
 /* 时间戳 */
@@ -187,7 +196,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
         .match_threshold(match_threshold),
 
-        .new_dest_port(new_dest_port),
         .new_length(new_length),
         .match_enable(match_enable),
         .match_suc(match_suc),
@@ -284,11 +292,13 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [6:0] rd_page_amount;
     reg [2:0] rd_batch_end;
     reg [2:0] rd_batch;
+
+    wire rxfv = rd_xfer_data_vld[read_sram] && rd_port[read_sram] == port;
     
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_batch <= 3'd0;
-        end else if(rd_xfer_data_vld[read_sram]) begin
+        end else if(rxfv) begin
             rd_batch <= rd_batch + 1;
         end
     end
@@ -297,7 +307,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(rd_sop[port]) begin
             rd_page_amount <= 7'd64;
             rd_batch_end <= 0;
-        end else if(rd_page_amount == 7'd64 && rd_xfer_data_vld[read_sram]) begin
+        end else if(rd_page_amount == 7'd64 && rxfv) begin
             rd_page_amount <= rd_xfer_data[read_sram][15:10];
             rd_batch_end <= rd_xfer_data[read_sram][9:7];
         end else if(rd_batch == 3'd7) begin
@@ -328,7 +338,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .rd_data(rd_data[port]),
         .ready(ready[port]),
     
-        .xfer_data_vld(rd_xfer_data_vld[read_sram]),
+        .xfer_data_vld(rxfv),
         .xfer_data(rd_xfer_data[read_sram]),
         .end_of_packet(end_of_packet)
     );
@@ -423,7 +433,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     reg concatenate_en; 
     reg [15:0] concatenate_head;
     reg [15:0] concatenate_tail;
-    reg [15:0] pst_concatenate_head;
+    reg [10:0] pst_concatenate_head;
     reg [15:0] pst_concatenate_tail;
 
     wire [3:0] concatenate_port;
@@ -440,7 +450,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     always @(posedge clk) begin
         if(concatenate_head[15:11] == sram) begin
             concatenate_en <= 1;
-            pst_concatenate_head <= concatenate_head;
+            pst_concatenate_head <= concatenate_head[10:0];
             pst_concatenate_tail <= concatenate_tail;
         end else begin
             concatenate_en <= 0;
@@ -480,6 +490,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         if(~rst_n) begin
             rd_batch <= 4'd9;
             rd_another_page <= 0;
+            rd_port[sram] <= 5'd16;
         end else if(~rd_batch[3]) begin
             rd_batch <= rd_batch + 1;
             rd_another_page <= 0;
@@ -518,8 +529,15 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .rd_another_page(rd_another_page),
         .rd_page(rd_page[rd_port[sram]]),
         .rd_xfer_data(rd_xfer_data[sram]),
-        .rd_next_page(rd_xfer_data[sram]),
+        .rd_next_page(rd_next_page[sram]),
         .rd_ecc_code(rd_ecc_code[sram])
+
+        // ,.wr_en(wr_en[sram]),
+        // .wr_addr(wr_addr[sram]),
+        // .din(din[sram]),
+        // .rd_en(rd_en[sram]), 
+        // .rd_addr(rd_addr[sram]),
+        // .dout(dout[sram])
     );
 end endgenerate 
 endmodule

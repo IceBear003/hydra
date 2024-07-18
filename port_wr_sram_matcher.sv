@@ -5,7 +5,6 @@ module port_wr_sram_matcher(
     input [4:0] match_threshold,
 
     /* 与前端交互的信号 */
-    input [3:0] new_dest_port,
     input [8:0] new_length,
     input match_enable,
     output reg match_suc,

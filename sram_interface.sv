@@ -24,7 +24,7 @@ module sram_interface
     output reg [5:0] wr_packet_join_time_stamp,
 
     input concatenate_enable,
-    input [15:0] concatenate_head,
+    input [10:0] concatenate_head,
     input [15:0] concatenate_tail,
 
     /*
