@@ -1,19 +1,16 @@
 `include "sram.sv"
-`include "sram_ecc_encoder.sv"
-`include "sram_ecc_decoder.sv"
-`include "sram_rd_round.sv"
+`include "ecc_encoder.sv"
 
 module sram_interface
 (
     input clk,
     input rst_n,
 
-    input [1:0] match_mode,
     input [4:0] time_stamp,
     input [4:0] SRAM_IDX,
 
     /*
-     * 写入数据
+     * 写入
      */
     input wr_xfer_data_vld,
     input [15:0] wr_xfer_data,
@@ -27,8 +24,26 @@ module sram_interface
     output reg [5:0] wr_packet_join_time_stamp,
 
     input concatenate_enable,
-    input [15:0] concatenate_head,
-    input [15:0] concatenate_tail
+    input [10:0] concatenate_head,
+    input [15:0] concatenate_tail,
+
+    /*
+     * 读出(即时响应，rd_page生效1周期后即可得到第一半字的信息)
+     */
+    input rd_another_page,
+    input [10:0] rd_page,
+    output [15:0] rd_xfer_data,
+    output [15:0] rd_next_page,
+    output [7:0] rd_ecc_code
+    
+    /* SRAM引出，综合用 */
+    // ,output wr_en,
+    // output [13:0] wr_addr,
+    // output [15:0] din,
+    
+    // output rd_en,
+    // output [13:0] rd_addr,
+    // input [15:0] dout
 );
 
 /******************************************************************************
@@ -39,7 +54,7 @@ module sram_interface
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
 reg [10:0] ec_wr_addr;
 wire [7:0] ec_din;
-reg [10:0] ec_rd_addr;
+wire [10:0] ec_rd_addr;
 reg [7:0] ec_dout;
 always @(posedge clk) begin ecc_codes[ec_wr_addr] <= ec_din; end
 always @(posedge clk) begin ec_dout <= ecc_codes[ec_rd_addr]; end
@@ -64,13 +79,13 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_end_of_page) begin
+    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin
         /* 页末时准备将结果写入ECC编码存储器 */
         ec_wr_addr <= wr_page;
     end
 end
 
-sram_ecc_encoder sram_ecc_encoder( 
+ecc_encoder ecc_encoder( 
     .data_0(ecc_encoder_buffer[0]),
     .data_1(ecc_encoder_buffer[1]),
     .data_2(ecc_encoder_buffer[2]),
@@ -82,11 +97,15 @@ sram_ecc_encoder sram_ecc_encoder(
     .code(ec_din)
 );
 
+/* 页刚开始读出时生成本页的校验码 */
+assign ec_rd_addr = rd_page;
+assign rd_ecc_code = ec_dout;
+
 /* 跳转表 */
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
 reg [10:0] jt_wr_addr;
 reg [15:0] jt_din;
-reg [10:0] jt_rd_addr;
+wire [10:0] jt_rd_addr;
 reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
@@ -96,11 +115,15 @@ always @(posedge clk) begin
     if(concatenate_enable) begin /* 优先进行不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else begin
+    end else if(wr_xfer_data_vld) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
         jt_wr_addr <= wr_page;
-        jt_din <= np_dout;
+        jt_din <= {SRAM_IDX, np_dout};
     end
 end
+
+/* 页刚开始读出时生成下一页的地址 */
+assign jt_rd_addr = rd_page;
+assign rd_next_page = jt_dout;
 
 /* 空闲队列 FIFO结构的RAM */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
@@ -134,10 +157,12 @@ assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld)
 
 always @(posedge clk) begin
     if(!rst_n) begin
-        np_perfusion_process <= 0;  /* 灌注从1开始 */
+        np_perfusion_process <= 0;  /* 灌注从0开始 */
         np_tail_ptr <= 0;
-    end else if(0 /* 读出页，未完成 */) begin
+    end else if(rd_another_page) begin /* 回收读出的页 */
         np_tail_ptr <= np_tail_ptr + 1;
+        np_wr_addr <= np_tail_ptr;
+        np_din <= rd_page;
     end else if(np_perfusion_process != 12'd2048) begin /* 灌注到2047结束 */
         np_tail_ptr <= np_tail_ptr + 1;
         np_perfusion_process <= np_perfusion_process + 1;
@@ -170,15 +195,25 @@ always @(posedge clk) begin
     end
 end
 
-/* 当前是否为页末 */
-wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
 /* 正在写入的页 */
 reg [10:0] wr_page;
+/* 在数据包传输完毕之后的第二个周期重新获取新的wr_page，以规避最后一页数据量过少导致的np_dout还未刷新到新的空闲页的问题 */
+reg [1:0] regain_wr_page_tick;
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        regain_wr_page_tick <= 2'd0;
+    end else if(wr_end_of_packet) begin
+        regain_wr_page_tick <= 2'd3;
+    end else if(regain_wr_page_tick != 0) begin 
+        regain_wr_page_tick <= regain_wr_page_tick - 1;
+    end
+end
 
 always @(posedge clk) begin
     if(!rst_n) begin
         wr_page <= 0;
-    end else if(wr_end_of_page) begin /* 在上页末时更新wr_page到新页 */ //TODO FIX: 最后一页长度小于3时会出错
+    end else if((wr_batch == 3'd7 && wr_xfer_data_vld) || regain_wr_page_tick == 2'd1) begin /* 更新wr_page到新页 */
         wr_page <= np_dout;
     end
 end
@@ -228,7 +263,7 @@ always @(posedge clk) begin
     if(~rst_n) begin 
         wr_packet_join_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        wr_packet_join_time_stamp <= time_stamp + 5'd1; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
+        wr_packet_join_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
     end else if(time_stamp + 5'd1 == wr_packet_join_time_stamp) begin
         wr_packet_join_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
     end
@@ -238,17 +273,42 @@ end
  *                                  读出处理                                   *
  ******************************************************************************/
 
+reg [2:0] rd_batch; /* 读出切片下标 */
+wire [13:0] sram_rd_addr = {rd_page, rd_another_page ? 3'd0 : rd_batch};  /* 读取页刚切换时，切片下标应为0，其他时刻则为rd_batch */
+
+always @(posedge clk) begin
+    if(rd_another_page) begin
+        rd_batch <= 1; /* 读取页切换时，下一刻batch应为1 */
+    end else begin
+        rd_batch <= rd_batch + 1; /* 永远自增 */
+    end
+end
+
 /******************************************************************************
  *                                  SRAM本体                                   *
  ******************************************************************************/
 
- wire [13:0] sram_wr_addr = {wr_page, wr_batch};
+wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
- sram sram(
+// /* SRAM不引出，调试用
+sram sram(
     .clk(clk),
     .rst_n(rst_n),
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
-    .din(wr_xfer_data)
- );
+    .din(wr_xfer_data),
+    .rd_en(1'b1),
+    .rd_addr(sram_rd_addr),
+    .dout(rd_xfer_data)
+); 
+// */
+
+/* SRAM引出，综合用 */
+// assign wr_en = wr_xfer_data_vld;
+// assign wr_addr = sram_wr_addr;
+// assign din = wr_xfer_data;
+// assign rd_en = 1'b1;
+// assign rd_addr = sram_rd_addr;
+// assign dout = rd_xfer_data;
+
 endmodule

@@ -60,7 +60,10 @@ reg [1:0] xfer_state;
  */
 reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
+wire [5:0] wr_ptr_pls = wr_ptr + 6'd1;
+wire [5:0] wr_ptr_plss = wr_ptr + 6'd2;
 reg [5:0] xfer_ptr;
+wire [5:0] xfer_ptr_pls = xfer_ptr + 6'd1;
 reg [6:0] end_ptr;
 
 reg [8:0] wr_length;
@@ -88,7 +91,7 @@ always @(posedge clk or negedge rst_n) begin
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
             new_dest_port <= wr_data[3:0];
-            new_length <= wr_data[15:7];
+            new_length <= wr_data[15:7] - 1;
         end
     end
 end
@@ -99,7 +102,7 @@ always @(posedge clk) begin
     end else if(wr_state == 2'd3) begin
         /* 传输完所有半字后，wr_ptr即为当前数据包的末端位置 */
         end_ptr <= wr_ptr;
-    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
         end_ptr <= 7'd64;
     end
 end
@@ -147,10 +150,10 @@ always @(posedge clk) begin
     end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin
         /* 匹配完毕，开始传输数据 */
         xfer_state <= 2'd1;
-    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == wr_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls == wr_ptr) begin
         /* 当前可传输的数据传输完毕，进入传输暂停态 */
         xfer_state <= 2'd2;
-    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
         /* 数据包传输完毕，进入传输空闲态 */
         xfer_state <= 2'd0;
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
@@ -164,7 +167,7 @@ assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
 always @(posedge clk) begin
     if(~rst_n) begin
         end_of_packet <= 0;
-    end else if(xfer_state == 2'd1 && xfer_ptr + 6'd1 == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
         /* 数据包即将被传输完毕，将最后一半字标记为末端 */
         end_of_packet <= 1;
     end else begin
@@ -191,8 +194,8 @@ end
  *  II - 缓冲区中存在仍未匹配到SRAM的数据包（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
  */
  always @(posedge clk) begin
-    pause <= (wr_ptr + 6'd2 == xfer_ptr) ||
-             (wr_ptr + 6'd1 == xfer_ptr) ||
+    pause <= (wr_ptr_plss == xfer_ptr) ||
+             (wr_ptr_pls == xfer_ptr) ||
              (wr_ptr == xfer_ptr) ||
              (wr_state == 2'd0 && match_enable && ~match_suc);
 end

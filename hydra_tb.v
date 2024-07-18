@@ -22,6 +22,12 @@ module tb_test;
     output reg [15:0] [15:0] wr_data;
     output reg [15:0] pause;
 
+    output reg [15:0] ready;
+    input [15:0] rd_sop;
+    input [15:0] rd_eop;
+    input [15:0] rd_vld;
+    input [15:0] [15:0] rd_data;
+
     hydra hydra(
         .clk(clk),
         .rst_n(rst_n),
@@ -30,14 +36,31 @@ module tb_test;
         .wr_vld(wr_vld),
         .wr_data(wr_data),
         .pause(pause),
+        
+        .ready(ready),
+        .rd_sop(rd_sop), 
+        .rd_eop(rd_eop),
+        .rd_vld(rd_vld),
+        .rd_data(rd_data),
+
         .wrr_enable(16'hFFFF),
         .match_threshold(5'd20),
-        .match_mode(2'd2),
-        .viscosity(4'd15)
+        .match_mode(2'd2)
     );
 
     always @(posedge clk) begin
         cnt <= cnt + 1;
+    end
+
+    reg re;
+
+    always @(posedge clk) begin
+        if(rd_eop != 0) begin
+            ready <= 16'h0008;
+            re <= 1;
+        end else if(re) begin
+            ready <= 16'h0000;
+        end
     end
 
     initial
@@ -53,7 +76,7 @@ module tb_test;
         #10 
         wr_sop <= 16'h0000;
         wr_vld <= 16'h0007;
-        wr_data <= {{9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}};
+        wr_data <= {{9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd34, 3'd4, 4'd3}};
         cnt = 0;
         #10 
         wr_vld <= 16'h0007;
@@ -87,9 +110,62 @@ module tb_test;
         #10 wr_data <= {cnt-16'd1, cnt};
         #10 wr_data <= {cnt-16'd1, cnt};
         #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= 0;
+        ready <= 16'h0008;
+        #10 wr_data <= {cnt-16'd1, cnt};
+        ready <= 16'h0000;
+        wr_vld <= 16'h0001;
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 
         wr_vld <= 16'h0000;
+        #10 
+        #10 
+        #10 
         wr_eop <= 16'h0007;
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
         #10 
         #10 
         #10 
