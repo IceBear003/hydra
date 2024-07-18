@@ -22,11 +22,11 @@ module hydra
     // output reg almost_full,      //TODO
 
     input [15:0] ready,
-    output [15:0] rd_sop,
+    output reg [15:0] rd_sop,
     output [15:0] rd_eop,
     output [15:0] rd_vld,
     output [15:0] [15:0] rd_data,
-
+ 
     
     /*
      * 可配置参数
@@ -137,7 +137,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(~rst_n) begin
             for(sram = 0; sram < 32; sram = sram + 1)
                 packet_amounts[port][sram] <= 0;
-        end
+        end else if(join_enable) begin
+            packet_amounts[port][wr_packet_tail_addr[join_request]] <= packet_amounts[port][matching_best_sram] + 1;
+        end else if(rd_end_of_packet) begin
+            packet_amounts[port][read_sram] <= packet_amounts[port][read_sram] - 1;
+        end //极小概率撞在一起，懒得处理了
     end
 
     always @(posedge clk) begin
@@ -215,6 +219,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     wire [15:0] debug_head = queue_head[4];
     wire [15:0] debug_tail = queue_tail[4];
+    wire [15:0] debug_amount = packet_amounts[port][4];
 
     /* 是否即将处理入队请求 */
     reg join_enable;
@@ -260,8 +265,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(join_enable != 0 && queue_empty[join_prior]) begin /* 队列为空时入队只需 头->头 + 尾->尾 */
             queue_head[join_prior] <= wr_packet_head_addr[join_request];
         end else if(~rd_end_of_packet) begin
-        end else if(read_page != queue_tail[read_prior]) begin
+        end else if({read_sram, read_page} != queue_tail[read_prior]) begin
             queue_head[read_prior] <= rd_next_page[read_sram];
+        end else begin
+            queue_head[read_prior] <= queue_tail[read_prior];
         end
     end
     
@@ -286,7 +293,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(~rst_n) begin
             read_sram <= 6'd32;
-        end else if(rd_page_amount == 0 && rd_batch == rd_batch_end) begin
+        end else if(rd_end_of_packet) begin
             read_sram <= 6'd32;
         end else if(rd_sop[port]) begin
             read_prior <= rd_prior;
@@ -340,12 +347,22 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .update(rd_sop[port]),
         .rd_prior(rd_prior)
     );
+    
+
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            rd_sop[port] <= 0;
+        end else if(ready && queue_empty != 8'hFF) begin
+            rd_sop[port] <= 1;
+        end else begin
+            rd_sop[port] <= 0;
+        end
+    end
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),
         .rst_n(rst_n),
     
-        .rd_sop(rd_sop[port]),
         .rd_eop(rd_eop[port]),
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
@@ -422,7 +439,7 @@ wire [15:0] concatenate_select = {concatenate_enable[15] == 1, concatenate_enabl
  * SRAM
  */ 
 
-reg [10:0] free_spaces [31:0];
+wire [10:0] free_spaces [31:0];
 wire accessibilities [31:0];
 
 genvar sram;
@@ -467,17 +484,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             pst_concatenate_tail <= concatenate_tail;
         end else begin
             concatenate_en <= 0;
-        end
-    end
-
-    //TODO FREESPACE更新
-
-    integer port;
-    always @(posedge clk) begin
-        if(~rst_n) begin
-            free_spaces[sram] <= 100 + sram; /* DEBUG 此为调试用数据吗，实际应该是 11'd2047 */
-        end else if(wr_end_of_packet[wr_port]) begin
-            free_spaces[sram] <= free_spaces[sram] - 1; //TODO 需要知道包的长度，这个好说，从sram_interface拉个信号出来即可
         end
     end
 
@@ -543,7 +549,9 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .rd_page(rd_page[rd_port[sram]]),
         .rd_xfer_data(rd_xfer_data[sram]),
         .rd_next_page(rd_next_page[sram]),
-        .rd_ecc_code(rd_ecc_code[sram])
+        .rd_ecc_code(rd_ecc_code[sram]),
+
+        .free_space(free_spaces[sram])
 
         // ,.wr_en(wr_en[sram]),
         // .wr_addr(wr_addr[sram]),

@@ -16,14 +16,14 @@ reg [7:0] wrr_mask_set [8:0];
 always @(posedge clk) begin
     if(~rst_n) begin
         wrr_mask_set[8] <= 8'h00;
-        wrr_mask_set[7] <= 8'h01;
-        wrr_mask_set[6] <= 8'h03;
-        wrr_mask_set[5] <= 8'h07;
-        wrr_mask_set[4] <= 8'h0F;
-        wrr_mask_set[3] <= 8'h1F;
-        wrr_mask_set[2] <= 8'h3F;
-        wrr_mask_set[1] <= 8'h7F;
-        wrr_mask_set[0] <= 8'hFF;
+        wrr_mask_set[0] <= 8'h01;
+        wrr_mask_set[1] <= 8'h03;
+        wrr_mask_set[2] <= 8'h07;
+        wrr_mask_set[3] <= 8'h0F;
+        wrr_mask_set[4] <= 8'h1F;
+        wrr_mask_set[5] <= 8'h3F;
+        wrr_mask_set[6] <= 8'h7F;
+        wrr_mask_set[7] <= 8'hFF;
     end
 end
 
@@ -64,28 +64,28 @@ always @(posedge clk) begin
         end else begin
             update_state <= 3'd0;
         end
-    end else if(update_state == 3'd4) begin
+    end else if(update_state == 3'd5) begin
         update_state <= 3'd0;
     end
 end
 
 always @(posedge clk) begin
-    if(~rst_n || ~wrr_en || update_state == 3'd5) begin
+    if(~rst_n || ~wrr_en) begin
         wrr_mask <= 8'h00;
     end else if(update) begin
         wrr_mask <= wrr_mask_set[rd_prior];
-    end else if(update_state == 3'd3) begin
+    end else if(update_state == 3'd2) begin
         wrr_mask <= wrr_mask_set[wrr_round];
     end
 end
 
 always @(posedge clk) begin
-    if(~rst_n || queue_empty == 8'hFF) begin
-        wrr_round <= 4'd8;
-    end else if(update_state == 3'd2) begin
-        wrr_round <= wrr_round - 1;
+    if(~rst_n) begin
+        wrr_round <= 4'd0;
+    end else if(update_state == 3'd3) begin
+        wrr_round <= wrr_round + 1;
     end else if(update_state == 3'd5) begin
-        wrr_round <= 4'd8;
+        wrr_round <= 4'd0;
     end
 end
 

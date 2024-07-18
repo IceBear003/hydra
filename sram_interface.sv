@@ -34,7 +34,9 @@ module sram_interface
     input [10:0] rd_page,
     output [15:0] rd_xfer_data,
     output [15:0] rd_next_page,
-    output [7:0] rd_ecc_code
+    output [7:0] rd_ecc_code,
+
+    output reg [10:0] free_space
     
     /* SRAM引出，综合用 */
     // ,output wr_en,
@@ -115,7 +117,7 @@ always @(posedge clk) begin
     if(concatenate_enable) begin /* 优先进行不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else if(wr_xfer_data_vld) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
+    end else if(wr_xfer_data_vld && wr_page != wr_packet_tail_addr[10:0]) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
         jt_wr_addr <= wr_page;
         jt_din <= {SRAM_IDX, np_dout};
     end
@@ -287,6 +289,25 @@ end
 /******************************************************************************
  *                                  SRAM本体                                   *
  ******************************************************************************/
+
+reg [5:0] packet_length;
+always @(posedge clk) begin
+    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+        packet_length <= wr_xfer_data[15:10] + 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(~rst_n) begin
+        free_space <= 11'd2047;
+    end else if(wr_packet_join_request && rd_another_page) begin
+        free_space <= free_space - packet_length + 1;
+    end else if(wr_packet_join_request) begin
+        free_space <= free_space - packet_length;
+    end else if(rd_another_page) begin
+        free_space <= free_space + 1;
+    end
+end
 
 wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 

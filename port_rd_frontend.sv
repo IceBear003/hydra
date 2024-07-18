@@ -2,7 +2,6 @@ module port_rd_frontend(
     input clk,
     input rst_n,
 
-    output reg rd_sop,
     output reg rd_eop,
     output reg rd_vld,
     output reg [15:0] rd_data,
@@ -28,16 +27,6 @@ always @(posedge clk) begin
         rd_eop <= 1;
     end else begin
         rd_eop <= 0;
-    end
-end
-
-always @(posedge clk) begin
-    if(~rst_n) begin
-        rd_sop <= 0;
-    end else if(ready) begin
-        rd_sop <= 1;
-    end else begin
-        rd_sop <= 0;
     end
 end
 
