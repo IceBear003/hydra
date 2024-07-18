@@ -240,17 +240,28 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(~rst_n) begin
             for(prior = 0; prior < 8; prior = prior + 1) begin
-                queue_head[prior] <= 16'd0;
                 queue_tail[prior] <= 16'd0;
             end
         end if(join_enable == 0) begin
         end else if(queue_empty[join_prior]) begin /* 队列为空时入队只需 头->头 + 尾->尾 */
-            queue_head[join_prior] <= wr_packet_head_addr[join_request]; //TODO UPDATE
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
         end else begin /* 队列不为空时入队需 发起跳转表拼接 + 尾->尾 */
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
             concatenate_previous[port] <= queue_tail[join_prior];
             concatenate_subsequent[port] <= wr_packet_head_addr[join_request];
+        end
+    end
+
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            for(prior = 0; prior < 8; prior = prior + 1) begin
+                queue_head[prior] <= 16'd0;
+            end
+        end else if(join_enable != 0 && queue_empty[join_prior]) begin /* 队列为空时入队只需 头->头 + 尾->尾 */
+            queue_head[join_prior] <= wr_packet_head_addr[join_request];
+        end else if(~rd_end_of_packet) begin
+        end else if(read_page != queue_tail[read_prior]) begin
+            queue_head[read_prior] <= rd_next_page[read_sram];
         end
     end
     
@@ -266,6 +277,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
  
     wire [3:0] rd_prior;
 
+    reg [2:0] read_prior;
     reg [5:0] read_sram;
     reg [10:0] read_page;
     assign rd_sram[port] = read_sram;
@@ -274,9 +286,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(~rst_n) begin
             read_sram <= 6'd32;
-        end else if(rd_page_amount == 0) begin //TODO FIXME
+        end else if(rd_page_amount == 0 && rd_batch == rd_batch_end) begin
             read_sram <= 6'd32;
         end else if(rd_sop[port]) begin
+            read_prior <= rd_prior;
             read_sram <= queue_head[rd_prior][15:11];
         end
     end
@@ -284,7 +297,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(rd_sop[port]) begin
             read_page <= queue_head[rd_prior][10:0];
-        end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin
+        end else if(rd_batch == 3'd6 && rd_page_amount != 0) begin
             read_page <= rd_next_page[read_sram];
         end
     end
@@ -340,7 +353,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     
         .xfer_data_vld(rxfv),
         .xfer_data(rd_xfer_data[read_sram]),
-        .end_of_packet(end_of_packet)
+        .end_of_packet(rd_end_of_packet)
     );
 
 end endgenerate
