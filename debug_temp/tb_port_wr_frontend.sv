@@ -75,11 +75,11 @@ end
 */
 always@(posedge clk or  negedge rst_n)
     if(state == RD_CTRL) begin
-        data_up = ($random);
+        /*data_up = ($random);
         if(data_up > 100)
             data_up = data_up % 100;
-        if(data_up < 32)
-            data_up = 32;
+        if(data_up < 32)*/
+            data_up = 70;
         
     end
 
@@ -126,7 +126,7 @@ reg     [3:0]   eop_ti;
 
 always@(posedge clk or  negedge rst_n)
     if(cnt == 31) begin
-        match_suc <= 1;
+        //match_suc <= 1;
     end else 
         match_suc <= 0;
 
@@ -151,7 +151,7 @@ always@(posedge clk or  negedge rst_n)
     else if(eop_ti == 1)
     begin
         eop_ti <= 0;
-        wr_sop <= 1;
+        //wr_sop <= 1;
         //match_suc <= 1;
     end
     

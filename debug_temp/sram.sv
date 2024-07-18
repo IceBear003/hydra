@@ -17,6 +17,7 @@ module sram
 
 always @(posedge clk) begin
     if(wr_en && rst_n) begin 
+        $display("wr_addr = %d %d",wr_addr,din);
         d_latches[wr_addr] <= din;
     end
 end

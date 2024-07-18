@@ -1,8 +1,3 @@
-`include "sram.sv"
-`include "sram_ecc_encoder.sv"
-`include "sram_ecc_decoder.sv"
-`include "sram_rd_round.sv"
-
 module sram_interface
 (
     input clk,
@@ -13,7 +8,7 @@ module sram_interface
     input [4:0] SRAM_IDX,
 
     /*
-     * ????????
+     * ????
      */
     input wr_xfer_data_vld,
     input [15:0] wr_xfer_data,
@@ -28,7 +23,16 @@ module sram_interface
 
     input concatenate_enable,
     input [15:0] concatenate_head,
-    input [15:0] concatenate_tail
+    input [15:0] concatenate_tail,
+
+    /*
+     * ????
+     */
+    input [10:0] rd_page,
+
+    output reg rd_xfer_data_vld,
+    output reg [15:0] rd_xfer_data,
+    output reg [15:0] rd_next_page
 );
 
 /******************************************************************************
@@ -44,11 +48,25 @@ reg [7:0] ec_dout;
 always @(posedge clk) begin ecc_codes[ec_wr_addr] <= ec_din; end
 always @(posedge clk) begin ec_dout <= ecc_codes[ec_rd_addr]; end
 
-/* ???????????????? */
-reg [2:0] wr_batch;
+/*
+ * np_head_ptr - ??????????????
+ * np_tail_ptr - ???????????????
+ * np_perfusion_process - ????????????????
+ */
+reg [10:0] np_head_ptr;
+reg [10:0] np_tail_ptr;
+reg [10:0] np_perfusion_process;
 
 /* ECC?????? */
 reg [15:0] ecc_encoder_buffer [7:0];
+
+/* ???????????????? */
+reg [2:0] wr_batch;
+
+/* ?????????? */
+reg [10:0] wr_page;
+/* ???????????????????????????????????wr_page?????????????????????????np_dout????????????????????? */
+reg [1:0] regain_wr_page_tick;
 
 /*
  * ???????????
@@ -74,24 +92,12 @@ always @(posedge clk) begin
     end
 end
 
-/* ????????? */
-wire wr_end_of_page = wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet;
-/* ?????????? */
-reg [10:0] wr_page;
-
 always @(posedge clk) begin
-    if(wr_end_of_page) begin
+    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin
         /* ???????????????ECC???????? */
         ec_wr_addr <= wr_page;
     end
 end
-
-/* ???????? FIFO????RAM */
-(* ram_style = "block" *) reg [10:0] null_pages [2047:0];
-reg [10:0] np_wr_addr;
-reg [10:0] np_din;
-wire [10:0] np_rd_addr;
-reg [10:0] np_dout;
 
 sram_ecc_encoder sram_ecc_encoder( 
     .data_0(ecc_encoder_buffer[0]),
@@ -114,28 +120,31 @@ reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
 
+/* ???????? FIFO????RAM */
+(* ram_style = "block" *) reg [10:0] null_pages [2047:0];
+reg [10:0] np_wr_addr;
+reg [10:0] np_din;
+wire [10:0] np_rd_addr;
+reg [10:0] np_dout;
+always @(posedge clk) begin null_pages[np_wr_addr] <= np_din; end
+always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
+
 /* ???????? */
 always @(posedge clk) begin
     if(concatenate_enable) begin /* ??????????????????????????? */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else begin
+        $display("jt_ wr_addr = %d %d",concatenate_head,SRAM_IDX);
+        $display("jt _din = %d",concatenate_tail);
+    end else if (wr_xfer_data_vld && wr_page != wr_packet_tail_addr) begin
         jt_wr_addr <= wr_page;
-        jt_din <= np_dout;
+        jt_din <= {SRAM_IDX,np_dout};
+        if(wr_page) begin
+            $display("jt_wr_addr = %d %d",wr_page,SRAM_IDX);
+            $display("jt_din = %d",np_dout);
+        end
     end
 end
-
-/*
- * np_head_ptr - ??????????????
- * np_tail_ptr - ???????????????
- * np_perfusion_process - ????????????????
- */
-reg [10:0] np_head_ptr;
-reg [10:0] np_tail_ptr;
-reg [10:0] np_perfusion_process;
-
-always @(posedge clk) begin null_pages[np_wr_addr] <= np_din; end
-always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
 
 always @(posedge clk) begin
     if(!rst_n) begin 
@@ -176,15 +185,31 @@ always @(posedge clk) begin
         wr_state <= 2'd2;
     end else if(wr_state == 2'd2 && wr_end_of_packet) begin
         wr_state <= 2'd0;
+        $display("1wd");
+    end
+end
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        regain_wr_page_tick <= 2'd0;
+    end else if(wr_end_of_packet) begin
+        regain_wr_page_tick <= 2'd3;
+    end else if(regain_wr_page_tick != 0) begin
+        regain_wr_page_tick <= regain_wr_page_tick - 1;
     end
 end
 
 always @(posedge clk) begin
     if(!rst_n) begin
         wr_page <= 0;
-    end else if(wr_end_of_page) begin /* ???????????wr_page????? */ //TODO FIX: ?????????????3??????
+    end else if((wr_batch == 3'd7 && wr_xfer_data_vld) || regain_wr_page_tick == 2'd1) begin /* ????wr_page????? */
         wr_page <= np_dout;
-    end
+        $display("np_rd_addr = %d",np_rd_addr);
+        $display("np_head_ptr = %d %d",np_head_ptr,SRAM_IDX);
+        $display("wr_xfer_data_vld = %d",wr_xfer_data_vld);
+    end 
+    //$display("wr_xfer_data_vld = %d %d",wr_xfer_data_vld,SRAM_IDX);
+    //$display("wr_end_of_packet = %d %d",wr_end_of_packet,SRAM_IDX);
 end
 
 always @(posedge clk) begin
@@ -209,6 +234,7 @@ always @(posedge clk) begin
         wr_packet_dest_port <= wr_xfer_data[3:0];
         wr_packet_prior <= wr_xfer_data[6:4];
         wr_packet_head_addr <= {SRAM_IDX, wr_page};
+        $display("wr_ packet_head_addr = %d %d",SRAM_IDX,wr_page);
     end
     if(wr_state == 2'd1 && wr_batch == 3'd1) begin
         wr_packet_tail_addr <= {SRAM_IDX, np_dout};
@@ -229,12 +255,10 @@ always @(posedge clk) begin
     if(~rst_n) begin 
         wr_packet_join_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        $display("time_stamp = %d",time_stamp);
-        wr_packet_join_time_stamp <= time_stamp + 5'd1; /* +1 ?????????????????????????????????? */
+        wr_packet_join_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 ?????????????????????????????????? */
     end else if(time_stamp + 5'd1 == wr_packet_join_time_stamp) begin
         wr_packet_join_time_stamp <= 6'd32; /* 32?????????????????????? */
     end
-    $display("wr_state = %d %d",wr_state,wr_xfer_data_vld);
 end
 
 /******************************************************************************
@@ -245,13 +269,13 @@ end
  *                                  SRAM????                                   *
  ******************************************************************************/
 
- wire [13:0] sram_wr_addr = {wr_page, wr_batch};
+wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
- sram sram(
+sram sram(
     .clk(clk),
     .rst_n(rst_n),
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
     .din(wr_xfer_data)
- );
+);
 endmodule
