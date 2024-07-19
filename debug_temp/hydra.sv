@@ -28,9 +28,7 @@ module hydra
     //????IO??
     input [15:0] wrr_enable,
     input [4:0] match_threshold,
-    input [1:0] match_mode,
-    //????????????????
-    input [3:0] viscosity
+    input [1:0] match_mode
 );
 
 /* ???? */
@@ -45,7 +43,8 @@ end
 
 /* ????????????SRAM??????*/
 reg [5:0] wr_sram [15:0]; /* ??????? */
-reg [5:0] matched_sram [15:0]; /* ??????? */
+
+wire [5:0] matched_sram [15:0]; /* ??????? */
 
 /* ?????SRAM???????????? */
 wire wr_xfer_data_vld [15:0];
@@ -79,7 +78,7 @@ wire [4:0] processing_join_request;
 
 /* Port->SRAM ???????????? */
 wire [3:0] processing_concatenate_port = time_stamp[3:0];
-reg concatenate_enable [15:0];
+reg [15:0] concatenate_enable;
 reg [15:0] concatenate_previous [15:0];
 reg [15:0] concatenate_subsequent [15:0];
 
@@ -89,7 +88,8 @@ reg [15:0] concatenate_subsequent [15:0];
 
 reg [8:0] packet_amounts [31:0][15:0];
 reg [10:0] free_spaces [31:0];
-reg accessibilities [31:0];
+
+wire accessibilities [31:0];
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -115,10 +115,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [8:0] packet_amount;
     reg accessibility;
 
-    /* ??????????0???????? */
-    reg [3:0] viscous_tick;
-    wire viscous = viscous_tick != 0;
-
     port_wr_frontend port_wr_frontend(
         .clk(clk),
         .rst_n(rst_n),
@@ -139,17 +135,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .new_dest_port(new_dest_port),
         .new_length(new_length)
     );
-
-    always @(posedge clk) begin
-        if(!rst_n) begin
-            viscous_tick <= 4'd0;
-        end else if(end_of_packet) begin //?????????????????????
-            viscous_tick <= viscosity;
-        end else if(viscous_tick > 0) begin
-            viscous_tick <= viscous_tick - 1;
-        end
-        //$display("xfer = %d",xfer_data_vld);
-    end
 
     always @(posedge clk) begin
         matching_sram <= next_matching_sram;
@@ -175,6 +160,18 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         endcase
     end
 
+    reg [1:0] regain_wr_page_tick;
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            regain_wr_page_tick <= 2'd0;
+        end else if(end_of_packet) begin
+            regain_wr_page_tick <= 2'd3;
+        end else if(regain_wr_page_tick != 0) begin
+            regain_wr_page_tick <= regain_wr_page_tick - 1;
+        end
+    end
+
     wire [4:0] matching_best_sram;
 
     always @(posedge clk) begin
@@ -182,26 +179,32 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* ???????PORT->SRAM?????????????????????????????wr_sram??????????? */
             wr_sram[port] <= matching_best_sram;
-            $display("matching_best_sram = %d",matching_best_sram);
+            $display("mat ching_best_sram = %d",matching_best_sram);
             $display("port = %d",port);
-        end else if(viscous_tick == 4'd1 || viscosity == 0) begin /* ???????????????????????????????? */
+        end else if(regain_wr_page_tick == 1) begin /* ???????????????????????????????? */
             wr_sram[port] <= 6'd32;
         end
-        //$display("wr_sram[0] = %d",wr_sram[0]);
+        if(port < 8) begin
+            $display("wr_sram[0] = %d",wr_sram[0]);
+            $display("matching_best_sram = %d",matching_best_sram);
+            $display("match_suc = %d",match_suc);
+        end
     end
 
     wire update_matched_sram;
-
+    assign matched_sram[port] = update_matched_sram ? matching_best_sram : 6'd32;
+/*
     always @(posedge clk) begin
         if(!rst_n) begin
             matched_sram[port] <= 6'd32;
         end else if(update_matched_sram) begin
-            matched_sram[port] <= matching_best_sram; /* ????????SRAM???????????????????????????????????????????????? */
+            matched_sram[port] <= matching_best_sram;
+
         end else begin
             matched_sram[port] <= 6'd32;
         end
     end
-    
+*/
     port_wr_sram_matcher port_wr_sram_matcher(
         .clk(clk),
         .rst_n(rst_n),
@@ -214,7 +217,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .match_enable(match_enable),
         .match_suc(match_suc),
 
-        .viscous(viscous),
         .matching_sram(matching_sram),
         .matching_best_sram(matching_best_sram),
         .update_matched_sram(update_matched_sram),
@@ -236,7 +238,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /* ????????????????????? */
     reg [2:0] join_prior;
     /* ????????????????SRAM???? */
-    reg [2:0] join_request;
+    reg [4:0] join_request;
     /* ???????????????????????????????????Port->SRAM??concatenate_enable */
     reg [3:0] concatenate_tick;
 
@@ -247,7 +249,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             join_prior <= wr_packet_prior[processing_join_request];
             join_request <= processing_join_request;
             $display("processing_join_request = %d",processing_join_request);
-            $display("prior = %d",wr_packet_prior[processing_join_request]);
+            $display("prior = %d %d",wr_packet_prior[processing_join_request],port);
         end else begin
             join_enable <= 0;
         end
@@ -262,19 +264,24 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             end
         end if(join_enable == 0) begin
         end else if(queue_empty[join_prior]) begin /* ?????????????? ?->? + ??->?? */
+            $display("wr_packet_head_addr[join_request] = %d",wr_packet_head_addr[join_request]);
+            $display("wr_packet_tail_addr[join_request] = %d",wr_packet_tail_addr[join_request]);
+            $display("join_request = %d",join_request);
             queue_head[join_prior] <= wr_packet_head_addr[join_request];
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
         end else begin /* ??????????????? ???????????? + ??->?? */
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
             concatenate_previous[port] <= queue_tail[join_prior];
             concatenate_subsequent[port] <= wr_packet_head_addr[join_request];
+            $display("wr_packet_head_addr[join_request] = %d",wr_packet_head_addr[join_request]);
         end
     end
     
     always @(posedge clk) begin
         if(join_enable == 1 && ~queue_empty[join_prior]) begin /* ??????????????? ???????????? + ??->?? */
             concatenate_enable[port] <= 1'b1;
-        end else if(concatenate_tick == 0) begin
+            $display("po rt = %d",port);
+        end else /*if(concatenate_tick == 0)*/ begin
             concatenate_enable[port] <= 1'b0;
         end
     end
@@ -295,11 +302,18 @@ decoder_32_5 decoder_32_5(
 );
 
 always @(posedge clk) begin
-    if(processing_join_select == 0) begin /* ???????????????????????????????????????????? */
+    if(!rst_n || processing_join_select == 0) begin /* ???????????????????????????????????????????? */
         processing_join_mask <= 32'hFFFFFFFF;
     end else begin /* ????????????????????????????????0??????????? */
         processing_join_mask[processing_join_request] <= 0;
+        $display("processing_join_select = %d",processing_join_select);
     end
+    //$display("processing_time_stamp = %d",processing_time_stamp);
+    //$display("ts_head_ptr = %d",ts_head_ptr);
+    //$display("ts_tail_ptr = %d",ts_tail_ptr);
+    //$display("processing_join_select = %d",processing_join_select);
+    //$display("processing_join_mask = %d",processing_join_mask);
+    //$display("wr_packet_join_time_stamp = %d",wr_packet_join_time_stamp[11]);
 end
 
 always @(posedge clk) begin
@@ -307,6 +321,7 @@ always @(posedge clk) begin
         ts_tail_ptr <= 0;
     end else if(wr_packet_join_request != 0) begin /* ???????????????????????????????????? */
         ts_fifo[ts_tail_ptr] <= time_stamp;
+        $display("tis = %d",time_stamp);
         ts_tail_ptr <= ts_tail_ptr + 1;
     end
 end
@@ -326,11 +341,17 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     wire [15:0] select_wr = {wr_sram[15] == sram, wr_sram[14] == sram, wr_sram[13] == sram, wr_sram[12] == sram, wr_sram[11] == sram, wr_sram[10] == sram, wr_sram[9] == sram, wr_sram[8] == sram, wr_sram[7] == sram, wr_sram[6] == sram, wr_sram[5] == sram, wr_sram[4] == sram, wr_sram[3] == sram, wr_sram[2] == sram, wr_sram[1] == sram, wr_sram[0] == sram};
     /* ??????????? */
     wire [15:0] select_matched = {matched_sram[15] == sram, matched_sram[14] == sram, matched_sram[13] == sram, matched_sram[12] == sram, matched_sram[11] == sram, matched_sram[10] == sram, matched_sram[9] == sram, matched_sram[8] == sram, matched_sram[7] == sram, matched_sram[6] == sram, matched_sram[5] == sram, matched_sram[4] == sram, matched_sram[3] == sram, matched_sram[2] == sram, matched_sram[1] == sram, matched_sram[0] == sram};
+    
+    assign accessibilities[sram] = select_wr == 0 && select_matched == 0;
+
     always @(posedge clk) begin
         /* ??SRAM??????????????????????????????????????????????????????????SRAM?????? */
-        accessibilities[sram] <= select_wr == 0 && select_matched == 0;
-        $display("select_wr = %d",select_wr);
+        if(!accessibilities[sram]) begin
+            $display("sram = %d",sram);
+        end
+        //$display("select_wr = %d",select_wr);
         //$display("wr_sram = %b",wr_sram[0]);
+        //$display("wr_packet_join_time_stamp = %d %d",wr_packet_join_time_stamp[sram],sram);
     end
     
     /* ????????SRAM?????????????????????16-4????????? */
@@ -344,19 +365,39 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     reg concatenate_en; 
     reg [15:0] concatenate_head;
     reg [15:0] concatenate_tail;
+    reg [15:0] concatenate_head_1;
+    reg [15:0] concatenate_tail_1;
+    reg [4:0] concatenate_port;
+
+    decoder_16_4 decoder_16_4_inst(
+        .select(concatenate_enable),
+        .idx(concatenate_port)
+    );
 
     always @(posedge clk) begin
-        if(concatenate_enable[processing_concatenate_port] /* ???????????????????????????????????????SRAM */
-            && concatenate_previous[processing_concatenate_port][15:11] == sram) begin
-            
+        concatenate_head_1 <= concatenate_previous[concatenate_port];
+        concatenate_tail_1 <= concatenate_subsequent[concatenate_port];
+    end
+
+    always @(posedge clk) begin
+        concatenate_head <= concatenate_head_1;
+        concatenate_tail <= concatenate_tail_1;
+    end
+
+    always @(posedge clk) begin
+        if(concatenate_head_1[15:11] == sram) begin
             //TODO ?????????????????????????????????????????????????????head??tail???wire????SRAM
-            concatenate_head <= concatenate_previous[processing_concatenate_port];
-            concatenate_tail <= concatenate_subsequent[processing_concatenate_port];
+            //concatenate_head <= concatenate_previous[concatenate_port];
+            //concatenate_tail <= concatenate_subsequent[concatenate_port];
+            $display("concatenate_subsequent[concatenate_port] = %d",concatenate_subsequent[concatenate_port]);
             concatenate_en <= 1;
         end else begin
             concatenate_en <= 0;
         end
-        $display("wr_port = %d",wr_port);
+        //$display("wr_port = %d",wr_port);
+        /*if(concatenate_enable[processing_concatenate_port]) begin
+            $display("sr am = %d",concatenate_previous[processing_concatenate_port][15:11]);
+        end*/
     end
 
     integer port;
