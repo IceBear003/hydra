@@ -9,9 +9,8 @@ module sram_interface
     input [4:0] time_stamp,
     input [4:0] SRAM_IDX,
 
-    /*
-     * 写入
-     */
+    /* 写入 */
+
     input wr_xfer_data_vld,
     input [15:0] wr_xfer_data,
     input wr_end_of_packet,
@@ -27,14 +26,17 @@ module sram_interface
     input [10:0] concatenate_head,
     input [15:0] concatenate_tail,
 
-    /*
-     * 读出(即时响应，rd_page生效1周期后即可得到第一半字的信息)
-     */
-    input rd_another_page,
+    /* 读出 */
+
+    input rd_page_down,
     input [10:0] rd_page,
+
+    output reg rd_xfer_data_vld,
     output [15:0] rd_xfer_data,
     output [15:0] rd_next_page,
     output [7:0] rd_ecc_code,
+
+    /* 统计 */
 
     output reg [10:0] free_space
     
@@ -99,7 +101,7 @@ ecc_encoder ecc_encoder(
     .code(ec_din)
 );
 
-/* 页刚开始读出时生成本页的校验码 */
+/* 生成正在读取的页的校验码 (在page_down信号拉高1周期后可视) */
 assign ec_rd_addr = rd_page;
 assign rd_ecc_code = ec_dout;
 
@@ -123,7 +125,7 @@ always @(posedge clk) begin
     end
 end
 
-/* 页刚开始读出时生成下一页的地址 */
+/* 生成正在读取的页的下一页的地址 (在page_down信号拉高1周期后可视) */
 assign jt_rd_addr = rd_page;
 assign rd_next_page = jt_dout;
 
@@ -139,11 +141,11 @@ always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
 /*
  * np_head_ptr - 空闲队列的头指针
  * np_tail_ptr - 空闲队列的尾指针
- * np_perfusion_process - 空闲队列的灌注进度
+ * np_perfusion - 空闲队列的灌注进度
  */
 reg [10:0] np_head_ptr;
 reg [10:0] np_tail_ptr;
-reg [10:0] np_perfusion_process;
+reg [10:0] np_perfusion;
 
 always @(posedge clk) begin
     if(!rst_n) begin 
@@ -154,22 +156,22 @@ always @(posedge clk) begin
 end
 
 assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
-                    ? np_head_ptr + wr_xfer_data[15:10] - (wr_xfer_data[9:7] == 0) /* 在数据包刚开始传输时查询尾页地址 */
-                    : np_head_ptr;
+                    ? np_head_ptr + wr_xfer_data[15:10] - (wr_xfer_data[9:7] == 0) /* 在数据包刚开始传输时预测数据包尾页地址 */
+                    : np_head_ptr; /* 其他时间查询顶部空页地址 */
 
 always @(posedge clk) begin
     if(!rst_n) begin
-        np_perfusion_process <= 0;  /* 灌注从0开始 */
+        np_perfusion <= 0;  /* 灌注从0开始 */
         np_tail_ptr <= 0;
-    end else if(rd_another_page) begin /* 回收读出的页 */
+    end else if(rd_page_down) begin /* 回收读出的页 */
         np_tail_ptr <= np_tail_ptr + 1;
         np_wr_addr <= np_tail_ptr;
         np_din <= rd_page;
-    end else if(np_perfusion_process != 12'd2048) begin /* 灌注到2047结束 */
+    end else if(np_perfusion != 12'd2048) begin /* 灌注到2047结束 */
         np_tail_ptr <= np_tail_ptr + 1;
-        np_perfusion_process <= np_perfusion_process + 1;
         np_wr_addr <= np_tail_ptr;
-        np_din <= np_perfusion_process;
+        np_din <= np_perfusion;
+        np_perfusion <= np_perfusion + 1;
     end
 end
 
@@ -275,19 +277,24 @@ end
  *                                  读出处理                                   *
  ******************************************************************************/
 
-reg [2:0] rd_batch; /* 读出切片下标 */
-wire [13:0] sram_rd_addr = {rd_page, rd_another_page ? 3'd0 : rd_batch};  /* 读取页刚切换时，切片下标应为0，其他时刻则为rd_batch */
+reg [3:0] rd_batch; /* 读出切片下标 */
+wire [13:0] sram_rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]}; /* 翻页时，切片下标应为0，其他时刻则为rd_batch */
+always @(posedge clk) begin
+    rd_xfer_data_vld <= rd_batch != 4'd8 || rd_page_down;
+end
 
 always @(posedge clk) begin
-    if(rd_another_page) begin
-        rd_batch <= 1; /* 读取页切换时，下一刻batch应为1 */
-    end else begin
-        rd_batch <= rd_batch + 1; /* 永远自增 */
+    if(~rst_n) begin
+        rd_batch <= 4'd8;
+    end if(rd_page_down) begin
+        rd_batch <= 1; /* 翻页时，下一刻切片下标应为1 */
+    end else if(rd_batch != 4'd8) begin
+        rd_batch <= rd_batch + 1;
     end
 end
 
 /******************************************************************************
- *                                  SRAM本体                                   *
+ *                                  统计信息                                   *
  ******************************************************************************/
 
 reg [5:0] packet_length;
@@ -300,11 +307,11 @@ end
 always @(posedge clk) begin
     if(~rst_n) begin
         free_space <= 11'd2047;
-    end else if(wr_packet_join_request && rd_another_page) begin
+    end else if(wr_packet_join_request && rd_page_down) begin
         free_space <= free_space - packet_length + 1;
     end else if(wr_packet_join_request) begin
         free_space <= free_space - packet_length;
-    end else if(rd_another_page) begin
+    end else if(rd_page_down) begin
         free_space <= free_space + 1;
     end
 end
@@ -318,7 +325,7 @@ sram sram(
     .wr_en(wr_xfer_data_vld),
     .wr_addr(sram_wr_addr),
     .din(wr_xfer_data),
-    .rd_en(1'b1),
+    .rd_en(rd_page_down || rd_batch != 4'd8),   //仅在需要读取的时候为1，节省SRAM功耗
     .rd_addr(sram_rd_addr),
     .dout(rd_xfer_data)
 ); 

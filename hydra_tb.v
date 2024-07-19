@@ -115,9 +115,9 @@ module tb_test;
         ready <= 16'h0000;
         wr_vld <= 16'h0001;
         #10 wr_data <= {cnt-16'd1, cnt};
-        #10 
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
         wr_vld <= 16'h0000;
-        #10 
         #10 
         #10 
         wr_eop <= 16'h0007;
