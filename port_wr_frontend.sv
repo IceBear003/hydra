@@ -68,7 +68,7 @@ reg [6:0] end_ptr;
 
 reg [8:0] wr_length;
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         wr_state <= 2'd0;
     end else if(wr_state == 2'd0 && wr_sop) begin
@@ -82,7 +82,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         wr_ptr <= 0;
     end else if(wr_vld) begin

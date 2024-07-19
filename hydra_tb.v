@@ -20,7 +20,7 @@ module tb_test;
     output reg [15:0] wr_eop;
     output reg [15:0] wr_vld;
     output reg [15:0] [15:0] wr_data;
-    output reg [15:0] pause;
+    input [15:0] pause;
 
     output reg [15:0] ready;
     input [15:0] rd_sop;

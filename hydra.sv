@@ -16,7 +16,7 @@ module hydra
     input [15:0] wr_eop,
     input [15:0] wr_vld,
     input [15:0] [15:0] wr_data,
-    input [15:0] pause,
+    output [15:0] pause,
 
     output reg full,
     output reg almost_full,
@@ -185,7 +185,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram[port] <= 6'd32;
         end else if(ready_to_xfer) begin /* 即将开始PORT->SRAM的数据传输时，将最优匹配结果持久化到wr_sram，启用写占用 */
             wr_sram[port] <= matching_best_sram;
-        end else if(regain_wr_page_tick) begin /* 直到数据包传输完毕后粘滞结束，写占用取消 */
+        end else if(regain_wr_page_tick == 1) begin /* 直到数据包传输完毕后，写占用取消 */
             wr_sram[port] <= 6'd32;
         end
     end
@@ -307,7 +307,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg rd_not_over; /* 数据包是否读取完毕，用于约束rd_vld */
     always @(posedge clk) begin
         if(~rst_n) begin
-            rd_not_over <= 1;
+            rd_not_over <= 0;
         end if(rd_end_of_packet) begin
             rd_not_over <= 0;
         end else if(rd_sop[port]) begin
@@ -338,7 +338,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    wire rd_xfer_data_vld = rd_not_over && rd_xfer_data_vlds[pst_rd_sram];
+    wire rd_xfer_data_vld = rd_not_over ? rd_xfer_data_vlds[pst_rd_sram] : 0;
     wire [15:0] rd_xfer_data = rd_xfer_datas[pst_rd_sram];
     
     wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end; /* 是否为数据包的最后一半字 */
@@ -356,7 +356,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     
 
     always @(posedge clk) begin
-        rd_sop[port] <= ready && queue_empty != 8'hFF;
+        rd_sop[port] <= ready[port] && queue_empty != 8'hFF;
     end
 
     port_rd_frontend port_rd_frontend(
