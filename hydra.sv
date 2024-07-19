@@ -18,8 +18,8 @@ module hydra
     input [15:0] [15:0] wr_data,
     input [15:0] pause,
 
-    // output reg full,
-    // output reg almost_full,      //TODO
+    output reg full,
+    output reg almost_full,
 
     input [15:0] ready,
     output reg [15:0] rd_sop,
@@ -64,6 +64,18 @@ always @(posedge clk) begin
     end
 end
 
+always @(posedge clk) begin
+    full <= accessibilities == 0;
+    almost_full <= (~accessibilities & {free_spaces[0][10], free_spaces[1][10], free_spaces[2][10], free_spaces[3][10],
+                                        free_spaces[4][10], free_spaces[5][10], free_spaces[6][10], free_spaces[7][10], 
+                                        free_spaces[8][10], free_spaces[9][10], free_spaces[10][10], free_spaces[11][10], 
+                                        free_spaces[12][10], free_spaces[13][10], free_spaces[14][10], free_spaces[15][10], 
+                                        free_spaces[16][10], free_spaces[17][10], free_spaces[18][10], free_spaces[19][10], 
+                                        free_spaces[20][10], free_spaces[21][10], free_spaces[22][10], free_spaces[23][10], 
+                                        free_spaces[24][10], free_spaces[25][10], free_spaces[26][10], free_spaces[27][10], 
+                                        free_spaces[28][10], free_spaces[29][10], free_spaces[30][10], free_spaces[31][10]} == 0);
+end
+
 /* 端口正在交互的SRAM的下标*/
 reg [5:0] wr_sram [15:0]; /* 写入占用 */
 wire [5:0] matched_sram [15:0]; /* 较优匹配 */
@@ -79,7 +91,7 @@ wire [10:0] rd_pages [15:0];
 reg [4:0] rd_ports [31:0];
 wire rd_xfer_data_vlds [31:0];
 wire [15:0] rd_xfer_datas [31:0];
-wire [7:0] rd_ecc_codes [31:0];  /* 校验码，用于纠错 */
+(*DONT_TOUCH="YES"*) wire [7:0] rd_ecc_codes [31:0];  /* 校验码，用于纠错 */
 wire [15:0] rd_next_pages [31:0]; /* 下一页地址，用于更新queue_head */
 
 /* 端口在对应SRAM的数据包存量 */
@@ -263,13 +275,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /* 读出 */
  
     wire [3:0] rd_prior;
-    reg [2:0] pst_rd_prior;
+    reg [2:0] pst_rd_prior; /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
 
     reg [5:0] rd_sram;
-    reg [5:0] pst_rd_sram;
-    reg [10:0] rd_page;
+    reg [5:0] pst_rd_sram; /* 持久化本次读取数据包的SRAM(最后一页rd_sram将会提前重置，以避免在数据包大小整除8时，SRAM多翻页的问题) */
     assign rd_srams[port] = rd_sram;
-    assign rd_pages[port] = rd_page;
 
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -283,15 +293,18 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
+    reg [10:0] rd_page; /* 当前正在读取的页地址 */
+    assign rd_pages[port] = rd_page;
+
     always @(posedge clk) begin
-        if(rd_sop[port]) begin
+        if(rd_sop[port]) begin /* 数据包开始读取时为队头 */
             rd_page <= queue_head[rd_prior][10:0];
-        end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin
+        end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin /* 数据包读取中途，一页的结束时切换到下页(PORT rd_batch为5对应SRAM rd_batch为7) */
             rd_page <= rd_next_pages[pst_rd_sram];
         end
     end
 
-    reg rd_not_over;
+    reg rd_not_over; /* 数据包是否读取完毕，用于约束rd_vld */
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_not_over <= 1;
@@ -302,23 +315,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    reg [6:0] rd_page_amount;
-    reg [2:0] rd_batch_end;
-    reg [2:0] rd_batch;
-
-    wire rd_xfer_data_vld = rd_not_over && rd_xfer_data_vlds[pst_rd_sram];
-    wire [15:0] rd_xfer_data = rd_xfer_datas[pst_rd_sram];
-    
-    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end;
-    
-    always @(posedge clk) begin
-        if(~rst_n || rd_sop[port]) begin
-            rd_batch <= 3'd0;
-        end else if(rd_xfer_data_vld) begin
-            rd_batch <= rd_batch + 1;
-        end
-    end
-
+    reg [6:0] rd_page_amount; /* 数据包有多少页 */
+    reg [2:0] rd_batch_end; /* 数据包最后一页有多少半字 */
     always @(posedge clk) begin
         if(rd_sop[port]) begin
             rd_page_amount <= 7'd64;
@@ -330,6 +328,20 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_page_amount <= rd_page_amount - 1;
         end
     end
+
+    reg [2:0] rd_batch;
+    always @(posedge clk) begin
+        if(~rst_n || rd_sop[port]) begin
+            rd_batch <= 3'd0;
+        end else if(rd_xfer_data_vld) begin
+            rd_batch <= rd_batch + 1;
+        end
+    end
+
+    wire rd_xfer_data_vld = rd_not_over && rd_xfer_data_vlds[pst_rd_sram];
+    wire [15:0] rd_xfer_data = rd_xfer_datas[pst_rd_sram];
+    
+    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end; /* 是否为数据包的最后一半字 */
 
     port_rd_dispatch port_rd_dispatch(
         .clk(clk),
@@ -368,13 +380,14 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(~rst_n) begin
             for(sram = 0; sram < 32; sram = sram + 1)
                 packet_amounts[port][sram] <= 0;
-        end else if(join_enable) begin
+        end else if(join_enable) begin /* 入队时+1 */
             packet_amounts[port][join_request] <= packet_amounts[port][join_request] + 1;
-        end else if(rd_end_of_packet) begin
+        end else if(rd_end_of_packet) begin /* 读取完毕-1 */
             packet_amounts[port][pst_rd_sram] <= packet_amounts[port][pst_rd_sram] - 1;
         end
     end
 
+    //TODO 调试用
     wire [15:0] debug_head = queue_head[4];
     wire [15:0] debug_tail = queue_tail[4];
     wire [15:0] debug_amount = packet_amounts[port][3];
@@ -460,7 +473,7 @@ wire [15:0] concatenate_tail = concatenate_tails[concatenate_port];
 
 /* SRAM状态 */ 
 wire [10:0] free_spaces [31:0];
-wire accessibilities [31:0];
+wire [31:0] accessibilities;
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
