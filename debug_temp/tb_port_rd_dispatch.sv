@@ -14,13 +14,13 @@ end
 
 always #2 clk = ~clk;
 
-wire wrr_en = 1;
-wire wrr_mode = 1;
+wire wrr_en = 0;
 
-reg next = 1;
-reg [7:0] queue_available;
+reg [7:0] queue_empty;
+reg update;
+wire [3:0] rd_prior;
 
-reg [5:0] cnt;
+reg [6:0] cnt;
 
 always @(posedge clk) begin
     if(!rst_n) begin
@@ -32,24 +32,32 @@ end
 
 always @(posedge clk) begin
     if(!rst_n) begin
-        queue_available <= 0;
-    end else if(cnt == 1) begin
-        queue_available <= $random;
+        queue_empty <= 8'hFF;
+    end else if(cnt == 0) begin
+        queue_empty <= $random;
     end
 end
 
-wire [2:0] prior;
+always @(posedge clk) begin
+    if(!rst_n) begin
+        update <= 0;
+    end else if(cnt[3:0] == 0) begin
+        update <= 1;
+    end else begin
+        update <= 0;
+    end
+end
 
 port_rd_dispatch port_rd_dispatch_inst
 (
     .clk(clk),
     .rst_n(rst_n),
-    .wrr_en(wrr_en),
-    .queue_available(queue_available),
-    .next(next),
-    .wrr_mode(wrr_mode),
 
-    .prior(prior)
+    .wrr_en(wrr_en),
+    .queue_empty(queue_empty),
+    .update(update),
+
+    .rd_prior(rd_prior)
 
 );
 
