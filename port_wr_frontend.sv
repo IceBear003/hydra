@@ -60,10 +60,11 @@ reg [1:0] xfer_state;
  */
 reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
-wire [5:0] wr_ptr_pls = wr_ptr + 6'd1;
-wire [5:0] wr_ptr_plss = wr_ptr + 6'd2;
+wire [5:0] wr_ptr_pls_1 = wr_ptr + 6'd1;
+wire [5:0] wr_ptr_pls_2 = wr_ptr + 6'd2;
+wire [5:0] wr_ptr_pls_3 = wr_ptr + 6'd2;
 reg [5:0] xfer_ptr;
-wire [5:0] xfer_ptr_pls = xfer_ptr + 6'd1;
+wire [5:0] xfer_ptr_pls_1 = xfer_ptr + 6'd1;
 reg [6:0] end_ptr;
 
 reg [8:0] wr_length;
@@ -150,12 +151,12 @@ always @(posedge clk) begin
     end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin
         /* 匹配完毕，开始传输数据 */
         xfer_state <= 2'd1;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == wr_ptr) begin
-        /* 当前可传输的数据传输完毕，进入传输暂停态 */
-        xfer_state <= 2'd2;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         /* 数据包传输完毕，进入传输空闲态 */
         xfer_state <= 2'd0;
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == wr_ptr) begin
+        /* 当前可传输的数据传输完毕，进入传输暂停态 */
+        xfer_state <= 2'd2;
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
         /* 有新的可传输的数据，从传输暂停态脱离 */
         xfer_state <= 2'd1;
@@ -167,7 +168,7 @@ assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
 always @(posedge clk) begin
     if(~rst_n) begin
         end_of_packet <= 0;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         /* 数据包即将被传输完毕，将最后一半字标记为末端 */
         end_of_packet <= 1;
     end else begin
@@ -194,9 +195,9 @@ end
  *  II - 缓冲区中存在仍未匹配到SRAM的数据包（此时若不暂停，新写入的数据包将会干扰匹配过程与结果）
  */
  always @(posedge clk) begin
-    pause <= (wr_ptr_plss == xfer_ptr) ||
-             (wr_ptr_pls == xfer_ptr) ||
-             (wr_ptr == xfer_ptr) ||
+    pause <= (wr_ptr_pls_3 == xfer_ptr) ||
+             (wr_ptr_pls_2 == xfer_ptr) ||
+             (wr_ptr_pls_1 == xfer_ptr) ||
              (wr_state == 2'd0 && match_enable && ~match_suc);
 end
 
