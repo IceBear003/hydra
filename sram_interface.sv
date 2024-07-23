@@ -145,7 +145,7 @@ always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
  */
 reg [10:0] np_head_ptr;
 reg [10:0] np_tail_ptr;
-reg [10:0] np_perfusion;
+reg [11:0] np_perfusion;
 
 always @(posedge clk) begin
     if(!rst_n) begin 
@@ -156,7 +156,7 @@ always @(posedge clk) begin
 end
 
 assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
-                    ? np_head_ptr + wr_xfer_data[15:10] - (wr_xfer_data[9:7] == 0) /* 在数据包刚开始传输时预测数据包尾页地址 */
+                    ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
                     : np_head_ptr; /* 其他时间查询顶部空页地址 */
 
 always @(posedge clk) begin

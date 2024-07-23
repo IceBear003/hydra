@@ -71,56 +71,110 @@ module tb_test;
         rst_n <= 0;
         #10 
         rst_n <= 1;
-        wr_sop <= 16'h0007;
+        wr_sop <= 16'h0001;
         wr_vld <= 16'h0000;
+        wr_eop <= 16'h0000;
         #10 
         wr_sop <= 16'h0000;
-        wr_vld <= 16'h0007;
-        wr_data <= {{9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd34, 3'd4, 4'd3}};
+        wr_vld <= 16'h0001;
+        wr_data <= {{9'd34, 3'd4, 4'd3}};
         cnt = 0;
         #10 
-        wr_vld <= 16'h0007;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0008;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0000;
         wr_vld <= 16'h0001;
         #10 wr_data <= {cnt-16'd1, cnt};
         #10 wr_data <= {cnt-16'd1, cnt};
         #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
         wr_vld <= 16'h0000;
         #10 
         #10 
-        wr_eop <= 16'h0007;
+        wr_eop <= 16'h0001;
+        #10 
+        wr_eop <= 16'h0000;
+        #10 
+        wr_sop <= 16'h0001;
+        #10 
+        wr_sop <= 16'h0000;
+        wr_vld <= 16'h0007;
+        wr_data <= {{9'd34, 3'd4, 4'd3}};
+        cnt = 0;
+        #10 
+        wr_vld <= 16'h0001;
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        #10 wr_data <= {cnt-16'd1, cnt};
+        wr_vld <= 16'h0000;
+        #10 
+        #10 
+        wr_eop <= 16'h0001;
+        #10 
+        wr_eop <= 16'h0000;
+        #10 
+        #10 
+        ready <= 16'h000C;
+        #10 
+        ready <= 0;
         #10 
         #10 
         #10 
@@ -164,12 +218,9 @@ module tb_test;
         #10 
         #10 
         #10 
+        ready <= 16'h000C;
         #10 
-        #10 
-        #10 
-        #10 
-        #10 
-        #10 
+        ready <= 0;
         #10 
         #10 
         #10 

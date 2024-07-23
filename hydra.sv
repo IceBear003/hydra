@@ -298,9 +298,18 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(rd_sop[port]) begin
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
-            pst_rd_sram <= queue_head[rd_prior][15:11];
         end else if(rd_page_amount == 0) begin
             rd_sram <= 6'd32;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            pst_rd_sram <= 6'd32;
+        end else if(rd_sop[port]) begin
+            pst_rd_sram <= queue_head[rd_prior][15:11];
+        end else if(rd_end_of_packet) begin
+            pst_rd_sram <= 6'd32;
         end
     end
 
@@ -329,7 +338,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [6:0] rd_page_amount; /* 数据包有多少页 */
     reg [2:0] rd_batch_end; /* 数据包最后一页有多少半字 */
     always @(posedge clk) begin
-        if(rd_sop[port]) begin
+        if(~rst_n || rd_sop[port]) begin
             rd_page_amount <= 7'd64;
             rd_batch_end <= 0;
         end else if(rd_page_amount == 7'd64 && rd_xfer_data_vld) begin
@@ -581,9 +590,22 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end else begin /* 无新的页读取请求 */
             rd_batch <= 3'd7;
             rd_page_down <= 0;
-            rd_port <= 5'd16;
         end
     end
+
+    reg rd_new_packet;
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            rd_new_packet <= 0;
+        end else if(rd_batch == 3'd7 && select_rd != 0 && rd_port != rd_port_idx) begin
+            rd_new_packet <= 1;
+        end else begin
+            rd_new_packet <= 0;
+        end
+    end
+
+    wire rd_xfer_data_vld;
+    assign rd_xfer_data_vlds[sram] = rd_xfer_data_vld && ~rd_new_packet;
 
     sram_interface sram_interface(
         .clk(clk),
@@ -610,7 +632,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .rd_page_down(rd_page_down),
         .rd_page(rd_page),
         
-        .rd_xfer_data_vld(rd_xfer_data_vlds[sram]),
+        .rd_xfer_data_vld(rd_xfer_data_vld),
         .rd_xfer_data(rd_xfer_datas[sram]),
         .rd_next_page(rd_next_pages[sram]),
         .rd_ecc_code(rd_ecc_codes[sram]),

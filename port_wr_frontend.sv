@@ -92,7 +92,7 @@ always @(posedge clk) begin
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
             new_dest_port <= wr_data[3:0];
-            new_length <= wr_data[15:7] - 1;
+            new_length <= wr_data[15:7];
         end
     end
 end
@@ -103,7 +103,7 @@ always @(posedge clk) begin
     end else if(wr_state == 2'd3) begin
         /* 传输完所有半字后，wr_ptr即为当前数据包的末端位置 */
         end_ptr <= wr_ptr;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         end_ptr <= 7'd64;
     end
 end
