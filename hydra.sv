@@ -614,7 +614,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .SRAM_IDX(sram[4:0]),
         .time_stamp(time_stamp),
 
-        .wr_xfer_data_vld(wr_xfer_data_vld[wr_port]),
+        .wr_xfer_data_vld(select_wr == 0 ? 1'b0 : wr_xfer_data_vld[wr_port]),
         .wr_xfer_data(wr_xfer_data[wr_port]),
         .wr_end_of_packet(wr_end_of_packet[wr_port]),
 
