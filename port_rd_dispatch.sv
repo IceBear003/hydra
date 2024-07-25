@@ -70,7 +70,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(~rst_n || ~wrr_en) begin
+    if(~rst_n || ~wrr_en || update_state == 3'd5) begin
         wrr_mask <= 8'h00;
     end else if(update) begin
         wrr_mask <= wrr_mask_set[rd_prior];

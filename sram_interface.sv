@@ -41,13 +41,13 @@ module sram_interface
     output reg [10:0] free_space
     
     /* SRAM引出，综合用 */
-    // ,output wr_en,
-    // output [13:0] wr_addr,
-    // output [15:0] din,
+    // ,(*DONT_TOUCH="YES"*) output wr_en,
+    // (*DONT_TOUCH="YES"*) output [13:0] wr_addr,
+    // (*DONT_TOUCH="YES"*) output [15:0] din,
     
-    // output rd_en,
-    // output [13:0] rd_addr,
-    // input [15:0] dout
+    // (*DONT_TOUCH="YES"*) output rd_en,
+    // (*DONT_TOUCH="YES"*) output [13:0] rd_addr,
+    // (*DONT_TOUCH="YES"*) input [15:0] dout
 );
 
 /******************************************************************************
@@ -145,7 +145,7 @@ always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
  */
 reg [10:0] np_head_ptr;
 reg [10:0] np_tail_ptr;
-reg [10:0] np_perfusion;
+reg [11:0] np_perfusion;
 
 always @(posedge clk) begin
     if(!rst_n) begin 
@@ -156,7 +156,7 @@ always @(posedge clk) begin
 end
 
 assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
-                    ? np_head_ptr + wr_xfer_data[15:10] - (wr_xfer_data[9:7] == 0) /* 在数据包刚开始传输时预测数据包尾页地址 */
+                    ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
                     : np_head_ptr; /* 其他时间查询顶部空页地址 */
 
 always @(posedge clk) begin
@@ -228,10 +228,10 @@ reg [2:0] wr_batch;
 always @(posedge clk) begin
     if(!rst_n) begin
         wr_batch <= 0;
-    end else if(wr_xfer_data_vld) begin
-        wr_batch <= wr_batch + 1;
     end else if(wr_end_of_packet) begin
         wr_batch <= 0;
+    end else if(wr_xfer_data_vld) begin
+        wr_batch <= wr_batch + 1;
     end
 end
 
@@ -318,7 +318,7 @@ end
 
 wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
-// /* SRAM不引出，调试用
+///* SRAM不引出，调试用
 sram sram(
     .clk(clk),
     .rst_n(rst_n),
@@ -329,14 +329,14 @@ sram sram(
     .rd_addr(sram_rd_addr),
     .dout(rd_xfer_data)
 ); 
-// */
+//*/
 
 /* SRAM引出，综合用 */
 // assign wr_en = wr_xfer_data_vld;
 // assign wr_addr = sram_wr_addr;
 // assign din = wr_xfer_data;
-// assign rd_en = 1'b1;
+// assign rd_en = rd_page_down || rd_batch != 4'd8;
 // assign rd_addr = sram_rd_addr;
-// assign dout = rd_xfer_data;
+// assign rd_xfer_data = dout;
 
 endmodule

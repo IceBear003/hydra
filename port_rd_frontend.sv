@@ -1,11 +1,9 @@
 module port_rd_frontend(
     input clk,
-    input rst_n,
 
     output reg rd_eop,
     output rd_vld,
     output [15:0] rd_data,
-    input ready,
 
     input xfer_data_vld,
     input [15:0] xfer_data,
