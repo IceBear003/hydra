@@ -374,6 +374,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .rd_prior(rd_prior)
     );
     
+    wire port_rd_sop = rd_sop[port];
 
     always @(posedge clk) begin
         rd_sop[port] <= ready[port] && queue_empty != 8'hFF;

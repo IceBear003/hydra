@@ -51,9 +51,10 @@ module tb_test;
             ready <= 16'h0000;
         end
     end
+    integer i;
     initial
     begin
-        $dumpfile("test.vcd");
+        $dumpfile("test_7_1_2.vcd");
         $dumpvars();
         #5 
         rst_n <= 0;
@@ -62,60 +63,24 @@ module tb_test;
         wr_eop <= 16'h0000;
         #10 
         rst_n <= 1;
-        wr_sop <= 16'h0007;
-        wr_vld <= 16'h0000;
+        #10 
+        wr_sop <= 16'h0001;
         #10 
         wr_sop <= 16'h0000;
-        wr_vld <= 16'h0007;
-        wr_data <= {{9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd34, 3'd4, 4'd3}};
-        cnt = 0;
-        #10 
-        wr_vld <= 16'h0007;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0008;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0000;
         wr_vld <= 16'h0001;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        wr_vld <= 16'h0000;
-        #10 
-        #10 
-        wr_eop <= 16'h0007;
-        #10 
-        #10 
-        #10 
-        #10 
+        wr_data <= {9'd63, 3'd4, 4'd3};
+        cnt <= 0;
+        for(i=0;i<62;i++) begin
+            #10 
+            if(i == 32) begin
+                ready <= 16'h0008;
+            end else begin
+                ready <= 16'h0000;
+            end
+            wr_data <= cnt;
+        end
+        #10 wr_vld <= 16'h0000; wr_eop <= 16'h0001;
+        #10 wr_eop <= 16'h0000;
         #10 
         #10 
         #10 
