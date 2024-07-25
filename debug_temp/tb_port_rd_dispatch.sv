@@ -14,13 +14,15 @@ end
 
 always #2 clk = ~clk;
 
-wire wrr_en = 0;
+wire wrr_en = 1;
 
 reg [7:0] queue_empty;
 reg update;
-wire [3:0] rd_prior;
+reg [3:0] rd_prior;
 
 reg [6:0] cnt;
+
+reg [7:0][7:0] queue_num;
 
 always @(posedge clk) begin
     if(!rst_n) begin
@@ -32,9 +34,37 @@ end
 
 always @(posedge clk) begin
     if(!rst_n) begin
+        queue_num[0] <= 14;
+        queue_num[1] <= 9;
+        queue_num[2] <= 7;
+        queue_num[3] <= 11;
+        queue_num[4] <= 17;
+        queue_num[5] <= 11;
+        queue_num[6] <= 14;
+        queue_num[7] <= 16;
+    end else if(update) begin
+        queue_num[rd_prior] <= queue_num[rd_prior] - 1;
+    end
+end
+
+integer i;
+
+always @(posedge clk) begin
+    if(!rst_n) begin
         queue_empty <= 8'hFF;
-    end else if(cnt == 0) begin
-        queue_empty <= $random;
+    end else begin
+        for(i = 0; i < 8; i = i+1)
+            queue_empty[i] <= queue_num[i] == 0;
+    end
+end
+
+reg [10:0] cnt_out;
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        cnt_out <= 0;
+    end else if(update && rd_prior != 8) begin
+        cnt_out <= cnt_out + 1;
     end
 end
 
