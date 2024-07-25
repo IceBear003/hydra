@@ -1,5 +1,7 @@
-module sram_ecc_decoder(
-    input update,
+module ecc_decoder(
+    input clk,
+    input enable,
+
     input [15:0] data_0,
     input [15:0] data_1,
     input [15:0] data_2,
@@ -43,10 +45,11 @@ assign cur_code[7] = data_7[15];
 
 /* 错误纠正 */
 wire [7:0] wrong_pos = cur_code ^ code;
-wire [128:0] sec_mask = 129'b1 << wrong_pos;
 
-always@(posedge update) begin
-    cr_data = {data_7,data_6,data_5,data_4,data_3,data_2,data_1,data_0} ^ sec_mask[128:1];
+always@(posedge clk) begin
+    if(enable) begin
+        cr_data <= {data_7,data_6,data_5,data_4,data_3,data_2,data_1,data_0};
+    end
 end
 
 endmodule

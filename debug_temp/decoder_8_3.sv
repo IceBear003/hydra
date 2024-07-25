@@ -14,3 +14,5 @@ always @(select) begin
     else if(~select[7]) idx = 4'd7;
     else idx = 4'd8;
 end
+
+endmodule

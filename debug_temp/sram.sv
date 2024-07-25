@@ -25,6 +25,7 @@ end
 always @(posedge clk) begin
     if(rd_en && rst_n) begin
         dout <= d_latches[rd_addr];
+        $display("rd_addr = %d %d",rd_addr,d_latches[rd_addr]);
     end
 end
 
