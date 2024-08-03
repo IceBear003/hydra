@@ -15,12 +15,12 @@ module sram_interface
     input [15:0] wr_xfer_data,
     input wr_end_of_packet,
 
-    output reg [3:0] wr_packet_dest_port,
-    output reg [2:0] wr_packet_prior,
-    output reg [15:0] wr_packet_head_addr,
-    output reg [15:0] wr_packet_tail_addr,
-    output reg wr_packet_join_request,
-    output reg [5:0] wr_packet_join_time_stamp,
+    output reg [4:0] join_request_dest_port,
+    output reg [2:0] join_request_prior,
+    output reg [15:0] join_request_head,
+    output reg [15:0] join_request_tail,
+    output reg join_request_enable,
+    output reg [5:0] join_request_time_stamp,
 
     input concatenate_enable,
     input [10:0] concatenate_head,
@@ -119,7 +119,7 @@ always @(posedge clk) begin
     if(concatenate_enable) begin /* 优先进行不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else if(wr_xfer_data_vld && wr_page != wr_packet_tail_addr[10:0]) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
+    end else if(wr_xfer_data_vld && wr_page != join_request_tail[10:0]) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
         jt_wr_addr <= wr_page;
         jt_din <= {SRAM_IDX, np_dout};
     end
@@ -201,23 +201,8 @@ end
 
 /* 正在写入的页 */
 reg [10:0] wr_page;
-/* 在数据包传输完毕之后的第二个周期重新获取新的wr_page，以规避最后一页数据量过少导致的np_dout还未刷新到新的空闲页的问题 */
-reg [1:0] regain_wr_page_tick;
-
 always @(posedge clk) begin
-    if(!rst_n) begin
-        regain_wr_page_tick <= 2'd0;
-    end else if(wr_end_of_packet) begin
-        regain_wr_page_tick <= 2'd3;
-    end else if(regain_wr_page_tick != 0) begin 
-        regain_wr_page_tick <= regain_wr_page_tick - 1;
-    end
-end
-
-always @(posedge clk) begin
-    if(!rst_n) begin
-        wr_page <= 0;
-    end else if((wr_batch == 3'd7 && wr_xfer_data_vld) || regain_wr_page_tick == 2'd1) begin /* 更新wr_page到新页 */
+    if((wr_batch == 3'd7 && wr_xfer_data_vld) || wr_state == 2'd0) begin /* 更新wr_page到新页 */
         wr_page <= np_dout;
     end
 end
@@ -244,32 +229,32 @@ end
  */
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        wr_packet_dest_port <= wr_xfer_data[3:0];
-        wr_packet_prior <= wr_xfer_data[6:4];
-        wr_packet_head_addr <= {SRAM_IDX, wr_page};
+        join_request_dest_port <= wr_xfer_data[3:0];
+        join_request_prior <= wr_xfer_data[6:4];
+        join_request_head <= {SRAM_IDX, wr_page};
     end
     if(wr_state == 2'd1 && wr_batch == 3'd1) begin
-        wr_packet_tail_addr <= {SRAM_IDX, np_dout};
+        join_request_tail <= {SRAM_IDX, np_dout};
     end
 end
 
 /* 在数据包刚写入时发起入队请求 */
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        wr_packet_join_request <= 1;
+        join_request_enable <= 1;
     end else begin
-        wr_packet_join_request <= 0;
+        join_request_enable <= 0;
     end
 end
 
 /* 入队请求时间戳 */
 always @(posedge clk) begin
     if(~rst_n) begin 
-        wr_packet_join_time_stamp <= 6'd32;
+        join_request_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        wr_packet_join_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
-    end else if(time_stamp + 5'd1 == wr_packet_join_time_stamp) begin
-        wr_packet_join_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
+        join_request_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
+    end else if(time_stamp + 5'd1 == join_request_time_stamp) begin
+        join_request_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
     end
 end
 
@@ -302,14 +287,14 @@ always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
         packet_length <= wr_xfer_data[15:10] + 1;
     end
-end
+end 
 
 always @(posedge clk) begin
     if(~rst_n) begin
         free_space <= 11'd2047;
-    end else if(wr_packet_join_request && rd_page_down) begin
+    end else if(join_request_enable && rd_page_down) begin
         free_space <= free_space - packet_length + 1;
-    end else if(wr_packet_join_request) begin
+    end else if(join_request_enable) begin
         free_space <= free_space - packet_length;
     end else if(rd_page_down) begin
         free_space <= free_space + 1;
@@ -318,7 +303,6 @@ end
 
 wire [13:0] sram_wr_addr = {wr_page, wr_batch};
 
-///* SRAM不引出，调试用
 sram sram(
     .clk(clk),
     .rst_n(rst_n),
@@ -329,14 +313,4 @@ sram sram(
     .rd_addr(sram_rd_addr),
     .dout(rd_xfer_data)
 ); 
-//*/
-
-/* SRAM引出，综合用 */
-// assign wr_en = wr_xfer_data_vld;
-// assign wr_addr = sram_wr_addr;
-// assign din = wr_xfer_data;
-// assign rd_en = rd_page_down || rd_batch != 4'd8;
-// assign rd_addr = sram_rd_addr;
-// assign rd_xfer_data = dout;
-
 endmodule
