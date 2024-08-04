@@ -33,8 +33,8 @@ module sram_interface
 
     output reg rd_xfer_data_vld,
     output [15:0] rd_xfer_data,
-    output [15:0] rd_next_page,
-    output [7:0] rd_ecc_code,
+    output reg [15:0] rd_next_page,
+    output reg [7:0] rd_ecc_code,
 
     /* 统计 */
 
@@ -54,18 +54,31 @@ module sram_interface
  *                                重要存储结构                                 *
  ******************************************************************************/
 
-/* ECC编码存储器 */
+/* 
+ * ECC编码存储
+ * RAM结构(2048*8) 占用 0.5*36Kbit BRAM
+ */
 (* ram_style = "block" *) reg [7:0] ecc_codes [2047:0];
+/* ECC存储写入 */
+reg ec_wr_en;
 reg [10:0] ec_wr_addr;
 wire [7:0] ec_din;
-wire [10:0] ec_rd_addr;
-reg [7:0] ec_dout;
-always @(posedge clk) begin ecc_codes[ec_wr_addr] <= ec_din; end
-always @(posedge clk) begin ec_dout <= ecc_codes[ec_rd_addr]; end
-
-/* ECC加码器 */
+always @(posedge clk) begin 
+    if(ec_wr_en) begin
+        ecc_codes[ec_wr_addr] <= ec_din; 
+    end
+end
+always @(posedge clk) begin
+    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin
+        ec_wr_en <= 1;
+        /* 页末时准备将结果写入ECC编码存储器 */
+        ec_wr_addr <= wr_page;
+    end else begin
+        ec_wr_en <= 0;
+    end
+end
+/* ECC编码缓冲区 */
 reg [15:0] ecc_encoder_buffer [7:0];
-
 always @(posedge clk) begin
     if(wr_xfer_data_vld) begin
         if(wr_batch == 0) begin
@@ -81,14 +94,7 @@ always @(posedge clk) begin
         ecc_encoder_buffer[wr_batch] <= wr_xfer_data;
     end
 end
-
-always @(posedge clk) begin
-    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin
-        /* 页末时准备将结果写入ECC编码存储器 */
-        ec_wr_addr <= wr_page;
-    end
-end
-
+/* ECC编码器 */
 ecc_encoder ecc_encoder( 
     .data_0(ecc_encoder_buffer[0]),
     .data_1(ecc_encoder_buffer[1]),
@@ -100,48 +106,77 @@ ecc_encoder ecc_encoder(
     .data_7(ecc_encoder_buffer[7]),
     .code(ec_din)
 );
-
-/* 生成正在读取的页的校验码 (在page_down信号拉高1周期后可视) */
+/* ECC存储读出 */
+wire [10:0] ec_rd_addr;
+reg [7:0] ec_dout;
+always @(posedge clk) begin 
+    ec_dout <= ecc_codes[ec_rd_addr]; 
+end
+/* 读出数据页的校验码 */
 assign ec_rd_addr = rd_page;
-assign rd_ecc_code = ec_dout;
 
-/* 跳转表 */
+always @(posedge clk) begin
+    rd_ecc_code <= ec_dout;
+end
+
+/* 
+ * 跳转表
+ * RAM结构(2048*16) 占用 1*36Kbit BRAM
+ */
 (* ram_style = "block" *) reg [15:0] jump_table [2047:0];
+ /* 跳转表写入 */
 reg [10:0] jt_wr_addr;
 reg [15:0] jt_din;
-wire [10:0] jt_rd_addr;
-reg [15:0] jt_dout;
 always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
-always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
-
-/* 跳转表拼接 */
+/* 跳转表拼接(数据包间/数据包内) */
 always @(posedge clk) begin
-    if(concatenate_enable) begin /* 优先进行不同数据包间跳转表的拼接 */
+    if(concatenate_enable) begin                                                    /* 不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else if(wr_xfer_data_vld && wr_page != join_request_tail[10:0]) begin /* 正常写入时跳转表连接数据包相邻两页 wr_page -> next_page(np_dout) */
+    end else if(wr_xfer_data_vld && wr_page != join_request_tail[10:0]) begin       /* 数据包内相邻两页的拼接 */
         jt_wr_addr <= wr_page;
         jt_din <= {SRAM_IDX, np_dout};
     end
 end
-
-/* 生成正在读取的页的下一页的地址 (在page_down信号拉高1周期后可视) */
+/* 跳转表读出 */
+wire [10:0] jt_rd_addr;
+reg [15:0] jt_dout;
+always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
+/* 生成当前读取的页链接下一页 */
 assign jt_rd_addr = rd_page;
-assign rd_next_page = jt_dout;
+always @(posedge clk) begin
+    rd_next_page <= jt_dout;
+end
 
-/* 空闲队列 FIFO结构的RAM */
+/* 
+ * 空闲队列
+ * RAM结构(2048*11) 占用 1*36Kbit BRAM
+ */
 (* ram_style = "block" *) reg [10:0] null_pages [2047:0];
+
+/* 空闲队列写入 */
 reg [10:0] np_wr_addr;
 reg [10:0] np_din;
+always @(posedge clk) begin null_pages[np_wr_addr] <= np_din; end
+
+/* 空闲队列读出 */
 wire [10:0] np_rd_addr;
 reg [10:0] np_dout;
-always @(posedge clk) begin null_pages[np_wr_addr] <= np_din; end
 always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
 
+assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
+                    ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
+                    : np_head_ptr;                      /* 其他时间查询顶部空页地址 */
+reg [10:0] new_page;
+always @(posedge clk) begin
+    new_page <= np_dout;
+end                    
+
 /*
- * np_head_ptr - 空闲队列的头指针
- * np_tail_ptr - 空闲队列的尾指针
- * np_perfusion - 空闲队列的灌注进度
+ * 以FIFO形式维护空闲队列
+ * |- np_head_ptr - 空闲队列的头指针
+ * |- np_tail_ptr - 空闲队列的尾指针
+ * |- np_perfusion - 空闲队列的灌注进度
  */
 reg [10:0] np_head_ptr;
 reg [10:0] np_tail_ptr;
@@ -150,24 +185,20 @@ reg [11:0] np_perfusion;
 always @(posedge clk) begin
     if(!rst_n) begin 
         np_head_ptr <= 0;
-    end if(wr_batch == 0 && wr_xfer_data_vld) begin /* 在一页刚开始的时候弹出顶页 */
+    end if(wr_batch == 0 && wr_xfer_data_vld) begin     /* 在一页刚开始的时候弹出顶页 */
         np_head_ptr <= np_head_ptr + 1;
     end
 end
 
-assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
-                    ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
-                    : np_head_ptr; /* 其他时间查询顶部空页地址 */
-
 always @(posedge clk) begin
     if(!rst_n) begin
-        np_perfusion <= 0;  /* 灌注从0开始 */
+        np_perfusion <= 0;                              /* 灌注从0开始 */
         np_tail_ptr <= 0;
-    end else if(rd_page_down) begin /* 回收读出的页 */
+    end else if(rd_page_down) begin                     /* 回收读出的页 */
         np_tail_ptr <= np_tail_ptr + 1;
         np_wr_addr <= np_tail_ptr;
         np_din <= rd_page;
-    end else if(np_perfusion != 12'd2048) begin /* 灌注到2047结束 */
+    end else if(np_perfusion != 12'd2048) begin         /* 灌注到2047结束 */
         np_tail_ptr <= np_tail_ptr + 1;
         np_wr_addr <= np_tail_ptr;
         np_din <= np_perfusion;
@@ -203,7 +234,7 @@ end
 reg [10:0] wr_page;
 always @(posedge clk) begin
     if((wr_batch == 3'd7 && wr_xfer_data_vld) || wr_state == 2'd0) begin /* 更新wr_page到新页 */
-        wr_page <= np_dout;
+        wr_page <= new_page;
     end
 end
 
@@ -220,30 +251,16 @@ always @(posedge clk) begin
     end
 end
 
-/* 
- * 在数据包刚写入时生成入队请求基本信息
- * |- wr_packet_dest_port - 数据包目的端口
- * |- wr_packet_prior - 数据包优先级
- * |- wr_packet_head_addr - 数据包头地址
- * |- wr_packet_tail_addr - 数据包尾地址
- */
+/* 在数据包刚写入时发起并生成入队请求 */
 always @(posedge clk) begin
-    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
+    join_request_enable <= wr_state == 2'd0 && wr_xfer_data_vld;    /* 发起入队请求 */
+    if(wr_state == 2'd0 && wr_xfer_data_vld) begin                  /* 生成入队请求基本信息 */
         join_request_dest_port <= wr_xfer_data[3:0];
         join_request_prior <= wr_xfer_data[6:4];
         join_request_head <= {SRAM_IDX, wr_page};
     end
-    if(wr_state == 2'd1 && wr_batch == 3'd1) begin
-        join_request_tail <= {SRAM_IDX, np_dout};
-    end
-end
-
-/* 在数据包刚写入时发起入队请求 */
-always @(posedge clk) begin
-    if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        join_request_enable <= 1;
-    end else begin
-        join_request_enable <= 0;
+    if(wr_state == 2'd1 && wr_batch == 3'd2) begin                  /* 尾部预测完成后追加入队请求的数据包尾页地址 */
+        join_request_tail <= {SRAM_IDX, new_page};
     end
 end
 
@@ -252,9 +269,9 @@ always @(posedge clk) begin
     if(~rst_n) begin 
         join_request_time_stamp <= 6'd32;
     end if(wr_state == 2'd0 && wr_xfer_data_vld) begin
-        join_request_time_stamp <= {1'b0, time_stamp + 5'd1}; /* +1 是为了与主模块中时间序列新插入的时间戳同步 */
+        join_request_time_stamp <= {1'b0, time_stamp + 5'd1};       /* 与主模块中时间序列新插入的时间戳同步 */
     end else if(time_stamp + 5'd1 == join_request_time_stamp) begin
-        join_request_time_stamp <= 6'd32; /* 32周期后自动还原，防止重复入队 */
+        join_request_time_stamp <= 6'd32;                           /* 31周期后销毁入队请求 */
     end
 end
 
@@ -263,7 +280,7 @@ end
  ******************************************************************************/
 
 reg [3:0] rd_batch; /* 读出切片下标 */
-wire [13:0] sram_rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]}; /* 翻页时，切片下标应为0，其他时刻则为rd_batch */
+wire [13:0] sram_rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]}; /* 翻页时，切片下标应为0，其他时刻则为rd_addr_batch */
 always @(posedge clk) begin
     rd_xfer_data_vld <= rd_batch != 4'd8 || rd_page_down;
 end

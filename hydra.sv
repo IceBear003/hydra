@@ -52,9 +52,11 @@ wire [5:0] match_srams [15:0];                          /* 匹配选通 */
 wire [5:0] rd_srams [15:0];                             /* 读出选通 */
 wire [5:0] pre_rd_srams [15:0];                         /* 预读取选通 */
 /* 写入Crossbar通道 端口->SRAM */
-wire wr_xfer_data_vlds [15:0];                          /* 写入数据有效 */
+wire wr_xfer_data_vlds [16:0];                          /* 写入数据有效 */
 wire [15:0] wr_xfer_datas [15:0];                       /* 写入数据 */
-wire wr_xfer_end_of_packets [15:0];                     /* 写入终止 */
+wire wr_xfer_end_of_packets [16:0];                     /* 写入终止 */
+assign wr_xfer_data_vlds[16] = 0;
+assign wr_xfer_end_of_packets[16] = 0;
 /* 读出Crossbar通道 端口->SRAM */
 wire [10:0] rd_xfer_pages [15:0];                       /* 读出页地址 */
 /* 读出Crossbar通道 SRAM->端口 */
@@ -94,12 +96,10 @@ wire [15:0] join_request_tails [31:0];
 reg [4:0] join_request_sram;                /* 当前处理的入队请求的SRAM编号 */
 reg [2:0] join_request_prior;               /* 当前处理的入队请求的优先级 */
 reg [15:0] join_request_head;               /* 当前处理的入队请求的首页地址 */
-reg [15:0] join_request_tail;               /* 当前处理的入队请求的尾页地址 */
 always @(posedge clk) begin
     join_request_sram <= processing_join_request;
     join_request_prior <= join_request_priors[processing_join_request];
     join_request_head <= join_request_heads[processing_join_request];
-    join_request_tail <= join_request_tails[processing_join_request];
 end
 
 /* 时间序列 */ 
@@ -144,13 +144,13 @@ end
 
 /* 跳转表拼接请求Crossbar通道 Port->SRAM */
 wire concatenate_enables [15:0];
-wire [15:0] concatenate_heads [15:0];
-wire [15:0] concatenate_tails [15:0];
+wire [15:0] concatenate_heads [16:0];
+wire [15:0] concatenate_tails [16:0];
 wire [15:0] concatenate_select = {concatenate_enables[15] == 1, concatenate_enables[14] == 1, concatenate_enables[13] == 1, concatenate_enables[12] == 1, 
                                   concatenate_enables[11] == 1, concatenate_enables[10] == 1, concatenate_enables[9] == 1, concatenate_enables[8] == 1, 
                                   concatenate_enables[7] == 1, concatenate_enables[6] == 1, concatenate_enables[5] == 1, concatenate_enables[4] == 1, 
                                   concatenate_enables[3] == 1, concatenate_enables[2] == 1, concatenate_enables[1] == 1, concatenate_enables[0] == 1}; 
-wire [3:0] concatenate_port;    /* 正在处理的拼接请求对应的端口 */
+wire [4:0] concatenate_port;    /* 正在处理的拼接请求对应的端口 */
 decoder_16_4 decoder_concatenate(
     .select(concatenate_select),
     .idx(concatenate_port)
@@ -281,10 +281,15 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     
     /* 有新数据包加入非空队列时发起拼接请求 */
     always @(posedge clk) begin
-        if(join_request_enable && ~queue_empty[join_request_prior]) begin
+        if(join_request_enable) begin
             concatenate_enable <= 1;
-            concatenate_head <= queue_tail[join_request_prior]; /* 拼接头为原队尾 */
-            concatenate_tail <= join_request_head;              /* 拼接尾为新数据包头*/
+            if(~queue_empty[join_request_prior]) begin                      /* 队列非空时 */
+                concatenate_head <= queue_tail[join_request_prior];         /* 拼接头为原队尾 */
+                concatenate_tail <= join_request_head;                      /* 拼接尾为新数据包头*/
+            end else begin                                                  /* 队列为空时 */
+                concatenate_head <= join_request_tails[join_request_sram];  /* 拼接头为新数据包尾 */
+                concatenate_tail <= join_request_tails[join_request_sram];  /* 拼接尾为新数据包尾*/
+            end
         end
     end
 
@@ -294,7 +299,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             queue_tail[0] <= 16'd0; queue_tail[1] <= 16'd0; queue_tail[2] <= 16'd0; queue_tail[3] <= 16'd0;
             queue_tail[4] <= 16'd0; queue_tail[5] <= 16'd0; queue_tail[6] <= 16'd0; queue_tail[7] <= 16'd0;
         end if(join_request_enable) begin
-            queue_tail[join_request_prior] <= join_request_tail;
+            queue_tail[join_request_prior] <= join_request_tails[join_request_sram];/* join_request_tails无需缓存，因为尾部预测本身需要2个周期 */
         end
     end
 
@@ -496,7 +501,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         wr_srams[7] == sram, wr_srams[6] == sram, wr_srams[5] == sram, wr_srams[4] == sram, 
         wr_srams[3] == sram, wr_srams[2] == sram, wr_srams[1] == sram, wr_srams[0] == sram};
 
-    wire [3:0] wr_port;                 /* 当前正向该SRAM写入的端口 */
+    wire [4:0] wr_port;                 /* 当前正向该SRAM写入的端口 */
     decoder_16_4 decoder_wr_select(
         .select(wr_select),
         .idx(wr_port)
@@ -508,14 +513,14 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     /*
      * 以下勿动，待重构——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
      */
-    /* 写占用选通信号 */
+    /* 读出选通信号 */
     wire [15:0] rd_select = {rd_srams[15] == sram, rd_srams[14] == sram, rd_srams[13] == sram, rd_srams[12] == sram, 
                              rd_srams[11] == sram, rd_srams[10] == sram, rd_srams[9] == sram, rd_srams[8] == sram, 
                              rd_srams[7] == sram, rd_srams[6] == sram, rd_srams[5] == sram, rd_srams[4] == sram, 
                              rd_srams[3] == sram, rd_srams[2] == sram, rd_srams[1] == sram, rd_srams[0] == sram};
 
     /* 当前正在读出SRAM数据的端口号 */
-    wire [3:0] rd_port_idx;
+    wire [4:0] rd_port_idx;
     decoder_16_4 decoder_rd_select(
         .select(rd_select),
         .idx(rd_port_idx)
@@ -574,7 +579,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .SRAM_IDX(sram[4:0]),
         .time_stamp(time_stamp),
 
-        .wr_xfer_data_vld(wr_select == 0 ? 1'b0 : wr_xfer_data_vlds[wr_port]),
+        .wr_xfer_data_vld(wr_xfer_data_vlds[wr_port]),
         .wr_xfer_data(wr_xfer_datas[wr_port]),
         .wr_end_of_packet(wr_xfer_end_of_packets[wr_port]),
 
