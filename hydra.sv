@@ -3,8 +3,8 @@
 `include "port_rd_frontend.sv"
 `include "port_rd_dispatch.sv"
 `include "sram_interface.sv"
-`include "decoder_16_4.sv"
-`include "decoder_32_5.sv"
+`include "encoder_16_4.sv"
+`include "encoder_32_5.sv"
 
 module hydra
 (
@@ -112,7 +112,7 @@ reg [32:0] processing_join_mask;                                                
 wire [31:0] processing_join_select =                                                            /* 时间戳对应的入队请求选通信号 */
     processing_join_mask & {join_request_time_stamps[31] == processing_time_stamp, join_request_time_stamps[30] == processing_time_stamp, join_request_time_stamps[29] == processing_time_stamp, join_request_time_stamps[28] == processing_time_stamp, join_request_time_stamps[27] == processing_time_stamp, join_request_time_stamps[26] == processing_time_stamp, join_request_time_stamps[25] == processing_time_stamp, join_request_time_stamps[24] == processing_time_stamp, join_request_time_stamps[23] == processing_time_stamp, join_request_time_stamps[22] == processing_time_stamp, join_request_time_stamps[21] == processing_time_stamp, join_request_time_stamps[20] == processing_time_stamp, join_request_time_stamps[19] == processing_time_stamp, join_request_time_stamps[18] == processing_time_stamp, join_request_time_stamps[17] == processing_time_stamp, join_request_time_stamps[16] == processing_time_stamp, join_request_time_stamps[15] == processing_time_stamp, join_request_time_stamps[14] == processing_time_stamp, join_request_time_stamps[13] == processing_time_stamp, join_request_time_stamps[12] == processing_time_stamp, join_request_time_stamps[11] == processing_time_stamp, join_request_time_stamps[10] == processing_time_stamp, join_request_time_stamps[9] == processing_time_stamp, join_request_time_stamps[8] == processing_time_stamp, join_request_time_stamps[7] == processing_time_stamp, join_request_time_stamps[6] == processing_time_stamp, join_request_time_stamps[5] == processing_time_stamp, join_request_time_stamps[4] == processing_time_stamp, join_request_time_stamps[3] == processing_time_stamp, join_request_time_stamps[2] == processing_time_stamp, join_request_time_stamps[1] == processing_time_stamp, join_request_time_stamps[0] == processing_time_stamp};
 wire [5:0] processing_join_request;                                                             /* 本周期正在处理的入队请求的SRAM，未处理时为32 */
-decoder_32_5 decoder_32_5( 
+encoder_32_5 encoder_32_5( 
     .select(processing_join_select),
     .idx(processing_join_request)
 );
@@ -151,7 +151,7 @@ wire [15:0] concatenate_select = {concatenate_enables[15] == 1, concatenate_enab
                                   concatenate_enables[7] == 1, concatenate_enables[6] == 1, concatenate_enables[5] == 1, concatenate_enables[4] == 1, 
                                   concatenate_enables[3] == 1, concatenate_enables[2] == 1, concatenate_enables[1] == 1, concatenate_enables[0] == 1}; 
 wire [4:0] concatenate_port;    /* 正在处理的拼接请求对应的端口 */
-decoder_16_4 decoder_concatenate(
+encoder_16_4 encoder_concatenate(
     .select(concatenate_select),
     .idx(concatenate_port)
 );
@@ -319,108 +319,30 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
  
     /* 读出 */
-    /*
-     * 以下勿动，待重构——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-     */
- 
+
     wire [3:0] rd_prior;
-    reg [2:0] pst_rd_prior; /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
+    reg [2:0] pst_rd_prior;     /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
 
     reg [5:0] rd_sram;
-    reg [5:0] pst_rd_sram; /* 持久化本次读取数据包的SRAM(最后一页rd_sram将会提前重置，以避免在数据包大小整除8时，SRAM多翻页的问题) */
+    reg [5:0] pst_rd_sram;      /* 持久化本次读取数据包的SRAM(最后一页rd_sram将会提前重置，以避免在数据包大小整除8时，SRAM多翻页的问题) */
+
+    reg [6:0] rd_page_amount;   /* 数据包有多少页 */
+    reg [2:0] rd_batch_end;     /* 数据包最后一页有多少半字 */
+
+    reg [2:0] rd_batch;         /* 读取切片 */
+
+    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end;
+
     assign rd_srams[port] = rd_sram;
 
     always @(posedge clk) begin
-        if(~rst_n) begin
-            rd_sram <= 6'd32;
-        end else if(rd_sop[port]) begin
-            pst_rd_prior <= rd_prior;
-            rd_sram <= queue_head[rd_prior][15:11];
-        end else if(rd_page_amount == 0) begin
-            rd_sram <= 6'd32;
-        end
-    end
-
-    always @(posedge clk) begin
-        if(~rst_n) begin
-            pst_rd_sram <= 6'd32;
-        end else if(rd_sop[port]) begin
-            pst_rd_sram <= queue_head[rd_prior][15:11];
-        end else if(rd_end_of_packet) begin
-            pst_rd_sram <= 6'd32;
-        end
-    end
-
-    reg [10:0] rd_page; /* 当前正在读取的页地址 */
-    assign rd_xfer_pages[port] = rd_page;
-
-    always @(posedge clk) begin
-        if(rd_sop[port]) begin /* 数据包开始读取时为队头 */
-            rd_page <= queue_head[rd_prior][10:0];
-        end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin /* 数据包读取中途，一页的结束时切换到下页(PORT rd_batch为5对应SRAM rd_batch为7) */
-            rd_page <= rd_xfer_next_pages[pst_rd_sram];
-        end
-    end
-
-    reg rd_not_over; /* 数据包是否读取完毕，用于约束rd_vld */
-    always @(posedge clk) begin
-        if(~rst_n) begin
-            rd_not_over <= 0;
-        end if(rd_end_of_packet) begin
-            rd_not_over <= 0;
-        end else if(rd_sop[port]) begin
-            rd_not_over <= 1;
-        end
-    end
-
-    reg [6:0] rd_page_amount; /* 数据包有多少页 */
-    reg [2:0] rd_batch_end; /* 数据包最后一页有多少半字 */
-    always @(posedge clk) begin
-        if(~rst_n || rd_sop[port]) begin
-            rd_page_amount <= 7'd64;
-            rd_batch_end <= 0;
-        end else if(rd_page_amount == 7'd64 && rd_xfer_data_vld) begin
-            rd_page_amount <= rd_xfer_data[15:10];
-            rd_batch_end <= rd_xfer_data[9:7];
-        end else if(rd_batch == 3'd7) begin
-            rd_page_amount <= rd_page_amount - 1;
-        end
-    end
-
-    reg [2:0] rd_batch;
-    always @(posedge clk) begin
-        if(~rst_n || rd_sop[port]) begin
-            rd_batch <= 3'd0;
-        end else if(rd_xfer_data_vld) begin
-            rd_batch <= rd_batch + 1;
-        end
-    end
-
-    wire rd_xfer_data_vld = rd_not_over ? rd_xfer_data_vlds[pst_rd_sram] && rd_xfer_ports[pst_rd_sram] == port : 0;
-    wire [15:0] rd_xfer_data = rd_xfer_datas[pst_rd_sram];
-    
-    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end; /* 是否为数据包的最后一半字 */
-
-    port_rd_dispatch port_rd_dispatch(
-        .clk(clk),
-        .rst_n(rst_n),
-
-        .wrr_en(wrr_enable[port]),
-
-        .queue_empty(queue_empty),
-        .update(rd_sop[port]),
-        .rd_prior(rd_prior)
-    );
-    
-    wire port_rd_sop = rd_sop[port];
-
-    always @(posedge clk) begin
-        rd_sop[port] <= ready[port] && queue_empty != 8'hFF;
+        
     end
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),
     
+        .rd_sop(rd_sop[port]),
         .rd_eop(rd_eop[port]),
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
@@ -432,40 +354,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     /* 统计信息 */
     reg [8:0] packet_amounts [31:0];
-    assign port_packet_amounts[port][0] = packet_amounts[0];
-    assign port_packet_amounts[port][1] = packet_amounts[1];
-    assign port_packet_amounts[port][2] = packet_amounts[2];
-    assign port_packet_amounts[port][3] = packet_amounts[3];
-    assign port_packet_amounts[port][4] = packet_amounts[4];
-    assign port_packet_amounts[port][5] = packet_amounts[5];
-    assign port_packet_amounts[port][6] = packet_amounts[6];
-    assign port_packet_amounts[port][7] = packet_amounts[7];
-    assign port_packet_amounts[port][8] = packet_amounts[8];
-    assign port_packet_amounts[port][9] = packet_amounts[9];
-    assign port_packet_amounts[port][10] = packet_amounts[10];
-    assign port_packet_amounts[port][11] = packet_amounts[11];
-    assign port_packet_amounts[port][12] = packet_amounts[12];
-    assign port_packet_amounts[port][13] = packet_amounts[13];
-    assign port_packet_amounts[port][14] = packet_amounts[14];
-    assign port_packet_amounts[port][15] = packet_amounts[15];
-    assign port_packet_amounts[port][16] = packet_amounts[16];
-    assign port_packet_amounts[port][17] = packet_amounts[17];
-    assign port_packet_amounts[port][18] = packet_amounts[18];
-    assign port_packet_amounts[port][19] = packet_amounts[19];
-    assign port_packet_amounts[port][20] = packet_amounts[20];
-    assign port_packet_amounts[port][21] = packet_amounts[21];
-    assign port_packet_amounts[port][22] = packet_amounts[22];
-    assign port_packet_amounts[port][23] = packet_amounts[23];
-    assign port_packet_amounts[port][24] = packet_amounts[24];
-    assign port_packet_amounts[port][25] = packet_amounts[25];
-    assign port_packet_amounts[port][26] = packet_amounts[26];
-    assign port_packet_amounts[port][27] = packet_amounts[27];
-    assign port_packet_amounts[port][28] = packet_amounts[28];
-    assign port_packet_amounts[port][29] = packet_amounts[29];
-    assign port_packet_amounts[port][30] = packet_amounts[30];
-    assign port_packet_amounts[port][31] = packet_amounts[31];
-
     integer sram;
+    for(sram = 0; sram < 32; sram = sram + 1)
+        assign port_packet_amounts[port][sram] = packet_amounts[sram];
+
     always @(posedge clk) begin
         if(~rst_n) begin
             for(sram = 0; sram < 32; sram = sram + 1)
@@ -481,10 +373,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [15:0] debug_head = queue_head[4];
     wire [15:0] debug_tail = queue_tail[4];
     wire [15:0] debug_amount = packet_amounts[1];
-
-    /*
-     * 以上勿动，待重构——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-     */
 end endgenerate
 
 genvar sram;
@@ -502,75 +390,58 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         wr_srams[3] == sram, wr_srams[2] == sram, wr_srams[1] == sram, wr_srams[0] == sram};
 
     wire [4:0] wr_port;                 /* 当前正向该SRAM写入的端口 */
-    decoder_16_4 decoder_wr_select(
+    encoder_16_4 encoder_wr_select(
         .select(wr_select),
         .idx(wr_port)
     );
     /* 当SRAM既没有正被任一端口写入数据，也没有被任一端口当作较优的匹配结果，则认为该SRAM可被匹配 */
     assign accessibilities[sram] = wr_select == 0 && match_select == 0;
 
-    /* 读出模块 */
-    /*
-     * 以下勿动，待重构——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-     */
-    /* 读出选通信号 */
-    wire [15:0] rd_select = {rd_srams[15] == sram, rd_srams[14] == sram, rd_srams[13] == sram, rd_srams[12] == sram, 
+    reg [15:0] comfort_mask;                /* 安抚读取掩码 */
+    wire [15:0] rd_select = comfort_mask &  /* 读出选通信号 */
+                            {rd_srams[15] == sram, rd_srams[14] == sram, rd_srams[13] == sram, rd_srams[12] == sram, 
                              rd_srams[11] == sram, rd_srams[10] == sram, rd_srams[9] == sram, rd_srams[8] == sram, 
                              rd_srams[7] == sram, rd_srams[6] == sram, rd_srams[5] == sram, rd_srams[4] == sram, 
                              rd_srams[3] == sram, rd_srams[2] == sram, rd_srams[1] == sram, rd_srams[0] == sram};
 
-    /* 当前正在读出SRAM数据的端口号 */
-    wire [4:0] rd_port_idx;
-    decoder_16_4 decoder_rd_select(
+    wire [4:0] rd_port_idx;                  /* 当前准备读出SRAM数据的端口号 */
+    encoder_16_4 encoder_rd_select(
         .select(rd_select),
         .idx(rd_port_idx)
     );
 
-    /* 切片计数器 */ 
-    reg [2:0] rd_batch;
-    /* 正在读取的数据包的端口 */ 
-    reg [10:0] rd_port;
+    reg [2:0] rd_batch;                      /* 切片计数器 */ 
+    reg [45:0] rd_port;                      /* 正在读取的数据包的端口 */ 
     assign rd_xfer_ports[sram] = rd_port;
-    /* 正在读取的页地址 */ 
-    reg [10:0] rd_page;
-    /* 是否即将读下一页 */ 
-    reg rd_page_down;
+    reg [10:0] rd_page;                      /* 正在读取的页地址 */ 
+    reg rd_page_down;                        /* 是否即将读下一页 */ 
 
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_batch <= 3'd7;
             rd_page_down <= 0;
             rd_port <= 5'd16;
-        end else if(rd_batch != 3'd7) begin /* 正在读取一页 */
+        end else if(rd_batch != 3'd7) begin  /* 正在读取一页 */
             rd_batch <= rd_batch + 1;
             rd_page_down <= 0;
-        end else if(rd_select != 0) begin /* 有新的页读取请求 */
+        end else if(rd_select != 0) begin    /* 有新的页读取请求 */
             rd_batch <= 3'd0;
             rd_page_down <= 1;
             rd_port <= rd_port_idx;
             rd_page <= rd_xfer_pages[rd_port_idx];
-        end else begin /* 无新的页读取请求 */
+        end else begin                       /* 无新的页读取请求 */
             rd_batch <= 3'd7;
             rd_page_down <= 0;
         end
     end
 
-    reg rd_new_packet;
     always @(posedge clk) begin
-        if(~rst_n) begin
-            rd_new_packet <= 0;
-        end else if(rd_batch == 3'd7 && rd_select != 0 && rd_port != rd_port_idx) begin
-            rd_new_packet <= 1;
-        end else begin
-            rd_new_packet <= 0;
+        if(~rst_n || rd_select == 0) begin                  /* 重置安抚掩码 */
+            comfort_mask <= 16'hFFFF;
+        end else if(rd_batch == 7 && rd_select != 0) begin  /* 拉低对应位的安抚掩码 */
+            comfort_mask[rd_port] <= 0;
         end
     end
-
-    wire rd_xfer_data_vld;
-    assign rd_xfer_data_vlds[sram] = rd_xfer_data_vld && ~rd_new_packet;
-    /*
-     * 以上勿动，待重构——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-     */
 
     sram_interface sram_interface(
         .clk(clk), 
@@ -597,7 +468,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .rd_page_down(rd_page_down),
         .rd_page(rd_page),
         
-        .rd_xfer_data_vld(rd_xfer_data_vld),
+        .rd_xfer_data_vld(rd_xfer_data_vlds[sram]),
         .rd_xfer_data(rd_xfer_datas[sram]),
         .rd_next_page(rd_xfer_next_pages[sram]),
         .rd_ecc_code(rd_xfer_ecc_codes[sram]),

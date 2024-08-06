@@ -1,4 +1,4 @@
-module decoder_16_4(
+module encoder_16_4(
     input [15:0] select,
     output reg [4:0] idx
 );

@@ -1,4 +1,4 @@
-`include "decoder_8_3.sv"
+`include "encoder_8_3.sv"
 
 module port_rd_dispatch(
     input clk,
@@ -96,7 +96,7 @@ always @(posedge clk) begin
     rd_prior <= wire_rd_prior;
 end
 
-decoder_8_3 decoder_8_3(
+encoder_8_3 encoder_8_3(
     .select(masked_queue_empty),
     .idx(wire_rd_prior)
 );
