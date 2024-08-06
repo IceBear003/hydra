@@ -13,11 +13,12 @@ module port_wr_frontend(
 
     /*
      * 向后端发送数据包的信号
+     * |- xfer_ready - 传输准备开始信号
      * |- xfer_data_vld - xfer_data是否有效
      * |- xfer_data - 当前周期传输的一半字数据
      * |- end_of_packet - 当前传输的半字是否为数据包最后半字
      */
-    output ready_to_xfer,
+    output xfer_ready,
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
@@ -26,13 +27,13 @@ module port_wr_frontend(
      * 与匹配模块交互的信号
      * |- match_suc - 匹配完毕信号，可以开始发送缓冲区的数据
      * |- match_enable - 使能匹配进程的信号
-     * |- new_dest_port, new_length - 被匹配的数据包的目标端口与长度(半字)
-     *                                用于匹配时判断SRAM对该数据包的喜好程度
+     * |- match_dest_port, match_length - 被匹配的数据包的目标端口与长度(半字)
+     *                                    用于匹配时判断SRAM对该数据包的喜好程度
      */
     input match_suc,
     output reg match_enable,
-    output reg [3:0] new_dest_port,
-    output reg [8:0] new_length
+    output reg [3:0] match_dest_port,
+    output reg [8:0] match_length
 );
 
 /*
@@ -62,7 +63,7 @@ reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
 wire [5:0] wr_ptr_pls_1 = wr_ptr + 6'd1;
 wire [5:0] wr_ptr_pls_2 = wr_ptr + 6'd2;
-wire [5:0] wr_ptr_pls_3 = wr_ptr + 6'd2;
+wire [5:0] wr_ptr_pls_3 = wr_ptr + 6'd3;
 reg [5:0] xfer_ptr;
 wire [5:0] xfer_ptr_pls_1 = xfer_ptr + 6'd1;
 reg [6:0] end_ptr;
@@ -76,7 +77,7 @@ always @(posedge clk) begin
         wr_state <= 2'd1;
     end else if(wr_state == 2'd1 && wr_vld) begin
         wr_state <= 2'd2;
-    end else if(wr_state == 2'd2 && wr_length == new_length) begin
+    end else if(wr_state == 2'd2 && wr_length == match_length) begin
         wr_state <= 2'd3;
     end else if(wr_state == 2'd3 && wr_eop) begin
         wr_state <= 2'd0; 
@@ -91,8 +92,8 @@ always @(posedge clk) begin
         wr_ptr <= wr_ptr + 1;
         if (wr_state == 2'd1) begin
             /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
-            new_dest_port <= wr_data[3:0];
-            new_length <= wr_data[15:7];
+            match_dest_port <= wr_data[3:0];
+            match_length <= wr_data[15:7];
         end
     end
 end
@@ -163,7 +164,7 @@ always @(posedge clk) begin
     end
 end
 
-assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
+assign xfer_ready = xfer_state == 2'd0 && (match_suc || pst_match_suc);
 
 always @(posedge clk) begin
     if(~rst_n) begin
