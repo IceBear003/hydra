@@ -94,7 +94,7 @@ always @(posedge clk or negedge rst_n) begin
             new_dest_port <= wr_data[3:0];
             new_length <= wr_data[15:7];
             new_prior <= wr_data[6:4];
-            $display("new_length = %d",wr_data[15:7]);
+            //$display("new_length = %d",wr_data[15:7]);
         end
     end
 end
@@ -115,7 +115,7 @@ always @(posedge clk) begin
         wr_length <= 0;
     end else if (wr_vld) begin
         wr_length <= wr_length + 1;
-        //$display("wr_length = %d",wr_length);
+        ////$display("wr_length = %d",wr_length);
     end
 end
 
@@ -125,7 +125,7 @@ always @(posedge clk) begin
     end else if(wr_vld && wr_state == 2'd1) begin
         /* ????????? */
         match_enable <= 1;
-        $display("1we");
+        //$display("1we");
     end else if(match_suc) begin
         /* ???? */
         match_enable <= 0;
@@ -158,7 +158,7 @@ always @(posedge clk) begin
     end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
         /* ??????????????????????? */
         xfer_state <= 2'd0;
-        $display("end_ptr = %d",end_ptr);    
+        //$display("end_ptr = %d",end_ptr);    
     end else if(xfer_state == 2'd1 && xfer_ptr_pls == wr_ptr) begin
         /* ?????????????????????????????? */
         xfer_state <= 2'd2;
@@ -166,8 +166,8 @@ always @(posedge clk) begin
         /* ???????????????????????????? */
         xfer_state <= 2'd1;
     end
-    if(xfer_state == 1)
-        $display("xfer_ptr_pls = %d %d %d %d",xfer_ptr_pls,wr_ptr,end_ptr,xfer_state);
+    //if(xfer_state == 1)
+        //$display("xfer_ptr_pls = %d %d %d %d",xfer_ptr_pls,wr_ptr,end_ptr,xfer_state);
 end
 
 assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);

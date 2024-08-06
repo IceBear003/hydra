@@ -155,12 +155,12 @@ reg [19:0] cnt_vld = 0;
 
 always @(posedge clk) begin
     for(i = 0; i < 16; i = i + 1) begin
-        $display("cnt_in = %d %d",cnt_in[i],i);
-        $display("cnt_out = %d %d",cnt_out[i],i);
+        //$display("cnt_in = %d %d",cnt_in[i],i);
+        //$display("cnt_out = %d %d",cnt_out[i],i);
         if(rd_vld[i])
             cnt_vld = cnt_vld + 1;
     end
-    $display("cnt_vld = %d",cnt_vld);
+    ////$display("cnt_vld = %d",cnt_vld);
 end
 
 genvar port;
@@ -295,14 +295,14 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             if(wr_eop[port]) begin
                 prior_num[new_prior] <= prior_num[new_prior] + 1;
             end
-            $display("prior_num = %d %d",prior_num[0],0);
-            $display("prior_num = %d %d",prior_num[1],1);
-            $display("prior_num = %d %d",prior_num[2],2);
-            $display("prior_num = %d %d",prior_num[3],3);
-            $display("prior_num = %d %d",prior_num[4],4);
-            $display("prior_num = %d %d",prior_num[5],5);
-            $display("prior_num = %d %d",prior_num[6],6);
-            $display("prior_num = %d %d",prior_num[7],7);
+            //$display("prior_num = %d %d",prior_num[0],0);
+            //$display("prior_num = %d %d",prior_num[1],1);
+            //$display("prior_num = %d %d",prior_num[2],2);
+            //$display("prior_num = %d %d",prior_num[3],3);
+            //$display("prior_num = %d %d",prior_num[4],4);
+            //$display("prior_num = %d %d",prior_num[5],5);
+            //$display("prior_num = %d %d",prior_num[6],6);
+            //$display("prior_num = %d %d",prior_num[7],7);
         end
     end
 */
@@ -377,7 +377,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             wr_sram <= 6'd32;
         end else if(ready_to_xfer) begin /* ???????PORT->SRAM?????????????????????????????wr_srams??????????? */
             wr_sram <= matching_best_sram;
-            $display("matching_best_sram = %d %d",matching_best_sram,port);
+            //$display("matching_best_sram = %d %d",matching_best_sram,port);
         end else if(regain_wr_page_tick == 1) begin /* ???????????????????????? */
             wr_sram <= 6'd32;
         end
@@ -428,9 +428,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             queue_tail[join_prior] <= wr_packet_tail_addr[join_request];
             concatenate_head <= queue_tail[join_prior];
             concatenate_tail <= wr_packet_head_addr[join_request];
-            if(join_request == 0)
-                $display("concatenate_head = %d %d %d %d",queue_tail[join_prior],wr_packet_head_addr[join_request],
-            wr_packet_tail_addr[join_request],join_request);
+            //if(join_request == 0)
+                //$display("concatenate_head = %d %d %d %d",queue_tail[join_prior],wr_packet_head_addr[join_request],
+            //wr_packet_tail_addr[join_request],join_request);
         end
     end
 
@@ -442,8 +442,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             queue_head[join_prior] <= wr_packet_head_addr[join_request];
         end else if(rd_end_of_packet && {pst_rd_sram, rd_page} != queue_tail[pst_rd_prior]) begin /* ?????????????? */
             queue_head[pst_rd_prior] <= rd_next_pages[pst_rd_sram];
-            if(port == 0)
-                $display("pst_rd_prior = %d %d %d %d",pst_rd_prior,rd_next_pages[pst_rd_sram],pst_rd_sram,rd_page);
+            //if(port == 0)
+                //$display("pst_rd_prior = %d %d %d %d",pst_rd_prior,rd_next_pages[pst_rd_sram],pst_rd_sram,rd_page);
         end else if(rd_end_of_packet) begin /* ?????????????? */
             queue_head[pst_rd_prior] <= queue_tail[pst_rd_prior];
         end
@@ -468,13 +468,13 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_sram <= queue_head[rd_prior][15:11];
             p_rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_prior <= rd_prior;
-            $display("queu e_head = %d %d",queue_head[rd_prior],rd_prior);
+            //$display("queu e_head = %d %d %d",queue_head[rd_prior],rd_prior,port);
         end else if(rd_sop[port]) begin
             //rd_sram <= queue_head[rd_prior][15:11];
             //pst_rd_sram <= rd_sram;
-            $display("rd_prior = %d",rd_prior);
-            $display("rd_sram = %d %d",rd_sram,port);
-            $display("queue_head[rd_prior] = %d",queue_head[rd_prior]);
+            //$display("rd_prior = %d",rd_prior);
+            //$display("rd_sram = %d %d",rd_sram,port);
+            //$display("queue_head[rd_prior] = %d",queue_head[rd_prior]);
         end else if(rd_page_amount == 0 && (rd_vld[port] || rd_eop[port])) begin
             rd_sram <= 6'd32;
         end
@@ -488,7 +488,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(rd_end_of_packet) begin
             pst_rd_sram <= 6'd32;
             p_rd_sram <= 6'd32;
-            $display("p_rd_sram = %d %d",p_rd_sram,pst_rd_sram);
+            //$display("p_rd_sram = %d %d",p_rd_sram,pst_rd_sram);
             pst_rd_prior <= 8;
         end
     end
@@ -502,8 +502,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else begin
             rd_sop[port] <= 1'b0;
         end
-        $display("rd_sram = %d %d %d %d %d %b %d",rd_ports[rd_sram],rd_sram,
-            pst_ready,port,rd_prior,queue_empty,pst_rd_prior);
+        ////$display("rd_sram = %d %d %d %d %d %b %d",rd_ports[rd_sram],rd_sram,
+        //    pst_ready,port,rd_prior,queue_empty,pst_rd_prior);
     end
 
     reg p_ready;
@@ -519,7 +519,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             pst_ready <= 1'b1;
         end else if(pst_ready == 1'b1 && rd_ports[rd_sram] == port && rd_ports[rd_sram] != 16) begin
             pst_ready <= 1'b0;
-            $display("rd_sr am = %d %d %d",rd_ports[rd_sram],port,pst_ready);
+            //$display("rd_sr am = %d %d %d",rd_ports[rd_sram],port,pst_ready);
         end
     end
 
@@ -542,7 +542,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(rd_sop[port]) begin
             pst_rd_sram <= queue_head[rd_prior][15:11];
-            $display("pst_rd_sram = %d %d",queue_head[rd_prior][15:11],port);
+            //$display("pst_rd_sram = %d %d",queue_head[rd_prior][15:11],port);
         end else if(rd_end_of_packet) begin
             pst_rd_sram <= 6'd32;
         end
@@ -553,10 +553,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_page <= queue_head[pst_rd_prior][10:0];
         end else if(rd_batch == 3'd5 && rd_page_amount != 0) begin /* ??????????????????????????????(PORT rd_batch?5???SRAM rd_batch?7) */
             rd_page <= rd_next_pages[pst_rd_sram];
-            $display("rd_next_pages = %d",rd_next_pages[pst_rd_sram]);
+            //$display("rd_next_pages = %d",rd_next_pages[pst_rd_sram]);
         end
         if(port == 10) begin
-            $display("rd_next_pages = %d %d %d",rd_next_pages[pst_rd_sram],rd_ports[pst_rd_sram],pst_rd_sram);
+            ////$display("rd_next_pages = %d %d %d",rd_next_pages[pst_rd_sram],rd_ports[pst_rd_sram],pst_rd_sram);
         end
     end
 
@@ -587,9 +587,9 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_batch <= 3'd0;
         end else if(rd_xfer_data_vld) begin
             rd_batch <= rd_batch + 1;
-            $display("rd_vld[port] = %d %d %d %d",rd_vld[port],rd_batch,rd_batch_end,rd_page_amount);
-            $display("rd_ports[pst_rd_sram] = %d %d %d %d",rd_ports[pst_rd_sram]
-            ,rd_xfer_data_vlds[pst_rd_sram],rd_not_over,rd_xfer_data_vld);
+            ////$display("rd_vld[port] = %d %d %d %d",rd_vld[port],rd_batch,rd_batch_end,rd_page_amount);
+            ////$display("rd_ports[pst_rd_sram] = %d %d %d %d",rd_ports[pst_rd_sram]
+            //,rd_xfer_data_vlds[pst_rd_sram],rd_not_over,rd_xfer_data_vld);
         end
     end
 
@@ -610,7 +610,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         rd_sop[port] <= ready[port] && queue_empty != 8'hFF;
         if(ready[port]) begin
-            $display("queue_empty = %d %d %d",queue_empty,queue_head[2],queue_tail[2]);
+            //$display("queue_empty = %d %d %d",queue_empty,queue_head[2],queue_tail[2]);
         end
     end
 */
@@ -685,9 +685,9 @@ always @(posedge clk) begin
             if(sram_num[i] > mx_sram_num) begin
                 mx_sram_num = sram_num[i];
             end
-            //$display("sram_num[i] = %d %d",sram_num[i],i);
+            ////$display("sram_num[i] = %d %d",sram_num[i],i);
         end
-        $display("mx_sram_num = %d",mx_sram_num);
+        //$display("mx_sram_num = %d",mx_sram_num);
     end
 end
 
@@ -701,7 +701,7 @@ always @(posedge clk) begin
             all_sram_num = all_sram_num + sram_num[i];
         end
     end
-    $display("all_sram_num = %d",all_sram_num);
+    //$display("all_sram_num = %d",all_sram_num);
 end
 
 genvar sram;
@@ -753,7 +753,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
                                 rd_srams[7] == sram+ rd_srams[6] == sram+ rd_srams[5] == sram+ rd_srams[4] == sram+ 
                                 rd_srams[3] == sram+ rd_srams[2] == sram+ rd_srams[1] == sram+ rd_srams[0] == sram;
         if(select_rd)
-            $display("sel e = %d",rd_srams[15] == sram+ rd_srams[14] == sram+ rd_srams[13] == sram+ rd_srams[12] == sram+ 
+            //$display("sel e = %d",rd_srams[15] == sram+ rd_srams[14] == sram+ rd_srams[13] == sram+ rd_srams[12] == sram+ 
                                 rd_srams[11] == sram+ rd_srams[10] == sram+ rd_srams[9] == sram+ rd_srams[8] == sram+ 
                                 rd_srams[7] == sram+ rd_srams[6] == sram+ rd_srams[5] == sram+ rd_srams[4] == sram+ 
                                 rd_srams[3] == sram+ rd_srams[2] == sram+ rd_srams[1] == sram+ rd_srams[0] == sram);
@@ -767,7 +767,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
                 sram_num[sram] = sram_num[sram] + 1;
         end
 
-        /*$display("sram_num[sram] = %d %d %d %d",sram_num[sram],sram,(16'd0 + pst_rd_srams[15] == sram+ pst_rd_srams[14] == sram+ pst_rd_srams[13] == sram+ pst_rd_srams[12] == sram+ 
+        /*//$display("sram_num[sram] = %d %d %d %d",sram_num[sram],sram,(16'd0 + pst_rd_srams[15] == sram+ pst_rd_srams[14] == sram+ pst_rd_srams[13] == sram+ pst_rd_srams[12] == sram+ 
                                 pst_rd_srams[11] == sram+ pst_rd_srams[10] == sram+ pst_rd_srams[9] == sram+ pst_rd_srams[8] == sram+ 
                                 pst_rd_srams[7] == sram+ pst_rd_srams[6] == sram+ pst_rd_srams[5] == sram+ pst_rd_srams[4] == sram+ 
                                 pst_rd_srams[3] == sram+ pst_rd_srams[2] == sram+ pst_rd_srams[1] == sram+ pst_rd_srams[0] == sram),select_rd);*/
@@ -842,11 +842,11 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end else if(rd_batch != 3'd7) begin
         end else if(select_rd != 0) begin /* ????????????? */
             rd_port <= rd_port_idx;//This changes during reading.
-            $display("select_rd = %d %d %d",select_rd,sram,rd_port);
+            //$display("select_rd = %d %d %d",select_rd,sram,rd_port);
         end
         if(select_wr) begin
-            $display("wr_port = %d %d",wr_port,wr_xfer_data_vld[wr_port]);
-            $display("wr_end_of_packet[wr_port] = %d",wr_end_of_packet[wr_port]);
+            ////$display("wr_port = %d %d",wr_port,wr_xfer_data_vld[wr_port]);
+            ////$display("wr_end_of_packet[wr_port] = %d",wr_end_of_packet[wr_port]);
         end
     end
 
@@ -861,7 +861,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             rd_page_down <= 1;
             rd_batch <= 3'd0;
             rd_page <= rd_pages[rd_port_idx];
-            $display("rd_pages = %d %b",rd_pages[rd_port],select_rd);
+            ////$display("rd_pages = %d %b",rd_pages[rd_port],select_rd);
         end else begin /* ????????????? */
             rd_batch <= 3'd7;
             rd_page_down <= 0;

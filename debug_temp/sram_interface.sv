@@ -79,10 +79,10 @@ always @(posedge clk) begin jump_table[jt_wr_addr] <= jt_din; end
 always @(posedge clk) begin 
     jt_dout <= jump_table[jt_rd_addr]; 
     if(jt_rd_addr == 5 && SRAM_IDX == 10) begin
-        $display("jt_dout = %d %d",jt_dout,jt_din);
+        //$display("jt_dout = %d %d",jt_dout,jt_din);
     end
     if(jt_wr_addr == 4 && SRAM_IDX == 29) begin
-        $display("jt_d in = %d",jt_din);
+        //$display("jt_d in = %d",jt_din);
     end
 end
 
@@ -126,10 +126,10 @@ wire [13:0] sram_rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]}; /* ??
 always @(posedge clk) begin
     rd_xfer_data_vld <= rd_batch != 4'd8 || rd_page_down;
     if(rd_batch != 4'd8) begin
-        $display("rd_batch = %d",rd_batch);
-        $display("rd_page = %d",rd_page);
-        $display("rd_page_down = %d",rd_page_down);
-        $display("rd_xfer_data_vld = %d %d",rd_xfer_data_vld,SRAM_IDX);
+        //$display("rd_batch = %d",rd_batch);
+        //$display("rd_page = %d",rd_page);
+        //$display("rd_page_down = %d",rd_page_down);
+        //$display("rd_xfer_data_vld = %d %d",rd_xfer_data_vld,SRAM_IDX);
     end
 end
 
@@ -180,13 +180,13 @@ always @(posedge clk) begin
     if(concatenate_enable) begin /* ??????????????????????????? */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-        $display("jt_wr_addr = %d",concatenate_head);
-        $display("jt _din = %d %d",concatenate_tail,SRAM_IDX);
+        //$display("jt_wr_addr = %d",concatenate_head);
+        //$display("jt _din = %d %d",concatenate_tail,SRAM_IDX);
     end else if(wr_xfer_data_vld && wr_page != wr_packet_tail_addr[10:0]) begin /* ??????????????????????????????? wr_page -> next_page(np_dout) */
         jt_wr_addr <= wr_page;
         jt_din <= {SRAM_IDX, np_dout};
-        $display("jt_wr_addr = %d",wr_page);
-        $display("jt_din = %d",{SRAM_IDX, np_dout});
+        //$display("jt_wr_addr = %d",wr_page);
+        //$display("jt_din = %d",{SRAM_IDX, np_dout});
     end
 end
 
@@ -196,7 +196,7 @@ always @(posedge clk) begin
     end if(wr_batch == 0 && wr_xfer_data_vld) begin /* ??????????????????????? */
         np_head_ptr <= np_head_ptr + 1;
         if(SRAM_IDX == 6) begin
-            $display("np_head_ptr = %d",np_head_ptr);
+            //$display("np_head_ptr = %d",np_head_ptr);
         end
     end
 end
@@ -218,7 +218,7 @@ always @(posedge clk) begin
         np_wr_addr <= np_tail_ptr;
         np_din <= np_perfusion;
         if(SRAM_IDX == 6) begin
-            $display("np_din = %d %d",np_perfusion,np_tail_ptr);
+            //$display("np_din = %d %d",np_perfusion,np_tail_ptr);
         end
         np_perfusion <= np_perfusion + 1;
     end
@@ -256,7 +256,7 @@ always @(posedge clk) begin
     end else if((wr_batch == 3'd7 && wr_xfer_data_vld) || regain_wr_page_tick == 2'd1) begin /* ????wr_page?????? */
         wr_page <= np_dout;
         if(SRAM_IDX == 6) begin
-            $display("np_dout = %d %d",np_dout,np_rd_addr,null_pages[np_rd_addr]);
+            //$display("np_dout = %d %d",np_dout,np_rd_addr,null_pages[np_rd_addr]);
         end
     end
 end
@@ -266,10 +266,10 @@ always @(posedge clk) begin
         wr_batch <= 0;
     end else if(wr_end_of_packet) begin
         wr_batch <= 0;
-        $display("Sram = %d",SRAM_IDX);
+        //$display("Sram = %d",SRAM_IDX);
     end else if(wr_xfer_data_vld) begin
         wr_batch <= wr_batch + 1;
-        $display("wr_batch = %d %d",wr_batch,SRAM_IDX);
+        //$display("wr_batch = %d %d",wr_batch,SRAM_IDX);
     end
     //$display("wr_xfer_data_vld = %d %d",wr_xfer_data_vld,SRAM_IDX);
 end
@@ -341,10 +341,10 @@ always @(posedge clk) begin
         free_space <= 11'd2047;
     end else if(wr_packet_join_request && rd_page_down) begin
         free_space <= free_space - packet_length + 1;
-        $display("free_space = %d %d",free_space - packet_length + 1,SRAM_IDX);
+        //$display("free_space = %d %d",free_space - packet_length + 1,SRAM_IDX);
     end else if(wr_packet_join_request) begin
         free_space <= free_space - packet_length;
-        $display("free_space = %d %d",free_space - packet_length,SRAM_IDX);
+        //$display("free_space = %d %d",free_space - packet_length,SRAM_IDX);
     end else if(rd_page_down) begin
         free_space <= free_space + 1;
     end

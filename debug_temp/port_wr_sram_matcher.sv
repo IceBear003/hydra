@@ -84,9 +84,9 @@ always @(posedge clk) begin
         matching_best_sram <= matching_sram;
         max_amount <= packet_amount;
         matching_find <= 1;
-        $display("matching_sram = %d",matching_sram);
-        $display("packet_amount = %d",packet_amount);
-        $display("fr ee_space = %d %d",free_space,new_length);
+        //$display("matching_sram = %d",matching_sram);
+        //$display("packet_amount = %d",packet_amount);
+        //$display("fr ee_space = %d %d",free_space,new_length);
     end
 end
 
