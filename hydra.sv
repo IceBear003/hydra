@@ -3,6 +3,7 @@
 `include "port_rd_frontend.sv"
 `include "port_rd_dispatch.sv"
 `include "sram_interface.sv"
+`include "ecc_decoder.sv"
 `include "encoder_16_4.sv"
 `include "encoder_32_5.sv"
 
@@ -324,20 +325,58 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [2:0] pst_rd_prior;     /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
 
     reg [5:0] rd_sram;
-    reg [5:0] pst_rd_sram;      /* 持久化本次读取数据包的SRAM(最后一页rd_sram将会提前重置，以避免在数据包大小整除8时，SRAM多翻页的问题) */
-
+    assign rd_srams[port] = rd_sram;
     reg [6:0] rd_page_amount;   /* 数据包有多少页 */
     reg [2:0] rd_batch_end;     /* 数据包最后一页有多少半字 */
 
     reg [2:0] rd_batch;         /* 读取切片 */
+    reg [10:0] rd_page;
+    assign rd_xfer_pages[port] = rd_page;
 
     wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end;
 
-    assign rd_srams[port] = rd_sram;
+    always @(posedge clk) begin
+        if(rd_xfer_ready) begin
+            pst_rd_prior <= rd_prior;
+            rd_sram <= queue_head[rd_prior][15:11];
+            rd_page <= queue_head[rd_prior][10:0];
+        end
+    end
 
     always @(posedge clk) begin
-        
+        if(~rst_n) begin
+            rd_batch <= 3'd7;
+        end else if(rd_batch != 3'd7) begin
+            rd_batch <= rd_batch + 1;
+        end else if(rd_xfer_ports[rd_sram] == port) begin
+            rd_batch <= 3'd0;
+        end
     end
+
+    wire rd_xfer_data_vld = rd_xfer_data_vlds[rd_sram];
+    wire [15:0] rd_xfer_data = rd_xfer_datas[rd_sram];
+    reg [7:0] rd_ecc_code;
+    wire [2:0] rd_out_batch;
+    wire [15:0] rd_out_data;
+
+    always @(posedge clk) begin
+        if(rd_batch == 0) begin
+            rd_ecc_code <= rd_xfer_ecc_codes[rd_sram];
+        end
+    end
+
+    ecc_decoder port_ecc_decoder(
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .end_of_page(rd_batch == 3'd7 || rd_end_of_packet),
+        .in_batch(rd_batch),
+        .data(rd_xfer_data),
+        .code(rd_ecc_code),
+
+        .out_batch(rd_out_batch),
+        .cr_data(rd_out_data)
+    );
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),
@@ -346,10 +385,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .rd_eop(rd_eop[port]),
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
-    
+
+        .xfer_ready(rd_xfer_ready),
         .xfer_data_vld(rd_xfer_data_vld),
-        .xfer_data(rd_xfer_data),
-        .end_of_packet(rd_end_of_packet)
+        .xfer_data(rd_out_data),
+        .end_of_packet(rd_out_batch == rd_batch_end && rd_page_amount == 0)
     );
 
     /* 统计信息 */
