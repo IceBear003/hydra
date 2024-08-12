@@ -54,12 +54,17 @@ initial begin
     run_test("my_env");
 end
 
+int time_stamp;
+
+always #(T/2) time_stamp = time_stamp + 1;
+
 generate
     for(genvar i=0; i<16; i=i+1) begin
         initial begin
             uvm_config_db#(virtual my_if)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"vif",input_if[i]);
             uvm_config_db#(virtual my_if)::set(null,$sformatf("uvm_test_top.i_agt[%0d].mon", i),"vif",input_if[i]);
             uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"vr",i);
+            uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"time_stamp",time_stamp);
             uvm_config_db#(virtual my_if)::set(null,$sformatf("uvm_test_top.o_agt[%0d].mon_out", i),"vif",output_if[i]);
             //uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.o_agt[%0d].drv", i),"var",i);
         end
@@ -106,6 +111,7 @@ interface my_if(input clk,input rst_n);
     reg wrr_enable = 1;
     reg [4:0] match_threshold = 15;
     reg [1:0] match_mode = 2;
+    int time_stamp;
 
     wire pause;
     wire rd_s;

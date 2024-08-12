@@ -35,7 +35,7 @@ task my_model::main_phase(uvm_phase phase);
     my_transaction tr[16];
     my_transaction rd_tr[16];
     my_transaction sd_tr[16];
-    logic [15:0] que[16][8][$];
+    logic [47:0] que[16][8][$];
     logic [2:0] port_round[16];
     logic [2:0] port_reach[16];
     super.main_phase(phase);

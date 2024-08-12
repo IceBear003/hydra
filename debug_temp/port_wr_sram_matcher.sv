@@ -4,50 +4,43 @@ module port_wr_sram_matcher(
 
     input [4:0] match_threshold,
 
-    /* ????????????? */
+    /* 与前端交互的信号 */
     input [8:0] new_length,
     input match_enable,
     output reg match_suc,
 
     /*
-     * ???????????? 
-     * |- matching_sram - ???????????SRAM
-     * |- matching_best_sram - ???????????SRAM
+     * 与后端交互的信号 
+     * |- match_sram - 当前尝试匹配的SRAM
+     * |- match_best_sram - 当前已匹配到最优的SRAM
+     * |- accessible - SRAM是否可用
+     * |- free_space - SRAM剩余空间（半字）
+     * |- packet_amount - SRAM中新包端口对应的数据包数量
      */
-    input [4:0] matching_sram,
-    output reg [4:0] matching_best_sram,
-    output update_matched_sram,
-
-    /* 
-     * ?????????SRAM????
-     * |- accessible - SRAM??????
-     * |- free_space - SRAM??????????
-     * |- packet_amount - SRAM??????????????????????
-     */
+    input [4:0] match_sram,
+    output reg [5:0] match_best_sram,
     input accessible,
     input [10:0] free_space,
     input [8:0] packet_amount
 );
 
 /* 
- * ?????
- * |- 0 - ?????
- * |- 1 - ?????(?????match_enable???)
- * |- 2 - ??????(??match_end???????)
+ * 匹配状态
+ * |- 0 - 未匹配
+ * |- 1 - 匹配中(落后于match_enable一拍)
+ * |- 2 - 匹配完成(与match_end同步拉高)
  */
 reg [1:0] match_state;
 
 /* 
- * ??????
- * |- matching_find - ??????????????SRAM
- * |- matching_tick - ?????????
- * |- max_amount - ???????SRAM??????????????
+ * 匹配信号
+ * |- match_find - 是否已经匹配到可用的SRAM
+ * |- match_tick - 当前匹配时长
+ * |- max_amount - 当前最优SRAM中目的端口的数据量
  */
-reg matching_find;
-reg [7:0] matching_tick;
+reg match_find;
+reg [7:0] match_tick;
 reg [8:0] max_amount;
-
-assign update_matched_sram = match_enable && ~match_suc && matching_find;
 
 always @(posedge clk) begin
     if(~rst_n) begin
@@ -55,11 +48,10 @@ always @(posedge clk) begin
         match_suc <= 0;
     end else if(match_state == 2'd0 && match_enable) begin
         match_state <= 2'd1;
-    end else if(match_state == 2'd1 && matching_find && matching_tick == match_threshold) begin
-        /* ?????????(??????????????) */
+    end else if(match_state == 2'd1 && match_find && match_tick == match_threshold) begin
+        /* 常规匹配成功(时间达到阈值且有结果) */
         match_suc <= 1;
         match_state <= 2'd2;
-        //$display("matching_best_sram = %d",matching_best_sram);
     end else if(match_state == 2'd2) begin
         match_suc <= 0;
         match_state <= 2'd0;
@@ -67,26 +59,25 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(match_enable && matching_tick != match_threshold) begin
-        matching_tick <= matching_tick + 1;
+    if(match_enable && match_tick != match_threshold) begin
+        match_tick <= match_tick + 1;
     end else begin
-        matching_tick <= 0;
+        match_tick <= 0;
     end
 end
 
 always @(posedge clk) begin
     if(~match_enable || match_suc) begin
-        matching_find <= 0;
+        match_find <= 0;
         max_amount <= 0;
-    end else if(~accessible) begin                  /* ??????? */
-    end else if(free_space < new_length[8:3] + 1) begin      /* ????? */
-    end else if(packet_amount >= max_amount) begin  /* ???????? */
-        matching_best_sram <= matching_sram;
+        match_best_sram <= 6'd32;
+    end else if(~accessible) begin                  /* 未被占用 */
+    end else if(free_space < new_length[8:3] + 1) begin      /* 空间足够 */
+    end else if(packet_amount >= max_amount) begin  /* 比当前更优 */
+        match_best_sram <= match_sram;
+        //$display("match_sram = %d",match_sram);
         max_amount <= packet_amount;
-        matching_find <= 1;
-        //$display("matching_sram = %d",matching_sram);
-        //$display("packet_amount = %d",packet_amount);
-        //$display("fr ee_space = %d %d",free_space,new_length);
+        match_find <= 1;
     end
 end
 

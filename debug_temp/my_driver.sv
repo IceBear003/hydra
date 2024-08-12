@@ -9,6 +9,7 @@ import uvm_pkg::*;
 class my_driver extends uvm_driver;
     virtual my_if vif;
     int vr;
+    int time_stamp;
     `uvm_component_utils(my_driver);
     function new(string name = "my_driver", uvm_component parent = null);
         super.new(name, parent);
@@ -21,6 +22,8 @@ class my_driver extends uvm_driver;
             `uvm_fatal("my_driver","virtual interface must be set for vif!");
         if(!uvm_config_db#(int)::get(this,"","vr",vr))
             `uvm_fatal("my_driver","virtual interface must be set for vif!");
+        if(!uvm_config_db#(int)::get(this,"","time_stamp",time_stamp))
+            `uvm_fatal("my_driver","virtual interface must be set for vif!");
     endfunction
 
     extern virtual task main_phase(uvm_phase phase);
@@ -30,7 +33,8 @@ endclass
 
 task my_driver::drive_one_pkt(my_transaction tr);
     `uvm_info("my_driver","begin to drive one pkt",UVM_LOW);
-    $display("vif.clk = %d",vif.clk);
+    $display("vif.clk = %d %d",vif.clk,time_stamp);
+    vif.time_stamp = tr.ctrl[47:16];
     @(posedge vif.clk); vif.wr_sop <= 1;
     @(posedge vif.clk); vif.wr_sop <= 0;
     @(posedge vif.clk);
@@ -70,6 +74,7 @@ task my_driver::main_phase(uvm_phase phase);
         if(len < 31) len = 31;
         if(len > 255) len = 255;
         tr.ctrl[15:7] = len;
+        tr.ctrl[47:16] = time_stamp;
         drive_one_pkt(tr);
     end
     //#1000

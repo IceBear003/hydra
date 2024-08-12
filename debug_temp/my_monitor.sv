@@ -48,6 +48,7 @@ task my_monitor::collect_one_pkt(my_transaction tr);
             `uvm_info("my_monitor","begin to collect one pkt",UVM_LOW);
             tr.ctrl = vif.wr_data;
             tr.vld = 1;
+            tr.ctrl[47:16] = vif.time_stamp;
             ap.write(tr);
             @(posedge vif.clk);
             tr.vld = 0;

@@ -13,7 +13,7 @@ class my_transaction extends uvm_sequence_item;
         data.size >= 32;
         data.size <= 512;
     }*/
-    logic [15:0] ctrl;
+    logic [47:0] ctrl;
     bit vld;
     bit rd_ready;
     //...
