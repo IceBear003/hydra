@@ -42,6 +42,11 @@ module hydra
     input [1:0] match_mode
 );
 
+integer file;
+initial begin
+    file = $fopen("D:/Engineer/Hydra_2/hydra/debug_temp/in.txt","r+");
+end
+
 /* ????? */
 reg [4:0] time_stamp;
 always @(posedge clk) time_stamp <= ~rst_n ? 0 : time_stamp + 1;
