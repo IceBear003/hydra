@@ -13,11 +13,12 @@ module port_wr_frontend(
 
     /*
      * ?????????????????
+     * |- xfer_ready - ?????????????
      * |- xfer_data_vld - xfer_data???????
      * |- xfer_data - ????????????????????
      * |- end_of_packet - ??????????????????????????
      */
-    output ready_to_xfer,
+    output xfer_ready,
     output reg xfer_data_vld,
     output reg [15:0] xfer_data,
     output reg end_of_packet,
@@ -26,14 +27,13 @@ module port_wr_frontend(
      * ????????????????
      * |- match_suc - ???????????????????????????????
      * |- match_enable - ?????????????
-     * |- new_dest_port, new_length - ??????????????????????(????)
-     *                                ????????????SRAM????????????????
+     * |- match_dest_port, match_length - ??????????????????????(????)
+     *                                    ????????????SRAM????????????????
      */
     input match_suc,
     output reg match_enable,
-    output reg [3:0] new_dest_port,
-    output reg [2:0] new_prior,
-    output reg [8:0] new_length
+    output reg [3:0] match_dest_port,
+    output reg [8:0] match_length
 );
 
 /*
@@ -61,29 +61,30 @@ reg [1:0] xfer_state;
  */
 reg [15:0] buffer [63:0];
 reg [5:0] wr_ptr;
-wire [5:0] wr_ptr_pls = wr_ptr + 6'd1;
-wire [5:0] wr_ptr_plss = wr_ptr + 6'd2;
+wire [5:0] wr_ptr_pls_1 = wr_ptr + 6'd1;
+wire [5:0] wr_ptr_pls_2 = wr_ptr + 6'd2;
+wire [5:0] wr_ptr_pls_3 = wr_ptr + 6'd3;
 reg [5:0] xfer_ptr;
-wire [5:0] xfer_ptr_pls = xfer_ptr + 6'd1;
+wire [5:0] xfer_ptr_pls_1 = xfer_ptr + 6'd1;
 reg [6:0] end_ptr;
 
 reg [8:0] wr_length;
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         wr_state <= 2'd0;
     end else if(wr_state == 2'd0 && wr_sop) begin
         wr_state <= 2'd1;
     end else if(wr_state == 2'd1 && wr_vld) begin
         wr_state <= 2'd2;
-    end else if(wr_state == 2'd2 && wr_length == new_length) begin
+    end else if(wr_state == 2'd2 && wr_length == match_length) begin
         wr_state <= 2'd3;
     end else if(wr_state == 2'd3 && wr_eop) begin
         wr_state <= 2'd0; 
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(~rst_n) begin
         wr_ptr <= 0;
     end else if(wr_vld) begin
@@ -91,10 +92,9 @@ always @(posedge clk or negedge rst_n) begin
         wr_ptr <= wr_ptr + 1;
         if (wr_state == 2'd1) begin
             /* ?????????????????????????????????????????????? */
-            new_dest_port <= wr_data[3:0];
-            new_length <= wr_data[15:7];
-            new_prior <= wr_data[6:4];
-            $display("new_length = %d",wr_data[15:7]);
+            match_dest_port <= wr_data[3:0];
+            match_length <= wr_data[15:7];
+            $display("match_port_and_length = %d %d",wr_data[3:0],wr_data[15:7]);
         end
     end
 end
@@ -105,7 +105,7 @@ always @(posedge clk) begin
     end else if(wr_state == 2'd3) begin
         /* ???????????????wr_ptr???????????????????? */
         end_ptr <= wr_ptr;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         end_ptr <= 7'd64;
     end
 end
@@ -115,7 +115,6 @@ always @(posedge clk) begin
         wr_length <= 0;
     end else if (wr_vld) begin
         wr_length <= wr_length + 1;
-        //$display("wr_length = %d",wr_length);
     end
 end
 
@@ -125,7 +124,6 @@ always @(posedge clk) begin
     end else if(wr_vld && wr_state == 2'd1) begin
         /* ????????? */
         match_enable <= 1;
-        $display("1we");
     end else if(match_suc) begin
         /* ???? */
         match_enable <= 0;
@@ -155,27 +153,24 @@ always @(posedge clk) begin
     end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin
         /* ?????????????????? */
         xfer_state <= 2'd1;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         /* ??????????????????????? */
         xfer_state <= 2'd0;
-        $display("end_ptr = %d",end_ptr);    
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == wr_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == wr_ptr) begin
         /* ?????????????????????????????? */
         xfer_state <= 2'd2;
     end else if(xfer_state == 2'd2 && xfer_ptr != wr_ptr) begin
         /* ???????????????????????????? */
         xfer_state <= 2'd1;
     end
-    if(xfer_state == 1)
-        $display("xfer_ptr_pls = %d %d %d %d",xfer_ptr_pls,wr_ptr,end_ptr,xfer_state);
 end
 
-assign ready_to_xfer = xfer_state == 2'd0 && (match_suc || pst_match_suc);
+assign xfer_ready = xfer_state == 2'd0 && (match_suc || pst_match_suc);
 
 always @(posedge clk) begin
     if(~rst_n) begin
         end_of_packet <= 0;
-    end else if(xfer_state == 2'd1 && xfer_ptr_pls == end_ptr) begin
+    end else if(xfer_state == 2'd1 && xfer_ptr_pls_1 == end_ptr) begin
         /* ??????????????????????????????????? */
         end_of_packet <= 1;
     end else begin
@@ -191,8 +186,12 @@ always @(posedge clk) begin
         xfer_data <= buffer[xfer_ptr];
         xfer_ptr <= xfer_ptr + 1;
         xfer_data_vld <= 1;
+        //$display("wr started");
     end else begin
         xfer_data_vld <= 0;
+    end
+    if(xfer_ptr || wr_ptr) begin
+        //$display("ptr = %d %d %d",xfer_ptr,wr_ptr,end_ptr);
     end
 end
 
@@ -202,8 +201,9 @@ end
  *  II - ???????????????????SRAM????????????????????????????????????????????????????
  */
  always @(posedge clk) begin
-    pause <= (wr_ptr_plss == xfer_ptr) ||
-             (wr_ptr_pls == xfer_ptr) ||
+    pause <= (wr_ptr_pls_3 == xfer_ptr) ||
+             (wr_ptr_pls_2 == xfer_ptr) ||
+             (wr_ptr_pls_1 == xfer_ptr) ||
              (wr_state == 2'd0 && match_enable && ~match_suc);
 end
 
