@@ -291,6 +291,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
                 concatenate_head <= join_request_tails[join_request_sram];  /* 拼接头为新数据包尾 */
                 concatenate_tail <= join_request_tails[join_request_sram];  /* 拼接尾为新数据包尾*/
             end
+        end else begin
+            concatenate_enable <= 0;
         end
     end
 
