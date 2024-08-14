@@ -36,7 +36,7 @@ module tb_test;
         .rd_vld(rd_vld),
         .rd_data(rd_data),
         .wrr_enable(16'hFFFF),
-        .match_threshold(5'd10),
+        .match_threshold(5'd30),
         .match_mode(2'd2)
     );
     always @(posedge clk) begin

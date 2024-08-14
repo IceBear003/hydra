@@ -217,8 +217,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         endcase
         match_sram <= next_match_sram;
         free_space <= free_spaces[next_match_sram];
-        packet_amount <= port_packet_amounts[wr_data[port][3:0]][next_match_sram];
-        accessibility <= accessibilities[next_match_sram] || wr_sram == match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
+        packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
+        accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
     end
 
     reg [5:0] wr_sram;                              /* 当前正写入的SRAM */
