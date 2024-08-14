@@ -538,7 +538,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         if(~rst_n || rd_select == 0) begin                  /* 重置安抚掩码 */
             comfort_mask <= 16'hFFFF;
         end else if(rd_batch == 7 && rd_select != 0) begin  /* 拉低对应位的安抚掩码 */
-            comfort_mask[rd_port_idx] <= 0;
+            // comfort_mask[rd_port_idx] <= 0;
         end
     end
 
