@@ -31,7 +31,6 @@ module sram_interface
     input rd_page_down,
     input [10:0] rd_page,
 
-    output reg rd_xfer_data_vld,
     output [15:0] rd_xfer_data,
     output reg [15:0] rd_next_page,
     output reg [7:0] rd_ecc_code,
@@ -281,9 +280,6 @@ end
 
 reg [3:0] rd_batch; /* 读出切片下标 */
 wire [13:0] sram_rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]}; /* 翻页时，切片下标应为0，其他时刻则为rd_addr_batch */
-always @(posedge clk) begin
-    rd_xfer_data_vld <= rd_batch != 4'd8 || rd_page_down;
-end
 
 always @(posedge clk) begin
     if(~rst_n) begin

@@ -62,7 +62,6 @@ assign wr_xfer_end_of_packets[16] = 0;
 wire [10:0] rd_xfer_pages [15:0];                       /* 读出页地址 */
 /* 读出Crossbar通道 SRAM->端口 */
 wire [4:0] rd_xfer_ports [31:0];                        /* 读出反馈 */
-wire rd_xfer_data_vlds [31:0];                          /* 读出数据有效(TODO可优化) */ 
 wire [15:0] rd_xfer_datas [31:0];                       /* 读出数据 */
 wire [7:0] rd_xfer_ecc_codes [31:0];                    /* 读出页校验码 */
 wire [15:0] rd_xfer_next_pages [31:0];                  /* 读出页下页地址 */
@@ -351,7 +350,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_sram  <= queue_head[rd_prior][15:11];
             rd_page <= queue_head[rd_prior][10:0];
-        end else if(rd_ecc_in_page_amount == 0) begin
+        end else if(rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end) begin
             rd_sram <= 6'd32;
         end
     end
@@ -388,7 +387,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    wire rd_xfer_data_vld = rd_xfer_data_vlds[pst_rd_sram];
     wire [15:0] rd_xfer_data = rd_ecc_in_page_amount == 0 && ecc_in_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
     reg [7:0] rd_xfer_ecc_code;
     reg [15:0] rd_xfer_next_page;
@@ -398,7 +396,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(ecc_in_batch == 4'd1) begin
             rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
         end
-        if(ecc_in_batch == 4'd7) begin
+    end
+
+    always @(posedge clk) begin
+        if(ecc_in_batch == 4'd6) begin
             rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
         end
     end
@@ -538,7 +539,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         if(~rst_n || rd_select == 0) begin                  /* 重置安抚掩码 */
             comfort_mask <= 16'hFFFF;
         end else if(rd_batch == 7 && rd_select != 0) begin  /* 拉低对应位的安抚掩码 */
-            // comfort_mask[rd_port_idx] <= 0;
+            comfort_mask[rd_port_idx] <= 0;
         end
     end
 
@@ -567,7 +568,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .rd_page_down(rd_page_down),
         .rd_page(rd_page),
         
-        .rd_xfer_data_vld(rd_xfer_data_vlds[sram]),
         .rd_xfer_data(rd_xfer_datas[sram]),
         .rd_next_page(rd_xfer_next_pages[sram]),
         .rd_ecc_code(rd_xfer_ecc_codes[sram]),
