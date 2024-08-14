@@ -59,67 +59,42 @@ module tb_test;
         $dumpvars();
         #5 
         rst_n <= 0;
-        wr_sop <= 16'h0000;
         ready <= 16'h0000;
+        wr_sop <= 16'h0000;
         wr_vld <= 16'h0000;
         wr_eop <= 16'h0000;
         #10 
         rst_n <= 1;
-        wr_sop <= 16'h000B;
-        wr_vld <= 16'h0000;
         #10 
-        wr_sop <= 16'h0004;
-        wr_vld <= 16'h000B;
-        wr_data <= {{9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd31, 3'd4, 4'd3}, {9'd34, 3'd4, 4'd3}};
-        cnt = 0;
+        wr_sop <= 16'h0001;
         #10 
         wr_sop <= 16'h0000;
-        wr_vld <= 16'h000F;
-        #10 wr_data <= {16'b0, {9'd31, 3'd4, 4'd3}, cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0008;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        ready <= 16'h0000;
-        wr_vld <= 16'h0005;
-        #10 wr_data <= {cnt-16'd1, cnt};
         wr_vld <= 16'h0001;
-        #10 wr_data <= {cnt-16'd1, cnt};
-        #10 wr_data <= {cnt-16'd1, cnt};
-        wr_vld <= 16'h0000;
+        wr_data <= {9'd66, 3'd4, 4'd3};
+        cnt <= 0;
+        for(i=0;i<66;i++) begin
+            #10 
+            wr_data <= cnt;
+        end
+        #10 wr_vld <= 16'h0000; wr_eop <= 16'h0001;
+        #10 wr_eop <= 16'h0000; wr_sop <= 16'h0001;
         #10 
+        wr_sop <= 16'h0000;
+        wr_vld <= 16'h0001;
+        wr_data <= {9'd64, 3'd4, 4'd4};
+        cnt <= 0;
+        for(j=0;j<64;j++) begin
+            #10 
+            wr_data <= cnt;
+        end
+        #10 wr_vld <= 16'h0000; wr_eop <= 16'h0001;
+        #10 wr_eop <= 16'h0000;
         #10 
-        wr_eop <= 16'h000F;
         #10 
         #10 
+        ready <= 16'h0018;
         #10 
+        ready <= 16'h0000;
         #10 
         #10 
         #10 
@@ -270,6 +245,16 @@ module tb_test;
         #10 
         #10 
         #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10 
+        #10
         #10 
         #10 
         $finish;

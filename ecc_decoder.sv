@@ -15,6 +15,9 @@ reg page_out;
 always @(posedge clk) begin
     page_out <= in_batch == 4'd7;
     if(in_batch != 4'd8) begin
+        // if(in_batch == 4'd4) begin
+        //     data_buffer[in_batch] <= data ^ 16'h0080;
+        // end else 
         data_buffer[in_batch] <= data;
     end
 end

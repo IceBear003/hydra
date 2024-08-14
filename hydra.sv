@@ -396,8 +396,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     always @(posedge clk) begin
         if(ecc_in_batch == 4'd1) begin
-            rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
             rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
+        end
+        if(ecc_in_batch == 4'd7) begin
+            rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
         end
     end
 
@@ -536,7 +538,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         if(~rst_n || rd_select == 0) begin                  /* 重置安抚掩码 */
             comfort_mask <= 16'hFFFF;
         end else if(rd_batch == 7 && rd_select != 0) begin  /* 拉低对应位的安抚掩码 */
-            comfort_mask[rd_port] <= 0;
+            comfort_mask[rd_port_idx] <= 0;
         end
     end
 
