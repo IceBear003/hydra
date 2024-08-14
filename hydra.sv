@@ -22,7 +22,7 @@ module hydra
     output reg almost_full,
     /* 读出IO口 */
     input [15:0] ready,
-    output reg [15:0] rd_sop,
+    output [15:0] rd_sop,
     output [15:0] rd_eop,
     output [15:0] rd_vld,
     output [15:0] [15:0] rd_data,
@@ -312,84 +312,137 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(join_request_enable && queue_empty[join_request_prior]) begin   /* 新数据包加入空队列时，无需发起拼接，但需要更新队头到数据包首 */
             queue_head[join_request_prior] <= join_request_head; 
         end else if(~rd_end_of_packet) begin                                        /* 数据包读取完毕，更新队列头指针 */
-        end else if({pst_rd_sram, rd_page} != queue_tail[pst_rd_prior]) begin       /* 队列有数据包剩余 */
-            queue_head[pst_rd_prior] <= rd_xfer_next_pages[pst_rd_sram];
+        end else if(rd_xfer_next_page != queue_tail[pst_rd_prior]) begin            /* 队列有数据包剩余 */
+            queue_head[pst_rd_prior] <= rd_xfer_next_page;
         end else begin                                                              /* 队列无数据包剩余 */
             queue_head[pst_rd_prior] <= queue_tail[pst_rd_prior];
         end
     end
  
     /* 读出 */
-
     wire [3:0] rd_prior;
     reg [2:0] pst_rd_prior;     /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
 
     reg [5:0] rd_sram;
     assign rd_srams[port] = rd_sram;
-    reg [6:0] rd_page_amount;   /* 数据包有多少页 */
-    reg [2:0] rd_batch_end;     /* 数据包最后一页有多少半字 */
-
-    reg [2:0] rd_batch;         /* 读取切片 */
+    reg [4:0] pst_rd_sram;
+    
     reg [10:0] rd_page;
     assign rd_xfer_pages[port] = rd_page;
 
-    wire rd_end_of_packet = rd_page_amount == 0 && rd_batch == rd_batch_end;
+    reg [6:0] rd_ecc_in_page_amount;   /* 数据包有多少页 */
+    reg [6:0] rd_ecc_out_page_amount;   /* 数据包有多少页 */
+    reg [2:0] rd_batch_end;     /* 数据包最后一页有多少半字 */
+
+    reg [3:0] ecc_in_batch;
+    wire [3:0] ecc_out_batch;
+
+    wire rd_xfer_ready = ready[port] && rd_prior != 4'd8;
+    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end;
+    wire rd_end_of_page = ecc_in_batch == 3'd7 || rd_end_of_packet;
 
     always @(posedge clk) begin
-        if(rd_xfer_ready) begin
+        if(~rst_n) begin
+            rd_sram <= 6'd32;
+        end if(rd_xfer_ready) begin
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
+            pst_rd_sram  <= queue_head[rd_prior][15:11];
             rd_page <= queue_head[rd_prior][10:0];
+        end else if(rd_ecc_in_page_amount == 0) begin
+            rd_sram <= 6'd32;
         end
     end
 
     always @(posedge clk) begin
         if(~rst_n) begin
-            rd_batch <= 3'd7;
-        end else if(rd_batch != 3'd7) begin
-            rd_batch <= rd_batch + 1;
+            ecc_in_batch <= 4'd8;
         end else if(rd_xfer_ports[rd_sram] == port) begin
-            rd_batch <= 3'd0;
+            ecc_in_batch <= 4'd0;
+        end else if(ecc_in_batch != 4'd8) begin
+            ecc_in_batch <= ecc_in_batch + 1;
         end
     end
 
-    wire rd_xfer_data_vld = rd_xfer_data_vlds[rd_sram];
-    wire [15:0] rd_xfer_data = rd_xfer_datas[rd_sram];
-    reg [7:0] rd_ecc_code;
-    wire [2:0] rd_out_batch;
+    always @(posedge clk) begin
+        if(~rst_n || rd_xfer_ready) begin
+            rd_ecc_in_page_amount <= 7'd64;
+            rd_batch_end <= 3'd7;
+        end else if(rd_ecc_in_page_amount == 7'd64 && ecc_out_batch == 4'd0) begin
+            rd_ecc_in_page_amount <= rd_out_data[15:10] - 1;
+            rd_batch_end <= rd_out_data[9:7];
+        end else if(~rd_ecc_in_page_amount[6] && rd_ecc_in_page_amount != 0 && ecc_in_batch == 4'd7) begin
+            rd_ecc_in_page_amount <= rd_ecc_in_page_amount - 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(~rst_n || rd_xfer_ready) begin
+            rd_ecc_out_page_amount <= 7'd64;
+        end else if(rd_ecc_out_page_amount == 7'd64 && ecc_out_batch == 4'd0) begin
+            rd_ecc_out_page_amount <= rd_out_data[15:10];
+        end else if(~rd_ecc_out_page_amount[6] && rd_ecc_out_page_amount != 0 && ecc_out_batch == 4'd7) begin
+            rd_ecc_out_page_amount <= rd_ecc_out_page_amount - 1;
+        end
+    end
+
+    wire rd_xfer_data_vld = rd_xfer_data_vlds[pst_rd_sram];
+    wire [15:0] rd_xfer_data = rd_ecc_in_page_amount == 0 && ecc_in_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
+    reg [7:0] rd_xfer_ecc_code;
+    reg [15:0] rd_xfer_next_page;
     wire [15:0] rd_out_data;
 
     always @(posedge clk) begin
-        if(rd_batch == 0) begin
-            rd_ecc_code <= rd_xfer_ecc_codes[rd_sram];
+        if(ecc_in_batch == 4'd1) begin
+            rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
+            rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
         end
     end
+
+    always @(posedge clk) begin
+        if(ecc_in_batch == 4'd5) begin
+            rd_page <= rd_xfer_next_page;
+        end
+    end
+
+    port_rd_dispatch port_rd_dispatch(
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .wrr_en(wrr_enable[port]),
+
+        .queue_empty(queue_empty),
+        .update(rd_end_of_packet),
+        .rd_prior(rd_prior)
+    );
+    
+    wire out_end_of_packet = rd_ecc_out_page_amount == 0 && ecc_out_batch == rd_batch_end;
 
     ecc_decoder port_ecc_decoder(
         .clk(clk),
         .rst_n(rst_n),
 
-        .end_of_page(rd_batch == 3'd7 || rd_end_of_packet),
-        .in_batch(rd_batch),
+        .in_batch(ecc_in_batch),
         .data(rd_xfer_data),
-        .code(rd_ecc_code),
+        .code(rd_xfer_ecc_code),
 
-        .out_batch(rd_out_batch),
-        .cr_data(rd_out_data)
+        .out_end_of_packet(out_end_of_packet),
+        .out_batch(ecc_out_batch),
+        .out_data(rd_out_data)
     );
 
     port_rd_frontend port_rd_frontend(
         .clk(clk),
     
         .rd_sop(rd_sop[port]),
-        .rd_eop(rd_eop[port]),
+        .rd_eop(rd_eop[port]), 
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
 
         .xfer_ready(rd_xfer_ready),
-        .xfer_data_vld(rd_xfer_data_vld),
+        .xfer_data_vld(ecc_out_batch != 4'd8),
         .xfer_data(rd_out_data),
-        .end_of_packet(rd_out_batch == rd_batch_end && rd_page_amount == 0)
+        .end_of_packet(out_end_of_packet)
     );
 
     /* 统计信息 */
@@ -405,7 +458,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end else if(join_request_enable) begin /* 入队时+1 */
             packet_amounts[join_request_sram] <= packet_amounts[join_request_sram] + 1;
         end else if(rd_end_of_packet) begin /* 读取完毕-1 */
-            packet_amounts[pst_rd_sram] <= packet_amounts[pst_rd_sram] - 1;
+            packet_amounts[rd_sram] <= packet_amounts[rd_sram] - 1;
         end
     end
 
@@ -451,7 +504,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
     );
 
     reg [2:0] rd_batch;                      /* 切片计数器 */ 
-    reg [45:0] rd_port;                      /* 正在读取的数据包的端口 */ 
+    reg [5:0] rd_port;                       /* 正在读取的数据包的端口 */ 
     assign rd_xfer_ports[sram] = rd_port;
     reg [10:0] rd_page;                      /* 正在读取的页地址 */ 
     reg rd_page_down;                        /* 是否即将读下一页 */ 
@@ -464,6 +517,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end else if(rd_batch != 3'd7) begin  /* 正在读取一页 */
             rd_batch <= rd_batch + 1;
             rd_page_down <= 0;
+            rd_port <= 5'd16;
         end else if(rd_select != 0) begin    /* 有新的页读取请求 */
             rd_batch <= 3'd0;
             rd_page_down <= 1;
@@ -472,6 +526,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end else begin                       /* 无新的页读取请求 */
             rd_batch <= 3'd7;
             rd_page_down <= 0;
+            rd_port <= 5'd16;
         end
     end
 

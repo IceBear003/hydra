@@ -60,6 +60,7 @@ module tb_test;
         #5 
         rst_n <= 0;
         wr_sop <= 16'h0000;
+        ready <= 16'h0000;
         wr_vld <= 16'h0000;
         wr_eop <= 16'h0000;
         #10 
