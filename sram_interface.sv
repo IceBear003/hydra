@@ -167,8 +167,8 @@ assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld)
                     ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
                     : np_head_ptr;                      /* 其他时间查询顶部空页地址 */
 reg [10:0] new_page;
-always @(posedge clk) begin
-    new_page <= np_dout;
+always @(np_dout) begin
+    new_page = np_dout;
 end                    
 
 /*
@@ -326,4 +326,11 @@ sram sram(
     .rd_addr(sram_rd_addr),
     .dout(rd_xfer_data)
 ); 
+
+// assign wr_en = wr_xfer_data_vld;
+// assign wr_addr = sram_wr_addr;
+// assign din = wr_xfer_data;
+// assign rd_en = rd_page_down || rd_batch != 4'd8;
+// assign rd_addr = sram_rd_addr;
+// assign rd_xfer_data = dout;
 endmodule

@@ -70,9 +70,9 @@ module tb_test;
         #10 
         wr_sop <= 16'h0000;
         wr_vld <= 16'h0001;
-        wr_data <= {9'd66, 3'd4, 4'd3};
+        wr_data <= {9'd31, 3'd4, 4'd3};
         cnt <= 0;
-        for(i=0;i<66;i++) begin
+        for(i=0;i<31;i++) begin
             #10 
             wr_data <= cnt;
         end
@@ -81,9 +81,9 @@ module tb_test;
         #10 
         wr_sop <= 16'h0000;
         wr_vld <= 16'h0001;
-        wr_data <= {9'd64, 3'd4, 4'd4};
+        wr_data <= {9'd56, 3'd3, 4'd3};
         cnt <= 0;
-        for(j=0;j<64;j++) begin
+        for(j=0;j<56;j++) begin
             #10 
             wr_data <= cnt;
         end
@@ -92,21 +92,21 @@ module tb_test;
         #10 
         wr_sop <= 16'h0000;
         wr_vld <= 16'h0001;
-        wr_data <= {9'd64, 3'd4, 4'd5};
+        wr_data <= {9'd128, 3'd5, 4'd3};
         cnt <= 0;
-        for(j=0;j<64;j++) begin
+        for(j=0;j<128;j++) begin
             #10 
             wr_data <= cnt;
         end
         #10 wr_vld <= 16'h0000; wr_eop <= 16'h0001;
         #10 wr_eop <= 16'h0000;
         #10 
-        #10 
-        #10 
-        #10 
-        ready <= 16'h0038;
+        ready <= 16'h0008;
         #10 
         ready <= 16'h0000;
+        #10 
+        #10 
+        #10 
         #10 
         #10 
         #10 

@@ -144,8 +144,8 @@ end
 
 /* 跳转表拼接请求Crossbar通道 Port->SRAM */
 wire concatenate_enables [15:0];
-wire [15:0] concatenate_heads [16:0];
-wire [15:0] concatenate_tails [16:0];
+wire [15:0] concatenate_heads [16:0]; assign concatenate_heads[16] = 0;
+wire [15:0] concatenate_tails [16:0]; assign concatenate_tails[16] = 0;
 wire [15:0] concatenate_select = {concatenate_enables[15] == 1, concatenate_enables[14] == 1, concatenate_enables[13] == 1, concatenate_enables[12] == 1, 
                                   concatenate_enables[11] == 1, concatenate_enables[10] == 1, concatenate_enables[9] == 1, concatenate_enables[8] == 1, 
                                   concatenate_enables[7] == 1, concatenate_enables[6] == 1, concatenate_enables[5] == 1, concatenate_enables[4] == 1, 
@@ -240,7 +240,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
         .match_threshold(match_threshold),
 
-        .new_length(match_length), 
+        .new_length(match_length[8:3]), 
         .match_enable(match_enable),
         .match_suc(match_suc),
 
@@ -339,7 +339,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [3:0] ecc_out_batch;
 
     wire rd_xfer_ready = ready[port] && rd_prior != 4'd8;
-    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end;
+    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end && rd_ecc_out_page_amount != 0;
     wire rd_end_of_page = ecc_in_batch == 3'd7 || rd_end_of_packet;
 
     always @(posedge clk) begin
@@ -349,9 +349,16 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_sram  <= queue_head[rd_prior][15:11];
-            rd_page <= queue_head[rd_prior][10:0];
         end else if(rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end) begin
             rd_sram <= 6'd32;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(rd_xfer_ready) begin
+            rd_page <= queue_head[rd_prior][10:0];
+        end else if(ecc_in_batch == 4'd5) begin
+            rd_page <= rd_xfer_next_page;
         end
     end
 
@@ -404,12 +411,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
-    always @(posedge clk) begin
-        if(ecc_in_batch == 4'd5) begin
-            rd_page <= rd_xfer_next_page;
-        end
-    end
-
     port_rd_dispatch port_rd_dispatch(
         .clk(clk),
         .rst_n(rst_n),
@@ -452,10 +453,41 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     /* 统计信息 */
     reg [8:0] packet_amounts [31:0];
-    integer sram;
-    for(sram = 0; sram < 32; sram = sram + 1)
-        assign port_packet_amounts[port][sram] = packet_amounts[sram];
 
+    assign port_packet_amounts[port][0] = packet_amounts[0];
+    assign port_packet_amounts[port][1] = packet_amounts[1];
+    assign port_packet_amounts[port][2] = packet_amounts[2];
+    assign port_packet_amounts[port][3] = packet_amounts[3];
+    assign port_packet_amounts[port][4] = packet_amounts[4];
+    assign port_packet_amounts[port][5] = packet_amounts[5];
+    assign port_packet_amounts[port][6] = packet_amounts[6];
+    assign port_packet_amounts[port][7] = packet_amounts[7];
+    assign port_packet_amounts[port][8] = packet_amounts[8];
+    assign port_packet_amounts[port][9] = packet_amounts[9];
+    assign port_packet_amounts[port][10] = packet_amounts[10];
+    assign port_packet_amounts[port][11] = packet_amounts[11];
+    assign port_packet_amounts[port][12] = packet_amounts[12];
+    assign port_packet_amounts[port][13] = packet_amounts[13];
+    assign port_packet_amounts[port][14] = packet_amounts[14];
+    assign port_packet_amounts[port][15] = packet_amounts[15];
+    assign port_packet_amounts[port][16] = packet_amounts[16];
+    assign port_packet_amounts[port][17] = packet_amounts[17];
+    assign port_packet_amounts[port][18] = packet_amounts[18];
+    assign port_packet_amounts[port][19] = packet_amounts[19];
+    assign port_packet_amounts[port][20] = packet_amounts[20];
+    assign port_packet_amounts[port][21] = packet_amounts[21];
+    assign port_packet_amounts[port][22] = packet_amounts[22];
+    assign port_packet_amounts[port][23] = packet_amounts[23];
+    assign port_packet_amounts[port][24] = packet_amounts[24];
+    assign port_packet_amounts[port][25] = packet_amounts[25];
+    assign port_packet_amounts[port][26] = packet_amounts[26];
+    assign port_packet_amounts[port][27] = packet_amounts[27];
+    assign port_packet_amounts[port][28] = packet_amounts[28];
+    assign port_packet_amounts[port][29] = packet_amounts[29];
+    assign port_packet_amounts[port][30] = packet_amounts[30];
+    assign port_packet_amounts[port][31] = packet_amounts[31];
+
+    integer sram;
     always @(posedge clk) begin
         if(~rst_n) begin
             for(sram = 0; sram < 32; sram = sram + 1)
