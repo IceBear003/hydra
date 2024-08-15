@@ -369,31 +369,42 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     reg [3:0] rd_xfer_batch;
     wire rd_xfer_eopacket = rd_xfer_page_amount == 0 && rd_xfer_batch == rd_batch_end;
     wire rd_xfer_eopage = rd_xfer_batch == 3'd7 || rd_xfer_eopacket;
+    
+    /*
+     * 读出传输原始数据
+     * |- rd_xfer_data - 传输数据
+     * |- rd_xfer_ecc_code - 传输页的ECC校验码
+     * |- rd_xfer_next_page - 传输页的下页地址
+     */
+    wire [15:0] rd_xfer_data = rd_xfer_page_amount == 0 && rd_xfer_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
+    reg [7:0] rd_xfer_ecc_code;
+    reg [15:0] rd_xfer_next_page;
 
     /*
      * 读出输出控制
      * |- rd_out_page_amount - 输出还剩下多少页
      * |- rd_out_batch - 输出切片编号
+     * |- rd_out_data - 输出数据
      * |- rd_out_eop - 输出终止信号
      */
     reg [6:0] rd_out_page_amount;
     wire [3:0] rd_out_batch;
-    wire rd_out_eop = rd_out_page_amount == 0 && rd_out_batch == rd_batch_end;
-
-    wire [15:0] rd_xfer_data = rd_xfer_page_amount == 0 && rd_xfer_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
-    reg [7:0] rd_xfer_ecc_code;
-    reg [15:0] rd_xfer_next_page;
     wire [15:0] rd_out_data;
+    wire rd_out_eop = rd_out_page_amount == 0 && rd_out_batch == rd_batch_end;
 
     always @(posedge clk) begin
         if(~rst_n) begin
+            pst_rd_prior <= 0;
             rd_sram <= 6'd32;
-        end if(rd_xfer_ready) begin
+            pst_rd_sram <= 0;
+        end if(rd_xfer_ready) begin                                                                     /* 准备时传输时更新读取SRAM，发起读取请求 */
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_sram <= queue_head[rd_prior][15:11];
-        end else if(rd_xfer_page_amount == 0 && rd_xfer_batch == rd_batch_end) begin
-            rd_sram <= 6'd32;
+        end else if(rd_xfer_page_amount == 0) begin                                                     /* 最后一页传输一开始即重置读取SRAM，以防SRAM侧多读 */
+            rd_sram <= 6'd32; //FIXME
+        end else if(rd_out_page_amount == 0) begin                                                      /* 最后一页输出一开始即重置读取SRAM，以防SRAM侧多读 */
+            pst_rd_sram <= 6'd32;
         end
     end
 
@@ -406,42 +417,46 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end
     end
 
+    /* 传输切片计数器 */
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_xfer_batch <= 4'd8;
-        end else if(rd_xfer_ports[rd_sram] == port && ~rd_xfer_eopacket) begin
+        end else if(rd_xfer_ports[rd_sram] == port && ~rd_xfer_eopacket) begin                          /* SRAM正在处理本端口的读出请求，计数器重置 */
             rd_xfer_batch <= 4'd0;
-        end else if(rd_xfer_batch != 4'd8) begin
+        end else if(rd_xfer_batch != 4'd8) begin                                                        /* 自增直到8 */
             rd_xfer_batch <= rd_xfer_batch + 1;
         end
     end
 
-    always @(posedge clk) begin
-        if(~rst_n || rd_xfer_ready) begin
-            rd_xfer_page_amount <= 7'd64;
-            rd_batch_end <= 3'd7;
-        end else if(rd_xfer_page_amount == 7'd64 && rd_out_batch == 4'd0) begin
-            rd_xfer_page_amount <= rd_out_data[15:10] - 1;
-            rd_batch_end <= rd_out_data[9:7];
-        end else if(~rd_xfer_page_amount[6] && rd_xfer_page_amount != 0 && rd_xfer_batch == 4'd7) begin
-            rd_xfer_page_amount <= rd_xfer_page_amount - 1;
-        end
-    end
-
-    always @(posedge clk) begin
-        if(~rst_n || rd_xfer_ready) begin
-            rd_out_page_amount <= 7'd64;
-        end else if(rd_out_page_amount == 7'd64 && rd_out_batch == 4'd0) begin
-            rd_out_page_amount <= rd_out_data[15:10];
-        end else if(~rd_out_page_amount[6] && rd_out_page_amount != 0 && rd_out_batch == 4'd7) begin
-            rd_out_page_amount <= rd_out_page_amount - 1;
-        end
-    end
-
+    /* 获取当前页的下页地址和ECC校验码 */
     always @(posedge clk) begin
         if(rd_xfer_batch == 4'd0) begin
             rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
             rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
+        end
+    end
+
+    /* 更新传输页数量和切片编号 */
+    always @(posedge clk) begin
+        if(~rst_n || rd_xfer_ready) begin                                                               /* 刚开始时为默认值 */
+            rd_xfer_page_amount <= 7'd127;
+            rd_batch_end <= 3'd7;
+        end else if(rd_xfer_page_amount[6] && rd_out_batch == 4'd0) begin                               /* 第一半字纠错结束，获取准确的包长度 */
+            rd_xfer_page_amount <= rd_out_data[15:10] - 1;                                              /* 减去1是考虑已经传输了一页 */
+            rd_batch_end <= rd_out_data[9:7];
+        end else if(rd_xfer_page_amount != 0 && rd_xfer_batch == 4'd7) begin                            /* 每传输一页，剩余页数量-1 */
+            rd_xfer_page_amount <= rd_xfer_page_amount - 1;
+        end
+    end
+
+    /* 更新输出页数量 */
+    always @(posedge clk) begin
+        if(~rst_n || rd_xfer_ready) begin
+            rd_out_page_amount <= 7'd64;
+        end else if(rd_out_page_amount == 7'd64 && rd_out_batch == 4'd0) begin                          /* 第一半字纠错结束，获取准确的包长度 */
+            rd_out_page_amount <= rd_out_data[15:10];
+        end else if(rd_out_page_amount != 0 && rd_out_batch == 4'd7) begin                              /* 每输出一页，剩余页数量-1 */
+            rd_out_page_amount <= rd_out_page_amount - 1;
         end
     end
 
@@ -613,6 +628,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
             rd_batch <= 3'd7;
             rd_page_down <= 0;
             pst_rd_port <= 5'd16;
+            rd_page <= 11'd0;
         end else if(rd_batch != 3'd7) begin                         /* 正在读取一页 */
             rd_batch <= rd_batch + 1;
             rd_page_down <= 0;
