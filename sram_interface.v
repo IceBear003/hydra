@@ -58,7 +58,7 @@ module sram_interface
     input [10:0] rd_page,
     output [15:0] rd_xfer_data,
     output [15:0] rd_next_page,
-    output reg [7:0] rd_ecc_code,
+    output [7:0] rd_ecc_code,
 
     /* free_space - 剩余空间（单位:页） */
     output reg [10:0] free_space
@@ -172,9 +172,7 @@ ecc_encoder ecc_encoder(
 
 /* 从存储器中读出ECC校验码 */
 assign ec_rd_addr = rd_page;
-always @(posedge clk) begin 
-    rd_ecc_code <= ec_dout;
-end
+assign rd_ecc_code = ec_dout;
 
 /* 拼接请求发起/数据包不同页写入 时跳转表的更新 */
 always @(posedge clk) begin

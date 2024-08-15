@@ -178,18 +178,80 @@ encoder_16_4 encoder_concatenate(
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
-    wire wr_xfer_ready;
-    wire wr_xfer_data_vld;
-    wire [15:0] wr_xfer_data;
-    wire wr_xfer_end_of_packet;
-    assign wr_xfer_data_vlds[port] = wr_xfer_data_vld;
-    assign wr_xfer_datas[port] = wr_xfer_data;
-    assign wr_xfer_end_of_packets[port] = wr_xfer_end_of_packet;
+    /* 
+     * 优先级队列管理 
+     * |- queue_head - 队列头部
+     * |- queue_tail - 队列尾部
+     * |- queue_amounts - 队列中数据包数量
+     * |- queue_empty - 队列是否为空
+     */
+    reg [15:0] queue_head [7:0];
+    reg [15:0] queue_tail [7:0];
+    reg [13:0] queue_amounts [7:0];
+    wire [7:0] queue_empty = {queue_head[7] == queue_tail[7], queue_head[6] == queue_tail[6], queue_head[5] == queue_tail[5], queue_head[4] == queue_tail[4], queue_head[3] == queue_tail[3], queue_head[2] == queue_tail[2], queue_head[1] == queue_tail[1], queue_head[0] == queue_tail[0]};
 
+    /* 
+     * 匹配控制信号
+     * |- match_suc - 匹配成功信号
+     * |- match_enable - 匹配使能信号
+     * |- match_dest_port - 匹配目的端口
+     * |- match_length - 匹配长度
+     */
     wire match_suc;
     wire match_enable;
     wire [3:0] match_dest_port;
     wire [8:0] match_length;
+
+    /* 
+     * 匹配参数
+     * |- next_match_sram - 下周期尝试匹配的SRAM
+     * |- match_sram - 当前周期尝试匹配的SRAM
+     * |- accessibility - 当前匹配的SRAM是否被占用
+     * |- free_space - 当前匹配的SRAM的剩余空间
+     * |- packet_amount - 当前匹配的SRAM中对应端口数据包的数量
+     */
+    reg [4:0] next_match_sram;
+    reg [4:0] match_sram;
+    reg accessibility;
+    reg [10:0] free_space;
+    reg [8:0] packet_amount;
+
+    /*
+     * 写入传输控制
+     * |- wr_srams - 当前正写入的SRAM
+     * |- match_srams - 当前匹配到的最优SRAM
+     * |- wr_xfer_ready - 写入传输数据准备信号
+     * |- wr_xfer_data_vld - 写入传输数据有效信号
+     * |- wr_xfer_data - 写入传输信号数据
+     * |- wr_xfer_end_of_packet - 写入传输数据终止信号
+     */
+    reg [5:0] wr_sram;
+    wire [5:0] match_best_sram;
+    wire wr_xfer_ready;
+    wire wr_xfer_data_vld;
+    wire [15:0] wr_xfer_data;
+    wire wr_xfer_end_of_packet;
+    assign wr_srams[port] = wr_sram;
+    assign match_srams[port] = match_best_sram;
+    assign wr_xfer_data_vlds[port] = wr_xfer_data_vld;
+    assign wr_xfer_datas[port] = wr_xfer_data;
+    assign wr_xfer_end_of_packets[port] = wr_xfer_end_of_packet;
+
+    /* join_enable - 入队请求受理信号，驱动下一周期入队过程 */
+    reg join_enable;
+
+    /* 
+     * 拼接请求
+     * |- concatenate_enable - 拼接请求发起信号
+     * |- concatenate_head - 拼接请求头地址
+     * |- concatenate_tail - 拼接请求尾地址
+     */
+    reg concatenate_enable;
+    reg [15:0] concatenate_head;
+    reg [15:0] concatenate_tail;
+    assign concatenate_enables[port] = concatenate_enable;
+    assign concatenate_heads[port] = concatenate_head;
+    assign concatenate_tails[port] = concatenate_tail;
 
     port_wr_frontend port_wr_frontend(
         .clk(clk),
@@ -211,45 +273,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .match_dest_port(match_dest_port),
         .match_length(match_length)
     );
-
-    /* 匹配参数 */
-    reg [4:0] next_match_sram;  /* 下周期尝试匹配的SRAM */
-    reg [4:0] match_sram;       /* 当前周期尝试匹配的SRAM */
-    reg [10:0] free_space;      /* 当前匹配的SRAM的剩余空间 */
-    reg [8:0] packet_amount;    /* 当前匹配的SRAM中对应端口数据包的数量 */
-    reg accessibility;          /* 当前匹配的SRAM是否被占用 */
-    
-    /*
-     * 生成下周期尝试匹配的SRAM，并提前抓取匹配参数
-     * PORT_IDX与时间戳的参与保证同一周期每个端口总尝试匹配不同的SRAM，避免Crossbar写入仲裁
-     */
-    always @(posedge clk) begin
-        case(match_mode)
-            /* 静态分配模式，在端口绑定的2块SRAM之间来回搜索 */
-            0: next_match_sram <= {port[3:0], time_stamp[0]};
-            /* 半动态分配模式，在端口绑定的1块SRAM和16块共享的SRAM中轮流搜索 */
-            1: next_match_sram <= time_stamp[0] ? time_stamp + {port[3:0], 1'b0} : {port[3:0], 1'b0};
-            /* 全动态分配模式，在32块共享的SRAM中轮流搜索 */
-            default: next_match_sram <= time_stamp + {port[3:0], 1'b0};
-        endcase
-        match_sram <= next_match_sram;
-        free_space <= free_spaces[next_match_sram];
-        packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
-        accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
-    end
-
-    reg [5:0] wr_sram;                              /* 当前正写入的SRAM */
-    wire [5:0] match_best_sram;                     /* 当前匹配到的最优SRAM */
-    assign wr_srams[port] = wr_sram;
-    assign match_srams[port] = match_best_sram;
-
-    always @(posedge clk) begin
-        if(~rst_n || wr_xfer_end_of_packet) begin   /* 新数据包传输完毕，解除写入占用 */
-            wr_sram <= 6'd32;
-        end else if(wr_xfer_ready) begin            /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
-            wr_sram <= match_best_sram;
-        end
-    end
     
     port_wr_sram_matcher port_wr_sram_matcher(
         .clk(clk),
@@ -267,106 +290,100 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .free_space(free_space),
         .packet_amount(packet_amount) 
     );
+    
+    /*
+     * 生成下周期尝试匹配的SRAM，并提前抓取匹配参数
+     * PORT_IDX与时间戳的参与保证同一周期每个端口总尝试匹配不同的SRAM，避免Crossbar写入仲裁
+     */
+    always @(posedge clk) begin
+        case(match_mode)
+            /* 静态分配模式，在端口绑定的2块SRAM之间来回搜索 */
+            0: next_match_sram <= {port[3:0], time_stamp[0]};
+            /* 半动态分配模式，在端口绑定的1块SRAM和16块共享的SRAM中轮流搜索 */
+            1: next_match_sram <= time_stamp[0] ? time_stamp + {port[3:0], 1'b0} : {port[3:0], 1'b0};
+            /* 全动态分配模式，在32块共享的SRAM中轮流搜索 */
+            default: next_match_sram <= time_stamp + {port[3:0], 1'b0};
+        endcase
+        match_sram <= next_match_sram;
+        accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 粘滞匹配 */
+        free_space <= free_spaces[next_match_sram];
+        packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
+    end
 
-    /* 优先级队列 */
-    reg [15:0] queue_head [7:0];        /* 队列头部 */
-    reg [15:0] queue_tail [7:0];        /* 队列尾部 */
-    reg [13:0] queue_amounts [7:0];     /* 队列中数据包数量 */
-    wire [7:0] queue_empty = {          /* 队列是否为空 */
-        queue_head[7] == queue_tail[7], 
-        queue_head[6] == queue_tail[6], 
-        queue_head[5] == queue_tail[5], 
-        queue_head[4] == queue_tail[4], 
-        queue_head[3] == queue_tail[3], 
-        queue_head[2] == queue_tail[2], 
-        queue_head[1] == queue_tail[1], 
-        queue_head[0] == queue_tail[0]
-    };
+    /* 更新正在写入的SRAM编号 */
+    always @(posedge clk) begin
+        if(~rst_n || wr_xfer_end_of_packet) begin   /* 新数据包传输完毕，解除写入占用 */
+            wr_sram <= 6'd32;
+        end else if(wr_xfer_ready) begin            /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
+            wr_sram <= match_best_sram;
+        end
+    end
 
-    /* 入队请求 */
-    reg join_enable;            /* 是否为本端口的入队请求，驱动下一周期入队过程 */
+    /* 更新入队请求受理使能信号 */
     always @(posedge clk) begin
         join_enable <= join_dest_ports[processing_join] == port;
     end
-
-    reg concatenate_enable;             /* 拼接请求发起信号 */
-    reg [15:0] concatenate_head;        /* 拼接请求头地址 */
-    reg [15:0] concatenate_tail;        /* 拼接请求尾地址 */
-    assign concatenate_enables[port] = concatenate_enable;
-    assign concatenate_heads[port] = concatenate_head;
-    assign concatenate_tails[port] = concatenate_tail;
     
-    /* 有新数据包加入非空队列时发起拼接请求 */
+    /* 有新数据包入队时发起拼接请求 */
     always @(posedge clk) begin
+        concatenate_enable <= join_enable;
         if(join_enable) begin
-            concatenate_enable <= 1;
-            if(~queue_empty[join_prior]) begin                      /* 队列非空时 */
-                concatenate_head <= queue_tail[join_prior];         /* 拼接头为原队尾 */
-                concatenate_tail <= join_head;                      /* 拼接尾为新数据包头*/
-            end else begin                                                  /* 队列为空时 */
-                concatenate_head <= {join_sram, join_tails[join_sram]};  /* 拼接头为新数据包尾 */
-                concatenate_tail <= {join_sram, join_tails[join_sram]};  /* 拼接尾为新数据包尾*/
+            if(~queue_empty[join_prior]) begin                          /* 队列非空时 */
+                concatenate_head <= queue_tail[join_prior];             /* 拼接头为原队尾 */
+                concatenate_tail <= join_head;                          /* 拼接尾为新数据包头*/
+            end else begin                                              /* 队列为空时 */
+                concatenate_head <= {join_sram, join_tails[join_sram]}; /* 拼接头为新数据包尾 */
+                concatenate_tail <= {join_sram, join_tails[join_sram]}; /* 拼接尾为新数据包尾*/
             end
-        end else begin
-            concatenate_enable <= 0;
-        end
-    end
-
-    /* 队尾维护 */
-    always @(posedge clk) begin
-        if(~rst_n) begin
-            queue_tail[0] <= 16'd0; queue_tail[1] <= 16'd0; queue_tail[2] <= 16'd0; queue_tail[3] <= 16'd0;
-            queue_tail[4] <= 16'd0; queue_tail[5] <= 16'd0; queue_tail[6] <= 16'd0; queue_tail[7] <= 16'd0;
-        end if(join_enable) begin
-            queue_tail[join_prior] <= join_tails[join_sram];/* join_tails无需缓存，因为尾部预测本身需要2个周期 */
-        end
-    end
-
-    /* 队头维护 */
-    always @(posedge clk) begin
-        if(~rst_n) begin
-            queue_head[0] <= 16'd0; queue_head[1] <= 16'd0; queue_head[2] <= 16'd0; queue_head[3] <= 16'd0;
-            queue_head[4] <= 16'd0; queue_head[5] <= 16'd0; queue_head[6] <= 16'd0; queue_head[7] <= 16'd0;
-        end else if(join_enable && queue_empty[join_prior]) begin   /* 新数据包加入空队列时，无需发起拼接，但需要更新队头到数据包首 */
-            queue_head[join_prior] <= join_head; 
-        end else if(~rd_end_of_packet) begin                                        /* 数据包读取完毕，更新队列头指针 */
-        end else if(rd_xfer_next_page != queue_tail[pst_rd_prior]) begin            /* 队列有数据包剩余 */
-            queue_head[pst_rd_prior] <= rd_xfer_next_pages[pst_rd_sram];
-        end else begin                                                              /* 队列无数据包剩余 */
-            queue_head[pst_rd_prior] <= queue_tail[pst_rd_prior];
         end
     end
  
-    /* 读出 */
+    /* 
+     * 读出控制
+     * |- rd_prior - 下一次读出的队列编号 
+     * |- pst_rd_prior - 正在读出的队列编号
+     * |- rd_sram - 正在传输的数据包对应的SRAM编号(在传输完毕时重置) 
+     * |- pst_rd_sram - 正在输出的数据包对应的SRAM编号(在输出完毕时重置)
+     * |- rd_page - 正在传输的页地址
+     * |- rd_batch_end - 数据包最后一页有多少半字
+     */
     wire [3:0] rd_prior;
-    reg [2:0] pst_rd_prior;     /* 持久化本次读取的队列(rd_sop后rd_prior将会更新) */
-
+    reg [2:0] pst_rd_prior;
     reg [5:0] rd_sram;
-    assign rd_srams[port] = rd_sram;
     reg [4:0] pst_rd_sram;
-    
     reg [10:0] rd_page;
+    reg [2:0] rd_batch_end;
+    assign rd_srams[port] = rd_sram;
     assign rd_xfer_pages[port] = rd_page;
 
-    reg [6:0] rd_ecc_in_page_amount;   /* 数据包有多少页 */
-    reg [6:0] rd_ecc_out_page_amount;   /* 数据包有多少页 */
-    reg [2:0] rd_batch_end;     /* 数据包最后一页有多少半字 */
-
-    reg [3:0] ecc_in_batch;
-    wire [3:0] ecc_out_batch;
-
+    /*
+     * 读出传输控制
+     * |- rd_xfer_ready - 读出传输发起信号
+     * |- rd_xfer_page_amount - 传输还剩下多少页
+     * |- rd_xfer_batch - 传输切片编号
+     * |- rd_xfer_eopacket - 数据包传输终止信号 TODO FIXME
+     * |- rd_xfer_eopage - 数据页传输终止信号
+     */
     wire rd_xfer_ready = ready[port] && rd_prior != 4'd8;
-    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end && ~rd_over;
-    reg rd_over;
-    always @(posedge clk) begin
-        if(~rst_n || rd_xfer_ready) begin
-            rd_over <= 0;
-        end else if(rd_end_of_packet) begin
-            rd_over <= 1;
-        end
-    end
+    reg [6:0] rd_xfer_page_amount;
+    reg [3:0] rd_xfer_batch;
+    wire rd_xfer_eopacket = rd_xfer_page_amount == 0 && rd_xfer_batch == rd_batch_end;
+    wire rd_xfer_eopage = rd_xfer_batch == 3'd7 || rd_xfer_eopacket;
 
-    wire rd_end_of_page = ecc_in_batch == 3'd7 || rd_end_of_packet;
+    /*
+     * 读出输出控制
+     * |- rd_out_page_amount - 输出还剩下多少页
+     * |- rd_out_batch - 输出切片编号
+     * |- rd_out_eop - 输出终止信号
+     */
+    reg [6:0] rd_out_page_amount;
+    wire [3:0] rd_out_batch;
+    wire rd_out_eop = rd_out_page_amount == 0 && rd_out_batch == rd_batch_end;
+
+    wire [15:0] rd_xfer_data = rd_xfer_page_amount == 0 && rd_xfer_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
+    reg [7:0] rd_xfer_ecc_code;
+    reg [15:0] rd_xfer_next_page;
+    wire [15:0] rd_out_data;
 
     always @(posedge clk) begin
         if(~rst_n) begin
@@ -375,7 +392,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_sram <= queue_head[rd_prior][15:11];
-        end else if(rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end) begin
+        end else if(rd_xfer_page_amount == 0 && rd_xfer_batch == rd_batch_end) begin
             rd_sram <= 6'd32;
         end
     end
@@ -383,57 +400,47 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(rd_xfer_ready) begin
             rd_page <= queue_head[rd_prior][10:0];
-        end else if(rd_ecc_in_page_amount == 0) begin
-        end else if(ecc_in_batch == 4'd5) begin
+        end else if(rd_xfer_page_amount == 0) begin
+        end else if(rd_xfer_batch == 4'd5) begin
             rd_page <= rd_xfer_next_page;
         end
     end
 
     always @(posedge clk) begin
         if(~rst_n) begin
-            ecc_in_batch <= 4'd8;
-        end else if(rd_xfer_ports[rd_sram] == port && ~rd_end_of_packet) begin
-            ecc_in_batch <= 4'd0;
-        end else if(ecc_in_batch != 4'd8) begin
-            ecc_in_batch <= ecc_in_batch + 1;
+            rd_xfer_batch <= 4'd8;
+        end else if(rd_xfer_ports[rd_sram] == port && ~rd_xfer_eopacket) begin
+            rd_xfer_batch <= 4'd0;
+        end else if(rd_xfer_batch != 4'd8) begin
+            rd_xfer_batch <= rd_xfer_batch + 1;
         end
     end
 
     always @(posedge clk) begin
         if(~rst_n || rd_xfer_ready) begin
-            rd_ecc_in_page_amount <= 7'd64;
+            rd_xfer_page_amount <= 7'd64;
             rd_batch_end <= 3'd7;
-        end else if(rd_ecc_in_page_amount == 7'd64 && ecc_out_batch == 4'd0) begin
-            rd_ecc_in_page_amount <= rd_out_data[15:10] - 1;
+        end else if(rd_xfer_page_amount == 7'd64 && rd_out_batch == 4'd0) begin
+            rd_xfer_page_amount <= rd_out_data[15:10] - 1;
             rd_batch_end <= rd_out_data[9:7];
-        end else if(~rd_ecc_in_page_amount[6] && rd_ecc_in_page_amount != 0 && ecc_in_batch == 4'd7) begin
-            rd_ecc_in_page_amount <= rd_ecc_in_page_amount - 1;
+        end else if(~rd_xfer_page_amount[6] && rd_xfer_page_amount != 0 && rd_xfer_batch == 4'd7) begin
+            rd_xfer_page_amount <= rd_xfer_page_amount - 1;
         end
     end
 
     always @(posedge clk) begin
         if(~rst_n || rd_xfer_ready) begin
-            rd_ecc_out_page_amount <= 7'd64;
-        end else if(rd_ecc_out_page_amount == 7'd64 && ecc_out_batch == 4'd0) begin
-            rd_ecc_out_page_amount <= rd_out_data[15:10];
-        end else if(~rd_ecc_out_page_amount[6] && rd_ecc_out_page_amount != 0 && ecc_out_batch == 4'd7) begin
-            rd_ecc_out_page_amount <= rd_ecc_out_page_amount - 1;
+            rd_out_page_amount <= 7'd64;
+        end else if(rd_out_page_amount == 7'd64 && rd_out_batch == 4'd0) begin
+            rd_out_page_amount <= rd_out_data[15:10];
+        end else if(~rd_out_page_amount[6] && rd_out_page_amount != 0 && rd_out_batch == 4'd7) begin
+            rd_out_page_amount <= rd_out_page_amount - 1;
         end
     end
 
-    wire [15:0] rd_xfer_data = rd_ecc_in_page_amount == 0 && ecc_in_batch > rd_batch_end ? 0 : rd_xfer_datas[pst_rd_sram];
-    reg [7:0] rd_xfer_ecc_code;
-    reg [15:0] rd_xfer_next_page;
-    wire [15:0] rd_out_data;
-
     always @(posedge clk) begin
-        if(ecc_in_batch == 4'd0) begin
+        if(rd_xfer_batch == 4'd0) begin
             rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
-        end
-    end
-
-    always @(posedge clk) begin
-        if(ecc_in_batch == 4'd6) begin
             rd_xfer_ecc_code <= rd_xfer_ecc_codes[pst_rd_sram];
         end
     end
@@ -445,22 +452,20 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .wrr_en(wrr_en[port]),
 
         .queue_empty(queue_empty),
-        .update(rd_end_of_packet),
-        .rd_prior(rd_prior)
+        .prior_update(rd_xfer_eopacket),
+        .prior_next(rd_prior)
     );
-    
-    wire out_end_of_packet = rd_ecc_out_page_amount == 0 && ecc_out_batch == rd_batch_end;
 
     ecc_decoder port_ecc_decoder(
         .clk(clk),
         .rst_n(rst_n),
 
-        .in_batch(ecc_in_batch),
-        .data(rd_xfer_data),
-        .code(rd_xfer_ecc_code),
+        .in_batch(rd_xfer_batch),
+        .in_data(rd_xfer_data),
+        .ecc_code(rd_xfer_ecc_code),
 
-        .out_end_of_packet(out_end_of_packet),
-        .out_batch(ecc_out_batch),
+        .end_of_packet(rd_out_eop),
+        .out_batch(rd_out_batch),
         .out_data(rd_out_data)
     );
 
@@ -472,15 +477,39 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .rd_vld(rd_vld[port]),
         .rd_data(rd_data[port]),
 
-        .xfer_ready(rd_xfer_ready),
-        .xfer_data_vld(ecc_out_batch != 4'd8),
-        .xfer_data(rd_out_data),
-        .end_of_packet(out_end_of_packet)
+        .out_ready(rd_xfer_ready),
+        .out_data_vld(rd_out_batch != 4'd8),
+        .out_data(rd_out_data),
+        .end_of_packet(rd_out_eop)
     );
 
-    /* 统计信息 */
-    reg [8:0] packet_amounts [31:0];
+    /* 优先级队列队尾维护 */
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            queue_tail[0] <= 16'd0; queue_tail[1] <= 16'd0; queue_tail[2] <= 16'd0; queue_tail[3] <= 16'd0;
+            queue_tail[4] <= 16'd0; queue_tail[5] <= 16'd0; queue_tail[6] <= 16'd0; queue_tail[7] <= 16'd0;
+        end if(join_enable) begin
+            queue_tail[join_prior] <= {join_sram, join_tails[join_sram]};           /* join_tails无需缓存，因为尾部预测本身需要2个周期 */
+        end
+    end
 
+    /* 优先级队列队头维护 */
+    always @(posedge clk) begin
+        if(~rst_n) begin
+            queue_head[0] <= 16'd0; queue_head[1] <= 16'd0; queue_head[2] <= 16'd0; queue_head[3] <= 16'd0;
+            queue_head[4] <= 16'd0; queue_head[5] <= 16'd0; queue_head[6] <= 16'd0; queue_head[7] <= 16'd0;
+        end else if(join_enable && queue_empty[join_prior]) begin                   /* 新数据包加入空队列时，队头更新到数据包首 */
+            queue_head[join_prior] <= join_head; 
+        end else if(~rd_xfer_eopacket) begin                                        /* 数据包读取传输完毕，更新队列头指针 */
+        end else if(rd_xfer_next_page != queue_tail[pst_rd_prior]) begin            /* 队列有数据包剩余，队首接到下一页的地址 */
+            queue_head[pst_rd_prior] <= rd_xfer_next_pages[pst_rd_sram];
+        end else begin                                                              /* 队列无数据包剩余，赋值队首使之队尾相同 */
+            queue_head[pst_rd_prior] <= queue_tail[pst_rd_prior];
+        end
+    end
+
+    /* packet_amounts - 端口在各个SRAM中数据包存量 */
+    reg [8:0] packet_amounts [31:0];
     assign port_packet_amounts[port][0] = packet_amounts[0];
     assign port_packet_amounts[port][1] = packet_amounts[1];
     assign port_packet_amounts[port][2] = packet_amounts[2];
@@ -514,19 +543,20 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     assign port_packet_amounts[port][30] = packet_amounts[30];
     assign port_packet_amounts[port][31] = packet_amounts[31];
 
+    /* 更新端口在各个SRAM中数据包存量的统计信息 */
     integer sram;
     always @(posedge clk) begin
         if(~rst_n) begin
             for(sram = 0; sram < 32; sram = sram + 1)
                 packet_amounts[sram] <= 0;
-        end else if(join_enable) begin /* 入队时+1 */
+        end else if(join_enable && rd_xfer_eopacket) begin          /* 边读边写不变 */
+        end else if(join_enable) begin                              /* 有数据包入队时+1 */
             packet_amounts[join_sram] <= packet_amounts[join_sram] + 1;
-        end else if(rd_end_of_packet) begin /* 读取完毕-1 */
+        end else if(rd_xfer_eopacket) begin                         /* 读取数据包完毕-1 */
             packet_amounts[rd_sram] <= packet_amounts[rd_sram] - 1;
         end
     end
 
-    //TODO 调试用
     wire [15:0] debug_head = queue_head[3];
     wire [15:0] debug_tail = queue_tail[3];
     wire [15:0] debug_amount = packet_amounts[1];
@@ -534,7 +564,6 @@ end endgenerate
 
 genvar sram;
 generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
-
     /* 
      * 由Crossbar选通矩阵得到的选通信号
      * |- wr_select - 写选通信号
