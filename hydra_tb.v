@@ -1,5 +1,5 @@
 `timescale  1ns / 1ps
-`include "hydra.sv"
+`include "hydra.v"
 module tb_test;
     reg clk = 0;
     initial

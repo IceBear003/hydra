@@ -1,12 +1,11 @@
-`include "port_wr_frontend.sv"
-`include "port_wr_sram_matcher.sv"
-`include "port_rd_frontend.sv"
-`include "port_rd_dispatch.sv"
-`include "sram_interface.sv"
-`include "ecc_decoder.sv"
-`include "encoder_16_4.sv"
-`include "encoder_32_5.sv"
-
+`include "port_wr_frontend.v"
+`include "port_wr_sram_matcher.v"
+`include "port_rd_frontend.v"
+`include "port_rd_dispatch.v"
+`include "sram_interface.v"
+`include "ecc_decoder.v"
+`include "encoder_16_4.v"
+`include "encoder_32_5.v"
 module hydra
 (
     /* 时钟与复位信号 */
