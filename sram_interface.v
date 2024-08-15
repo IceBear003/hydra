@@ -150,7 +150,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin      /* 页末时准备将结果写入ECC编码存储器 */ //TODO
+    if(wr_batch == 3'd7 && wr_xfer_data_vld || wr_end_of_packet) begin      /* 页末时准备将结果写入ECC编码存储器 */
         ec_wr_en <= 1;
         ec_wr_addr <= wr_page;
     end else begin
