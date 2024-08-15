@@ -32,7 +32,7 @@ module sram_interface
     input [10:0] rd_page,
 
     output [15:0] rd_xfer_data,
-    output reg [15:0] rd_next_page,
+    output [15:0] rd_next_page,
     output reg [7:0] rd_ecc_code,
 
     /* 统计 */
@@ -143,9 +143,7 @@ reg [15:0] jt_dout;
 always @(posedge clk) begin jt_dout <= jump_table[jt_rd_addr]; end
 /* 生成当前读取的页链接下一页 */
 assign jt_rd_addr = rd_page;
-always @(posedge clk) begin
-    rd_next_page <= jt_dout;
-end
+assign rd_next_page = jt_dout;
 
 /* 
  * 空闲队列
@@ -166,10 +164,7 @@ always @(posedge clk) begin np_dout <= null_pages[np_rd_addr]; end
 assign np_rd_addr = (wr_state == 2'd0 && wr_xfer_data_vld) 
                     ? np_head_ptr + wr_xfer_data[15:10] /* 在数据包刚开始传输时预测数据包尾页地址 */
                     : np_head_ptr;                      /* 其他时间查询顶部空页地址 */
-reg [10:0] new_page;
-always @(np_dout) begin
-    new_page = np_dout;
-end                    
+wire [10:0] new_page = np_dout;
 
 /*
  * 以FIFO形式维护空闲队列
@@ -258,7 +253,7 @@ always @(posedge clk) begin
         join_request_prior <= wr_xfer_data[6:4];
         join_request_head <= {SRAM_IDX, wr_page};
     end
-    if(wr_state == 2'd1 && wr_batch == 3'd2) begin                  /* 尾部预测完成后追加入队请求的数据包尾页地址 */
+    if(wr_state == 2'd1 && wr_batch == 3'd1) begin                  /* 尾部预测完成后追加入队请求的数据包尾页地址 */
         join_request_tail <= {SRAM_IDX, new_page};
     end
 end

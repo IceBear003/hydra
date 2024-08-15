@@ -218,7 +218,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         match_sram <= next_match_sram;
         free_space <= free_spaces[next_match_sram];
         packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
-        accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
+        accessibility <= accessibilities[next_match_sram] ;//|| wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
     end
 
     reg [5:0] wr_sram;                              /* 当前正写入的SRAM */
@@ -314,7 +314,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             queue_head[join_request_prior] <= join_request_head; 
         end else if(~rd_end_of_packet) begin                                        /* 数据包读取完毕，更新队列头指针 */
         end else if(rd_xfer_next_page != queue_tail[pst_rd_prior]) begin            /* 队列有数据包剩余 */
-            queue_head[pst_rd_prior] <= rd_xfer_next_page;
+            queue_head[pst_rd_prior] <= rd_xfer_next_pages[pst_rd_sram];
         end else begin                                                              /* 队列无数据包剩余 */
             queue_head[pst_rd_prior] <= queue_tail[pst_rd_prior];
         end
@@ -357,6 +357,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(rd_xfer_ready) begin
             rd_page <= queue_head[rd_prior][10:0];
+        end else if(rd_ecc_in_page_amount == 0) begin
         end else if(ecc_in_batch == 4'd5) begin
             rd_page <= rd_xfer_next_page;
         end
@@ -365,7 +366,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(~rst_n) begin
             ecc_in_batch <= 4'd8;
-        end else if(rd_xfer_ports[rd_sram] == port) begin
+        end else if(rd_xfer_ports[rd_sram] == port && ~rd_end_of_packet) begin
             ecc_in_batch <= 4'd0;
         end else if(ecc_in_batch != 4'd8) begin
             ecc_in_batch <= ecc_in_batch + 1;
@@ -400,7 +401,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [15:0] rd_out_data;
 
     always @(posedge clk) begin
-        if(ecc_in_batch == 4'd1) begin
+        if(ecc_in_batch == 4'd0) begin
             rd_xfer_next_page <= rd_xfer_next_pages[pst_rd_sram];
         end
     end
@@ -500,8 +501,8 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     end
 
     //TODO 调试用
-    wire [15:0] debug_head = queue_head[4];
-    wire [15:0] debug_tail = queue_tail[4];
+    wire [15:0] debug_head = queue_head[3];
+    wire [15:0] debug_tail = queue_tail[3];
     wire [15:0] debug_amount = packet_amounts[1];
 end endgenerate
 
@@ -593,7 +594,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         .join_request_head(join_request_heads[sram]),
         .join_request_tail(join_request_tails[sram]),
 
-        .concatenate_enable(concatenate_head[15:11] == sram),
+        .concatenate_enable(concatenate_head[15:11] == sram && concatenate_select != 0),
         .concatenate_head(concatenate_head[10:0]), 
         .concatenate_tail(concatenate_tail),
 
