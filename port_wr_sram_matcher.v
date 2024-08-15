@@ -25,10 +25,10 @@ module port_wr_sram_matcher(
 );
 
 /* 
- * 匹配状态
- * |- 0 - 未匹配
- * |- 1 - 匹配中(落后于match_enable一拍)
- * |- 2 - 匹配完成(与match_end同步拉高)
+ * match_state - 匹配状态
+ *             |- 0 - 未匹配
+ *             |- 1 - 匹配中(落后于match_enable一拍)
+ *             |- 2 - 匹配完成(与match_end同步拉高)
  */
 reg [1:0] match_state;
 
@@ -72,7 +72,7 @@ always @(posedge clk) begin
         max_amount <= 0;
         match_best_sram <= 6'd32;
     end else if(~accessible) begin                  /* 未被占用 */
-    end else if(free_space < new_length + 1) begin      /* 空间足够 */
+    end else if(free_space < new_length + 1) begin  /* 空间足够 */
     end else if(packet_amount >= max_amount) begin  /* 比当前更优 */
         match_best_sram <= match_sram;
         max_amount <= packet_amount;

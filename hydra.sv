@@ -218,7 +218,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         match_sram <= next_match_sram;
         free_space <= free_spaces[next_match_sram];
         packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
-        accessibility <= accessibilities[next_match_sram] ;//|| wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
+        accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 正在写入的SRAM可被粘滞匹配选中 */
     end
 
     reg [5:0] wr_sram;                              /* 当前正写入的SRAM */
@@ -339,7 +339,16 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     wire [3:0] ecc_out_batch;
 
     wire rd_xfer_ready = ready[port] && rd_prior != 4'd8;
-    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end && rd_ecc_out_page_amount != 0;
+    wire rd_end_of_packet = rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end && ~rd_over;
+    reg rd_over;
+    always @(posedge clk) begin
+        if(~rst_n || rd_xfer_ready) begin
+            rd_over <= 0;
+        end else if(rd_end_of_packet) begin
+            rd_over <= 1;
+        end
+    end
+
     wire rd_end_of_page = ecc_in_batch == 3'd7 || rd_end_of_packet;
 
     always @(posedge clk) begin
@@ -348,7 +357,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         end if(rd_xfer_ready) begin
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
-            pst_rd_sram  <= queue_head[rd_prior][15:11];
+            pst_rd_sram <= queue_head[rd_prior][15:11];
         end else if(rd_ecc_in_page_amount == 0 && ecc_in_batch == rd_batch_end) begin
             rd_sram <= 6'd32;
         end

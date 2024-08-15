@@ -1,4 +1,8 @@
 module ecc_encoder(
+    /* 
+     * |- data_x - 页中第x半字的数据
+     * |- code - (136,128)ECC编码
+     */
     input [15:0] data_0,
     input [15:0] data_1,
     input [15:0] data_2,

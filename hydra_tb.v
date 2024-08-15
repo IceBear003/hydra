@@ -1,4 +1,3 @@
-//~ `New testbench
 `timescale  1ns / 1ps
 `include "hydra.sv"
 module tb_test;
@@ -72,7 +71,7 @@ module tb_test;
         wr_vld <= 16'h0001;
         wr_data <= {9'd31, 3'd4, 4'd3};
         cnt <= 0;
-        for(i=0;i<31;i++) begin
+        for(i=0;i<31;i+=1) begin
             #10 
             wr_data <= cnt;
         end
