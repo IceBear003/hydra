@@ -59,10 +59,10 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(match_enable && match_tick != match_threshold) begin
-        match_tick <= match_tick + 1;
-    end else begin
+    if(~rst_n || match_state == 2'd2) begin
         match_tick <= 0;
+    end if(match_enable && match_tick != match_threshold) begin
+        match_tick <= match_tick + 1;
     end
 end
 

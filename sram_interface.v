@@ -179,9 +179,9 @@ always @(posedge clk) begin
     if(concatenate_enable) begin                                        /* 不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    // end else if(wr_end_of_packet) begin                                 /* 数据包尾页指向自身 */
+    // end else if(wr_end_of_packet) begin                              /* 数据包尾页指向自身 */
     end else if(~wr_xfer_data_vld) begin
-    end else if(wr_page != join_tail) begin         /* 数据包内相邻两页的拼接 */
+    end else if(wr_page != join_tail) begin                             /* 数据包内相邻两页的拼接 */
         jt_wr_addr <= wr_page;
         jt_din <= {sram_idx, np_dout};
     end 
@@ -318,10 +318,10 @@ sram sram(
 ); 
 
 // assign wr_en = wr_xfer_data_vld;
-// assign wr_addr = sram_wr_addr;
+// assign wr_addr = {wr_page, wr_batch};
 // assign din = wr_xfer_data;
 // assign rd_en = rd_page_down || rd_batch != 4'd8;
-// assign rd_addr = sram_rd_addr;
+// assign rd_addr = {rd_page, rd_page_down ? 3'd0 : rd_batch[2:0]};
 // assign rd_xfer_data = dout;
 
 endmodule

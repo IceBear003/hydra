@@ -22,7 +22,7 @@ wire [15:0] rd_sop;
 wire [15:0] rd_eop;
 wire [15:0] rd_vld; 
 wire [15:0] [15:0] rd_data;
-wire [31:0] [15:0] left_packet_amounts;
+reg [31:0] left_packet_amounts[15:0] ;
 
 hydra hydra(
     .clk(clk),
@@ -67,12 +67,15 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
     integer prior;
     integer dest_port;
     integer i;
+    wire [31:0] left = left_packet_amounts[port_wr];
     initial begin
+        left_packet_amounts[port_wr] = 0;
         #525
-        for(packet_amount = 0; packet_amount < 30; packet_amount = packet_amount + 1) begin
+        for(packet_amount = 0; packet_amount < 20; packet_amount = packet_amount + 1) begin
             length = $urandom_range(31,511);
             prior = $urandom_range(0,7);
             dest_port = $urandom_range(0,15);
+            left_packet_amounts[dest_port] = left_packet_amounts[dest_port] + 1; 
             wr_sop[port_wr] <= 1;
             wr_eop[port_wr] <= 0;
             #10
@@ -106,6 +109,7 @@ generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_l
             #10;
             ready[port_rd] <= 0;
             if(rd_sop[port_rd]) begin
+                left_packet_amounts[port_rd] = left_packet_amounts[port_rd] - 1;
                 rd_cnt = rd_cnt + 1;
                 while(rd_eop[port_rd] != 1) begin
                     #10;
@@ -121,7 +125,7 @@ end endgenerate
 
 always @(posedge clk) begin
     if(finish_wr == 0) begin
-        #150000
+        #110000
         $finish;
     end
 end
