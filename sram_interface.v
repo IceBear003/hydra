@@ -179,10 +179,12 @@ always @(posedge clk) begin
     if(concatenate_enable) begin                                        /* 不同数据包间跳转表的拼接 */
         jt_wr_addr <= concatenate_head;
         jt_din <= concatenate_tail;
-    end else if(wr_xfer_data_vld && wr_page != join_tail) begin         /* 数据包内相邻两页的拼接 */
+    // end else if(wr_end_of_packet) begin                                 /* 数据包尾页指向自身 */
+    end else if(~wr_xfer_data_vld) begin
+    end else if(wr_page != join_tail) begin         /* 数据包内相邻两页的拼接 */
         jt_wr_addr <= wr_page;
         jt_din <= {sram_idx, np_dout};
-    end
+    end 
 end
 
 /* 从跳转表中读取当前页的下一页地址 */
@@ -250,6 +252,7 @@ always @(posedge clk) begin
 end
 
 /* 刚写入时生成并发起入队请求 */
+wire [3:0] out_of_date_stamp = time_stamp[3:0] + 2;
 always @(posedge clk) begin
     join_enable <= wr_state == 2'd0 && wr_xfer_data_vld;                /* 发起入队请求 */
     if(~rst_n) begin
@@ -262,11 +265,8 @@ always @(posedge clk) begin
         join_dest_port <= wr_xfer_data[3:0];
         join_prior <= wr_xfer_data[6:4];
         join_head <= wr_page;
-    end else if(time_stamp + 5'd1 == join_time_stamp) begin
-        join_time_stamp <= 6'd34;                                       /* 31周期后销毁入队请求 */
-        join_dest_port <= 0;
-        join_prior <= 0;
-        join_head <= 0;
+    end else if(time_stamp[3:0] == join_time_stamp[3:0] && ~(wr_state == 2'd1 && wr_batch == 3'd1)) begin
+        join_time_stamp <= 6'd34;                                       /* 16周期后销毁入队请求 */
     end
     if(wr_state == 2'd1 && wr_batch == 3'd1) begin                      /* 尾部预测完成后追加入队请求的数据包尾页地址 */
         join_tail <= np_dout;
@@ -285,7 +285,7 @@ always @(posedge clk) begin
 end
 
 /* 写入数据包长度持久化 */
-reg [5:0] packet_length;
+reg [6:0] packet_length;                                                /* 7位是防止最大包长的数据包溢出，导致free_space不正常减少 */
 always @(posedge clk) begin
     if(wr_state == 2'd0 && wr_xfer_data_vld) begin
         packet_length <= wr_xfer_data[15:10] + 1;
@@ -296,7 +296,8 @@ end
 always @(posedge clk) begin
     if(~rst_n) begin
         free_space <= 11'd2047;
-    end else if(join_enable && rd_page_down) begin
+    end 
+    else if(join_enable && rd_page_down) begin
         free_space <= free_space - packet_length + 1;
     end else if(join_enable) begin
         free_space <= free_space - packet_length;

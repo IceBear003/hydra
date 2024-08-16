@@ -22,6 +22,7 @@ wire [15:0] rd_sop;
 wire [15:0] rd_eop;
 wire [15:0] rd_vld; 
 wire [15:0] [15:0] rd_data;
+wire [31:0] [15:0] left_packet_amounts;
 
 hydra hydra(
     .clk(clk),
@@ -37,13 +38,15 @@ hydra hydra(
     .rd_eop(rd_eop),
     .rd_vld(rd_vld),
     .rd_data(rd_data),
+    .left_packet_amounts(left_packet_amounts),
 
     .wrr_en(16'hFFFF),
     .match_threshold(5'd30),
     .match_mode(2'd2)
 );
 
-reg [15:0] finish = 1;
+reg [15:0] finish_wr = 1;
+reg [15:0] finish_rd = 1;
 
 initial begin
     $dumpfile("testbench_hydra.vcd");
@@ -66,8 +69,8 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
     integer dest_port;
     integer i;
     initial begin
-        #25
-        for(packet_amount = 0; packet_amount < 10; packet_amount = packet_amount + 1) begin
+        #525
+        for(packet_amount = 0; packet_amount < 30; packet_amount = packet_amount + 1) begin
             length = $urandom_range(31,511);
             prior = $urandom_range(0,7);
             dest_port = $urandom_range(0,15);
@@ -86,34 +89,40 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
             wr_eop[port_wr] <= 1;
             #10;
         end
-        finish[port_wr] <= 0;
+        finish_wr[port_wr] <= 0;
     end
 end endgenerate
 
+integer rd_cnt = 0;
+
 genvar port_rd;
 generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_loop
-    integer packet_amount;
-    integer length;
-    integer prior;
-    integer dest_port;
-    integer i;
     initial begin
-        #1005
-        for(packet_amount = 0; packet_amount < 10; packet_amount = packet_amount + 1) begin
-            ready[port_rd] <= 1;
+        #1000
+        while(finish_wr != 0) begin
+            #10;
+        end
+        ready[port_rd] <= 1;
+        while(left_packet_amounts[port_rd] > 0) begin
             #10;
             ready[port_rd] <= 0;
-            if(rd_sop) begin
+            if(rd_sop[port_rd]) begin
+                rd_cnt = rd_cnt + 1;
                 while(rd_eop[port_rd] != 1) begin
                     #10;
                 end
+                ready[port_rd] <= 1;
             end
         end
+        #10;
+        ready[port_rd] <= 0;
+        finish_rd[port_rd] <= 0;
     end
 end endgenerate
 
 always @(posedge clk) begin
-    if(finish == 0) begin
+    if(finish_wr == 0) begin
+        #150000
         $finish;
     end
 end

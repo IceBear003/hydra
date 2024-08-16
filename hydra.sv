@@ -59,9 +59,9 @@ reg [4:0] ts_tail_ptr;
  * |- free_spaces - SRAM剩余空间
  * |- accessibilities - SRAM占用状态
  */
- wire [8:0] port_packet_amounts [15:0][31:0];
- wire [10:0] free_spaces [31:0];
- wire [31:0] accessibilities;
+wire [8:0] port_packet_amounts [15:0][31:0];
+wire [10:0] free_spaces [31:0];
+wire [31:0] accessibilities;
 
 /* 
  * Crossbar选通矩阵
@@ -80,9 +80,10 @@ wire [5:0] rd_srams [15:0];
  * |- wr_xfer_end_of_packets - 写入传输终止
  */
 wire wr_xfer_data_vlds [16:0];
-wire [15:0] wr_xfer_datas [15:0];
+wire [15:0] wr_xfer_datas [116:0];
 wire wr_xfer_end_of_packets [16:0];
 assign wr_xfer_data_vlds[16] = 0;
+assign wr_xfer_datas[16] = 0;
 assign wr_xfer_end_of_packets[16] = 0;
 
 /* 
@@ -396,15 +397,11 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         if(~rst_n) begin
             pst_rd_prior <= 0;
             rd_sram <= 6'd32;
-            pst_rd_sram <= 0;
         end if(rd_xfer_ready) begin                                                                     /* 准备时传输时更新读取SRAM，发起读取请求 */
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
-            pst_rd_sram <= queue_head[rd_prior][15:11];
         end else if(rd_xfer_page_amount == 0 && rd_xfer_batch == 0) begin                               /* 最后一页传输一开始即重置读取SRAM，以防SRAM侧多读 */
-            rd_sram <= 6'd32; //FIXME
-        end else if(rd_out_page_amount == 0) begin                                                      /* 最后一页输出一开始即重置读取SRAM，以防SRAM侧多读 */
-            pst_rd_sram <= 6'd32;
+            rd_sram <= 6'd32;
         end
     end
 
@@ -421,8 +418,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     always @(posedge clk) begin
         if(~rst_n) begin
             rd_xfer_batch <= 4'd8;
+            pst_rd_sram <= 0;
         end else if(rd_xfer_ports[rd_sram] == port && ~rd_xfer_eopacket) begin                          /* SRAM正在处理本端口的读出请求，计数器重置 */
             rd_xfer_batch <= 4'd0;
+            pst_rd_sram <= rd_sram;
         end else if(rd_xfer_batch != 4'd8) begin                                                        /* 自增直到8 */
             rd_xfer_batch <= rd_xfer_batch + 1;
         end
