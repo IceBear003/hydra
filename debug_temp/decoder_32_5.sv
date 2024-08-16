@@ -1,4 +1,4 @@
-module decoder_32_5(
+module encoder_32_5(
     input [31:0] select,
     output reg [5:0] idx
 );

@@ -35,14 +35,14 @@ hydra my_dut
     .pause ({input_if[15].pause,input_if[14].pause,input_if[13].pause,input_if[12].pause,input_if[11].pause,input_if[10].pause,input_if[9].pause,input_if[8].pause,input_if[7].pause,input_if[6].pause,input_if[5].pause,input_if[4].pause,input_if[3].pause,input_if[2].pause,input_if[1].pause,input_if[0].pause}),
 
     .wrr_enable (1),
-    .match_threshold (15),
+    .match_threshold (30),
     .match_mode (2),
     
     .full (full),
     .almost_full (almost_full),
 
     .ready ({output_if[15].ready,output_if[14].ready,output_if[13].ready,output_if[12].ready,output_if[11].ready,output_if[10].ready,output_if[9].ready,output_if[8].ready,output_if[7].ready,output_if[6].ready,output_if[5].ready,output_if[4].ready,output_if[3].ready,output_if[2].ready,output_if[1].ready,output_if[0].ready}),
-    .rd_s ({output_if[15].rd_s,output_if[14].rd_s,output_if[13].rd_s,output_if[12].rd_s,output_if[11].rd_s,output_if[10].rd_s,output_if[9].rd_s,output_if[8].rd_s,output_if[7].rd_s,output_if[6].rd_s,output_if[5].rd_s,output_if[4].rd_s,output_if[3].rd_s,output_if[2].rd_s,output_if[1].rd_s,output_if[0].rd_s}),
+    //.rd_s ({output_if[15].rd_s,output_if[14].rd_s,output_if[13].rd_s,output_if[12].rd_s,output_if[11].rd_s,output_if[10].rd_s,output_if[9].rd_s,output_if[8].rd_s,output_if[7].rd_s,output_if[6].rd_s,output_if[5].rd_s,output_if[4].rd_s,output_if[3].rd_s,output_if[2].rd_s,output_if[1].rd_s,output_if[0].rd_s}),
     .rd_sop ({output_if[15].rd_sop,output_if[14].rd_sop,output_if[13].rd_sop,output_if[12].rd_sop,output_if[11].rd_sop,output_if[10].rd_sop,output_if[9].rd_sop,output_if[8].rd_sop,output_if[7].rd_sop,output_if[6].rd_sop,output_if[5].rd_sop,output_if[4].rd_sop,output_if[3].rd_sop,output_if[2].rd_sop,output_if[1].rd_sop,output_if[0].rd_sop}),
     .rd_eop ({output_if[15].rd_eop,output_if[14].rd_eop,output_if[13].rd_eop,output_if[12].rd_eop,output_if[11].rd_eop,output_if[10].rd_eop,output_if[9].rd_eop,output_if[8].rd_eop,output_if[7].rd_eop,output_if[6].rd_eop,output_if[5].rd_eop,output_if[4].rd_eop,output_if[3].rd_eop,output_if[2].rd_eop,output_if[1].rd_eop,output_if[0].rd_eop}),
     .rd_vld ({output_if[15].rd_vld,output_if[14].rd_vld,output_if[13].rd_vld,output_if[12].rd_vld,output_if[11].rd_vld,output_if[10].rd_vld,output_if[9].rd_vld,output_if[8].rd_vld,output_if[7].rd_vld,output_if[6].rd_vld,output_if[5].rd_vld,output_if[4].rd_vld,output_if[3].rd_vld,output_if[2].rd_vld,output_if[1].rd_vld,output_if[0].rd_vld}),
@@ -56,7 +56,10 @@ end
 
 int time_stamp;
 
-always #(T/2) time_stamp = time_stamp + 1;
+always @(posedge clk) begin
+    time_stamp = time_stamp + 1;
+    $display("tim e = %d",time_stamp);
+end
 
 generate
     for(genvar i=0; i<16; i=i+1) begin
@@ -67,6 +70,10 @@ generate
             uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"time_stamp",time_stamp);
             uvm_config_db#(virtual my_if)::set(null,$sformatf("uvm_test_top.o_agt[%0d].mon_out", i),"vif",output_if[i]);
             //uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.o_agt[%0d].drv", i),"var",i);
+        end
+        always @(posedge clk) begin
+            uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"time_stamp",time_stamp);
+            $display("ti m e = %d",time_stamp);
         end
     end
 endgenerate
@@ -82,11 +89,11 @@ always #(T/2) clk <= ~clk;
 generate
     for(genvar i=0; i<16; i=i+1) begin
         initial begin
-            #3009
+            #30009
             output_if[i].ready <= 1;
         end
 
-        always@ (posedge clk) begin 
+        always @(posedge clk) begin 
             if(!rst_n) begin
                 output_if[i].ready <= 0;
             end else if(output_if[i].rd_eop) begin

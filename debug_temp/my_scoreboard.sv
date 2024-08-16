@@ -49,9 +49,9 @@ task my_scoreboard::main_phase(uvm_phase phase);
                     `uvm_info("my_scoreboard","Compare SUCCESSFULLY",UVM_LOW);
                     expect_queue.pop_front();
                 end else if(expect_queue.size() == 1 || expect_queue[0][47:16] != expect_queue[1][47:16]) begin
-                    `uvm_error("my_scoreboard","Compare FAILED");
-                    $display("the expect pkt is %d",tmp_tran);
-                    $display("the actural pkt is %d",get_actual.ctrl);
+                    $display("the expect pkt is %d %d",tmp_tran,expect_queue[0][47:16]);
+                    $display("the actural pkt is %d %d %d",get_actual.ctrl,expect_queue[1][47:16],expect_queue.size());
+                    `uvm_error("my_scoreboard","Com pare FAILED");
                     expect_queue.pop_front();
                 end else begin
                     bit suc_if = 0;
@@ -68,15 +68,15 @@ task my_scoreboard::main_phase(uvm_phase phase);
                         end
                     end
                     if(!suc_if) begin
-                        `uvm_error("my_scoreboard","Compare FAILED");
-                        $display("the expect pkt is %d",tmp_tran);
+                        $display("the expect pkt is %d %d",tmp_tran,expect_queue[0][47:16]);
                         $display("the actural pkt is %d",get_actual.ctrl);
+                        `uvm_error("my_scoreboard","Compare FAILED");
                         expect_queue.pop_front();
                     end
                 end
             end else if(get_actual.vld) begin
-                `uvm_error("my_scoreboard","Received from DUT, while Expected Queue is empty");
                 $display("the unexpected pkt is %d",get_actual.ctrl);
+                `uvm_error("my_scoreboard","Received from DUT, while Expected Queue is empty");
             end
         end
     join

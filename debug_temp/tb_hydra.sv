@@ -38,8 +38,8 @@ reg [15:0] wr_sop_1  ;
 
 initial
     begin
-        $dumpfile("test_7_1_2.vcd");
-        $dumpvars();
+        //$dumpfile("test_7_1_2.vcd");
+        //$dumpvars();
         file = $fopen("D:/Engineer/Hydra_2/hydra/debug_temp/in.txt","r+");
         clk     =   1'b1;
         rst_n   <=  1'b0;
@@ -61,10 +61,10 @@ initial
         ready <= 16'b0000000000111;
       #4
         ready <= 0;*/
-      #1000
-      $finish;
+      #30000
+      //$finish;
       //#14400
-      //  ready_1 <= 16'hFFFF;
+        ready <= 16'hFFFF;
 
     end
 
@@ -182,7 +182,7 @@ always@(posedge clk or  negedge rst_n) begin
     if(!rst_n) begin
         cnt_pack <= 0;
     end else begin
-        for (i = 0;i<1;i = i + 1) begin
+        for (i = 0;i<16;i = i + 1) begin
                 if(rd_eop[i]) begin
                     cnt_pack = cnt_pack + 1;
                     //ready_1[i] <= 1;
@@ -193,24 +193,32 @@ end
 
 reg [4:0] cnt_rd_st;
 reg [4:0] cnt_rd_ed;
-
+/*
 always@(posedge clk or  negedge rst_n) begin
     if(!rst_n) begin
         cnt_rd_st <= 0;
         cnt_rd_ed <= 0;
         ready <= 0;
-    end else if(ready_1 != 0) begin
+    end else if(ready != 0) begin
         cnt_rd_st <= 0;
         cnt_rd_ed <= 0;
     end else begin
-        for (i = 0;i<1;i = i + 1) begin
-            if(rd_s[i])
+        for (i = 0;i<16;i = i + 1) begin
+            if(rd_sop[i])
                 cnt_rd_st = cnt_rd_st + 1;
             if(rd_eop[i])
                 cnt_rd_ed = cnt_rd_ed + 1;
         end
         if(cnt_rd_st == cnt_rd_ed && cnt_rd_st != 0)
-            ready_1 <= 16'hFFFF;
+            ready <= 16'hFFFF;
+    end
+end
+*/
+
+always@(posedge clk or  negedge rst_n) begin
+    for (i = 0;i<16;i = i + 1) begin
+        if(rd_eop[i])
+            ready[i] <= 1;
     end
 end
 
@@ -226,14 +234,14 @@ always@(posedge clk or  negedge rst_n) begin
         cnt_wr_st <= 0;
         cnt_wr_ed <= 0;
     end else begin
-        for (i = 0;i<1;i = i + 1) begin
+        for (i = 0;i<16;i = i + 1) begin
             if(wr_sop[i])
                 cnt_wr_st = cnt_wr_st + 1;
             if(wr_eop[i])
                 cnt_wr_ed = cnt_wr_ed + 1;
         end
-        //if((cnt_wr_st == cnt_wr_ed && cnt_wr_st != 0) && cnt_sop < 700)
-        //    wr_sop_1 <= 16'hFFFF;
+        if((cnt_wr_st == cnt_wr_ed && cnt_wr_st != 0) && cnt_sop < 100)
+            wr_sop_1 <= 16'hFFFF;
     end
 end
 
@@ -246,7 +254,7 @@ reg     [15:0][1:0]   state   ;
 reg     [15:0][11:0]   cnt     ;
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1) begin
+for(i=0 ; i<16 ; i=i+1) begin
     if(rst_n == 4'b0)
         state[i] <= IDLE;
     else
@@ -273,31 +281,31 @@ reg    [6:0]  data_up[15:0] ;
 //assign  data_up =   (state == RD_CTRL) ? (512+16) / 16 : data_up;
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(state[i] == RD_CTRL) begin
         data_up[i] = ($random);
         if(data_up[i] < 32)
             data_up[i] = 31;
         
-        //data_up[i] = 55;
+        //data_up[i] = 31;
         
     end
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(rst_n == 4'b0)
         wr_data[i] <= 4'b0;
     else if(state[i] == RD_CTRL) begin
         //wr_data <= $random % 65536;
         wr_data[i][15:7] <= data_up[i];
-        wr_data[i][6:4] <= $random;
-        wr_data[i][3:0] <= i;
+        wr_data[i][6:4] <= 1;
+        wr_data[i][3:0] <= $random;
     end
     else if(state[i] == RD_DATA)
         wr_data[i] <= cnt[i];
             
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(rst_n == 0 || state == IDLE)
     begin
         wr_vld[i] = 0;
@@ -327,7 +335,7 @@ reg     [3:0]   eop_t[15:0];
 reg     [3:0]   eop_ti[15:0];
 
 always@(posedge clk or  negedge rst_n)
-    for(i=0 ; i<1 ; i=i+1) begin
+    for(i=0 ; i<16 ; i=i+1) begin
         if(rst_n == 0)
         begin
             wr_eop[i] <= 0;
@@ -353,14 +361,14 @@ always@(posedge clk or  negedge rst_n)
     end
     
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(wr_sop[i] == 1)
     begin
         wr_sop[i] <= 0;
     end
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(wr_sop_1[i] == 1)
     begin
         wr_sop_1[i] <= 0;
@@ -369,14 +377,14 @@ for(i=0 ; i<1 ; i=i+1)
 always@(posedge clk or  negedge rst_n) wr_sop <= wr_sop_1;
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(ready[i] == 1)
     begin
         ready[i] <= 0;
     end
 
 always@(posedge clk or  negedge rst_n)
-for(i=0 ; i<1 ; i=i+1)
+for(i=0 ; i<16 ; i=i+1)
     if(ready_1[i] == 1)
     begin
         ready_1[i] <= 0;
