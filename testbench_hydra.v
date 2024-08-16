@@ -38,7 +38,6 @@ hydra hydra(
     .rd_eop(rd_eop),
     .rd_vld(rd_vld),
     .rd_data(rd_data),
-    .left_packet_amounts(left_packet_amounts),
 
     .wrr_en(16'hFFFF),
     .match_threshold(5'd30),
