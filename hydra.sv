@@ -361,7 +361,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
      * |- rd_xfer_ready - 读出传输发起信号
      * |- rd_xfer_page_amount - 传输还剩下多少页
      * |- rd_xfer_batch - 传输切片编号
-     * |- rd_xfer_eopacket - 数据包传输终止信号 TODO FIXME
+     * |- rd_xfer_eopacket - 数据包传输终止信号
      * |- rd_xfer_eopage - 数据页传输终止信号
      */
     wire rd_xfer_ready = ready[port] && rd_prior != 4'd8;
@@ -401,7 +401,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             pst_rd_prior <= rd_prior;
             rd_sram <= queue_head[rd_prior][15:11];
             pst_rd_sram <= queue_head[rd_prior][15:11];
-        end else if(rd_xfer_page_amount == 0) begin                                                     /* 最后一页传输一开始即重置读取SRAM，以防SRAM侧多读 */
+        end else if(rd_xfer_page_amount == 0 && rd_xfer_batch == 0) begin                               /* 最后一页传输一开始即重置读取SRAM，以防SRAM侧多读 */
             rd_sram <= 6'd32; //FIXME
         end else if(rd_out_page_amount == 0) begin                                                      /* 最后一页输出一开始即重置读取SRAM，以防SRAM侧多读 */
             pst_rd_sram <= 6'd32;
