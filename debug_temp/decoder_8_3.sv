@@ -1,4 +1,4 @@
-module decoder_8_3(
+module encoder_8_3(
     input [7:0] select,
     output reg [3:0] idx
 );

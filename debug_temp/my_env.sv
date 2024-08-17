@@ -15,6 +15,8 @@ class my_env extends uvm_env;
     uvm_tlm_analysis_fifo#(my_transaction) agt_mdl_fifo[16];
     uvm_tlm_analysis_fifo#(my_transaction) agt_scb_fifo[16];
     uvm_tlm_analysis_fifo#(my_transaction) agt_sbd_fifo[16];
+    uvm_tlm_analysis_fifo#(my_transaction) mdl_sbd_fifo[16];
+    uvm_tlm_analysis_fifo#(my_transaction) mdl_scb_fifo[16];
     uvm_tlm_analysis_fifo#(my_transaction) agt_o_mdl_fifo[16];
 
     function new(string name = "my_env", uvm_component parent);
@@ -31,6 +33,8 @@ class my_env extends uvm_env;
             agt_mdl_fifo[i] = new($sformatf("agt_mdl_fifo[%0d]", i),this);
             agt_scb_fifo[i] = new($sformatf("agt_scb_fifo[%0d]", i),this);
             agt_sbd_fifo[i] = new($sformatf("agt_sbd_fifo[%0d]", i),this);
+            mdl_sbd_fifo[i] = new($sformatf("mdl_sbd_fifo[%0d]", i),this);
+            mdl_scb_fifo[i] = new($sformatf("mdl_scb_fifo[%0d]", i),this);
             agt_o_mdl_fifo[i] = new($sformatf("agt_o_mdl_fifo[%0d]", i),this);
             scb[i] = new($sformatf("scb[%0d]", i),this);
         end
@@ -48,6 +52,10 @@ class my_env extends uvm_env;
             scb[i].act_port.connect(agt_scb_fifo[i].blocking_get_export);
             mdl.ap[i].connect(agt_sbd_fifo[i].analysis_export);
             scb[i].exp_port.connect(agt_sbd_fifo[i].blocking_get_export);
+            mdl.ap_1[i].connect(mdl_scb_fifo[i].analysis_export);
+            scb[i].exp_port_1.connect(mdl_scb_fifo[i].blocking_get_export);
+            scb[i].ap.connect(mdl_sbd_fifo[i].analysis_export);
+            mdl.act_port[i].connect(mdl_sbd_fifo[i].blocking_get_export);
         end
     endfunction
     `uvm_component_utils(my_env);

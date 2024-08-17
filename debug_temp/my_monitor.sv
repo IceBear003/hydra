@@ -49,6 +49,7 @@ task my_monitor::collect_one_pkt(my_transaction tr);
             tr.ctrl = vif.wr_data;
             tr.vld = 1;
             tr.ctrl[47:16] = vif.time_stamp;
+            $display("time_stamp = %d",vif.time_stamp);
             ap.write(tr);
             @(posedge vif.clk);
             tr.vld = 0;
@@ -134,7 +135,7 @@ task my_monitor_out::collect_one_pkt(my_transaction tr);
                     if(vif.rd_eop) break;
                 end
                 if(len - 1 != tr.ctrl[15:7]) begin
-                    $display("len = %d %d",len - 1,tr.ctrl[15:7]);
+                    $display("len = %d %d %d",len - 1,tr.ctrl[15:7],tr.ctrl);
                     `uvm_fatal("my_monitor_out","length not right!");
                 end
                 `uvm_info("my_monitor_out","end collect one pkt",UVM_LOW);

@@ -8,7 +8,9 @@ import uvm_pkg::*;
 class my_scoreboard extends uvm_scoreboard;
     logic [47:0] expect_queue[$];
     uvm_blocking_get_port#(my_transaction) exp_port;
+    uvm_blocking_get_port#(my_transaction) exp_port_1;
     uvm_blocking_get_port#(my_transaction) act_port;
+    uvm_analysis_port#(my_transaction) ap;
     extern function new(string name,uvm_component parent = null);
     extern function void build_phase(uvm_phase phase);
     extern virtual task main_phase(uvm_phase phase);
@@ -22,12 +24,14 @@ endfunction
 function void my_scoreboard::build_phase(uvm_phase phase);
     super.build_phase(phase);
     exp_port = new("exp_port",this);
+    exp_port_1 = new("exp_port_1",this);
     act_port = new("act_port",this);
+    ap = new("ap",this);
 endfunction
 
 task my_scoreboard::main_phase(uvm_phase phase);
-    my_transaction get_expect,get_actual;
-    logic [15:0] tmp_tran;
+    my_transaction get_expect,get_actual,tmp_tran;
+    //logic [15:0] tmp_tran;
     logic result;
     super.main_phase(phase);
     `uvm_info("my_scoreboard","begin to compare",UVM_LOW);
@@ -35,25 +39,29 @@ task my_scoreboard::main_phase(uvm_phase phase);
         while(1) begin
             //`uvm_info("my_scoreboard","getting expect",UVM_LOW);
             exp_port.get(get_expect);
-            $display("expect = %d %d",get_expect.ctrl,get_expect.vld);
+            $display("expect = %d %d",get_expect.ctrl[15:0],get_expect.vld);
             if(get_expect.vld)
                 expect_queue.push_back(get_expect.ctrl);
         end
         while(1) begin
             act_port.get(get_actual);
             if(expect_queue.size() > 0 && get_actual.vld) begin
-                $display("acutal = %d %d",get_actual.ctrl,get_actual.vld);
-                tmp_tran = expect_queue[0];
-                result = (get_actual.ctrl == tmp_tran);
+                $display("acutal = %d %d %d %d",get_actual.ctrl[3:0],
+                get_actual.ctrl,get_actual.vld,get_actual.ctrl[6:4]);
+                //tmp_tran = expect_queue[0];
+                ap.write(get_actual);
+                exp_port_1.get(tmp_tran);
+                result = (get_actual.ctrl[15:0] == tmp_tran.ctrl[15:0]);
                 if(result) begin
                     `uvm_info("my_scoreboard","Compare SUCCESSFULLY",UVM_LOW);
                     expect_queue.pop_front();
-                end else if(expect_queue.size() == 1 || expect_queue[0][47:16] != expect_queue[1][47:16]) begin
-                    `uvm_error("my_scoreboard","Compare FAILED");
-                    $display("the expect pkt is %d",tmp_tran);
-                    $display("the actural pkt is %d",get_actual.ctrl);
-                    expect_queue.pop_front();
                 end else begin
+                    $display("the expect pkt is %d %d",tmp_tran.ctrl[15:0],tmp_tran.ctrl[6:4]);
+                    $display("the actural pkt is %d %d %d"
+                    ,get_actual.ctrl,expect_queue.size(),get_actual.ctrl[6:4]);
+                    `uvm_error("my_scoreboard","Com pare FAILED");
+                    expect_queue.pop_front();
+                end/* else begin
                     bit suc_if = 0;
                     for(int i = 0; expect_queue[0][47:16] == expect_queue[i][47:16]; i = i + 1) begin
                         tmp_tran = expect_queue[i];
@@ -68,15 +76,15 @@ task my_scoreboard::main_phase(uvm_phase phase);
                         end
                     end
                     if(!suc_if) begin
-                        `uvm_error("my_scoreboard","Compare FAILED");
-                        $display("the expect pkt is %d",tmp_tran);
+                        $display("the expect pkt is %d %d",tmp_tran,expect_queue[0][47:16]);
                         $display("the actural pkt is %d",get_actual.ctrl);
+                        `uvm_error("my_scoreboard","Compare FAILED");
                         expect_queue.pop_front();
                     end
-                end
+                end*/
             end else if(get_actual.vld) begin
-                `uvm_error("my_scoreboard","Received from DUT, while Expected Queue is empty");
                 $display("the unexpected pkt is %d",get_actual.ctrl);
+                `uvm_error("my_scoreboard","Received from DUT, while Expected Queue is empty");
             end
         end
     join
