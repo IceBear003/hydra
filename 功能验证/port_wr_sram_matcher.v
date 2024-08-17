@@ -76,7 +76,7 @@ always @(posedge clk) begin
     end else if(~accessible) begin                  /* 未被占用 */
     end else if(free_space < new_length + 1) begin  /* 空间足够 */
     end else if(packet_amount >= max_amount) begin  /* 比当前更优 */
-        match_best_sram <= match_sram;
+        match_best_sram <= 1;
         max_amount <= packet_amount;
         match_find <= 1;
     end
