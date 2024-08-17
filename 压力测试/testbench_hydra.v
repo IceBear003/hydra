@@ -27,7 +27,10 @@ wire [15:0] rd_sop;
 wire [15:0] rd_eop;
 wire [15:0] rd_vld; 
 wire [15:0] [15:0] rd_data;
-reg [31:0] left_packet_amounts[15:0] ;
+// wire [3:0] ppa_port;
+// wire [31:0][8:0]  ppa;
+
+reg [31:0] left_packet_amounts[15:0];
 
 hydra hydra(
     .clk(clk),
@@ -43,9 +46,11 @@ hydra hydra(
     .rd_eop(rd_eop),
     .rd_vld(rd_vld),
     .rd_data(rd_data),
+    // .ppa_port(ppa_port),
+    // .ppa(ppa),
 
     .wrr_en(16'hFFFF),
-    .match_threshold(5'd30),
+    .match_threshold(5'd20),
     .match_mode(2'd2)
 );
 
@@ -54,9 +59,10 @@ reg [15:0] finish_rd = 16'hFFFF;
 
 integer out_file;
 initial begin
+    #200
     out_file = $fopen("statistic.txt");
-    // $dumpfile("testbench_hydra.vcd");
-    // $dumpvars();
+    $dumpfile("testbench_hydra.vcd");
+    $dumpvars();
     #5 
     rst_n <= 0;
     ready <= 16'h0000;
@@ -78,7 +84,7 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
     initial begin
         left_packet_amounts[port_wr] = 0;
         #525
-        for(packet_amount = 0; packet_amount < 30; packet_amount = packet_amount + 1) begin
+        for(packet_amount = 0; packet_amount < 20; packet_amount = packet_amount + 1) begin
             length = $urandom_range(31,511);
             prior = $urandom_range(0,7);
             dest_port = $urandom_range(0,15);
@@ -97,10 +103,25 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
             wr_vld[port_wr] <= 0;
             wr_eop[port_wr] <= 1;
             #10;
+            wr_eop[port_wr] <= 0;
         end
         finish_wr[port_wr] <= 0;
     end
 end endgenerate
+
+// integer tmp;
+// initial begin
+//     #1000
+//     while(finish_wr != 0) begin
+//         #10;
+//     end
+//     for(tmp = 0; tmp < 16; tmp = tmp + 1) begin
+//         $fdisplay(out_file, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d ", 
+//         ppa_port, ppa[0], ppa[1], ppa[2], ppa[3], ppa[4], ppa[5], ppa[6], ppa[7], ppa[8], ppa[9], ppa[10], ppa[11], ppa[12], ppa[13], ppa[14], ppa[15], 
+//         ppa[16], ppa[17], ppa[18], ppa[19], ppa[20], ppa[21], ppa[22], ppa[23], ppa[24], ppa[25], ppa[26], ppa[27], ppa[28], ppa[29], ppa[30], ppa[31]);
+//         #10;
+//     end
+// end
 
 integer rd_cnt = 0;
 
@@ -115,6 +136,7 @@ generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_l
         while(finish_wr != 0) begin
             #10;
         end
+        #100
         ready[port_rd] <= 1;
         while(left_packet_amounts[port_rd] > 0) begin
             #10;
@@ -132,7 +154,7 @@ generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_l
                     end 
                 end
                 end_tick = tick;
-                $fdisplay(out_file, "%d %d %d %d %d", port_rd, start_tick, end_tick, response_tick, packet_length);
+                $fdisplay(out_file, "%d %d %d %d", port_rd, 4 * (end_tick - start_tick + 1), 4 * (response_tick - start_tick - 1), 16 * packet_length);
                 ready[port_rd] <= 1;
             end
         end
@@ -143,8 +165,9 @@ generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_l
 end endgenerate
 
 always @(posedge clk) begin
-    if(finish_rd == 0) begin
-        #1000
+    if(finish_wr == 0) begin
+        #100000
+        $fclose(out_file);
         $finish;
     end
 end
