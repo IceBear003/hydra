@@ -34,7 +34,7 @@ hydra my_dut
     .wr_data ({input_if[15].wr_data,input_if[14].wr_data,input_if[13].wr_data,input_if[12].wr_data,input_if[11].wr_data,input_if[10].wr_data,input_if[9].wr_data,input_if[8].wr_data,input_if[7].wr_data,input_if[6].wr_data,input_if[5].wr_data,input_if[4].wr_data,input_if[3].wr_data,input_if[2].wr_data,input_if[1].wr_data,input_if[0].wr_data}),
     .pause ({input_if[15].pause,input_if[14].pause,input_if[13].pause,input_if[12].pause,input_if[11].pause,input_if[10].pause,input_if[9].pause,input_if[8].pause,input_if[7].pause,input_if[6].pause,input_if[5].pause,input_if[4].pause,input_if[3].pause,input_if[2].pause,input_if[1].pause,input_if[0].pause}),
 
-    .wrr_enable (1),
+    .wrr_en (16'hFFFF),
     .match_threshold (30),
     .match_mode (2),
     
@@ -58,7 +58,7 @@ int time_stamp;
 
 always @(posedge clk) begin
     time_stamp = time_stamp + 1;
-    $display("tim e = %d",time_stamp);
+    //$display("tim e = %d",time_stamp);
 end
 
 generate
@@ -73,7 +73,7 @@ generate
         end
         always @(posedge clk) begin
             uvm_config_db#(int)::set(null,$sformatf("uvm_test_top.i_agt[%0d].drv", i),"time_stamp",time_stamp);
-            $display("ti m e = %d",time_stamp);
+            //$display("ti m e = %d",time_stamp);
         end
     end
 endgenerate
@@ -89,7 +89,7 @@ always #(T/2) clk <= ~clk;
 generate
     for(genvar i=0; i<16; i=i+1) begin
         initial begin
-            #30009
+            #60009
             output_if[i].ready <= 1;
         end
 

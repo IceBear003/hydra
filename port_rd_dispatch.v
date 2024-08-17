@@ -1,4 +1,4 @@
-`include "encoder_8_3.v"
+
 module port_rd_dispatch(
     input clk,
     input rst_n,

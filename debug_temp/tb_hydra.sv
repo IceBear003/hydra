@@ -298,7 +298,7 @@ for(i=0 ; i<16 ; i=i+1)
     else if(state[i] == RD_CTRL) begin
         //wr_data <= $random % 65536;
         wr_data[i][15:7] <= data_up[i];
-        wr_data[i][6:4] <= 1;
+        wr_data[i][6:4] <= $random;
         wr_data[i][3:0] <= $random;
     end
     else if(state[i] == RD_DATA)
