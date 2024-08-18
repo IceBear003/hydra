@@ -114,19 +114,20 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
     end
 end endgenerate
 
-// integer tmp;
-// initial begin
-//     #1000
-//     while(finish_wr != 0) begin
-//         #10;
-//     end
-//     for(tmp = 0; tmp < 16; tmp = tmp + 1) begin
-//         $fdisplay(out_file, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d ", 
-//         ppa_port, ppa[0], ppa[1], ppa[2], ppa[3], ppa[4], ppa[5], ppa[6], ppa[7], ppa[8], ppa[9], ppa[10], ppa[11], ppa[12], ppa[13], ppa[14], ppa[15], 
-//         ppa[16], ppa[17], ppa[18], ppa[19], ppa[20], ppa[21], ppa[22], ppa[23], ppa[24], ppa[25], ppa[26], ppa[27], ppa[28], ppa[29], ppa[30], ppa[31]);
-//         #10;
-//     end
-// end
+integer tmp;
+
+initial begin
+    #1000
+    while(finish_wr != 0) begin
+        #10;
+    end
+    for(tmp = 0; tmp < 16; tmp = tmp + 1) begin
+        $fdisplay(out_file, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d ", 
+        ppa_port, ppa[0], ppa[1], ppa[2], ppa[3], ppa[4], ppa[5], ppa[6], ppa[7], ppa[8], ppa[9], ppa[10], ppa[11], ppa[12], ppa[13], ppa[14], ppa[15], 
+        ppa[16], ppa[17], ppa[18], ppa[19], ppa[20], ppa[21], ppa[22], ppa[23], ppa[24], ppa[25], ppa[26], ppa[27], ppa[28], ppa[29], ppa[30], ppa[31]);
+        #10;
+    end
+end
 
 integer rd_cnt = 0;
 
