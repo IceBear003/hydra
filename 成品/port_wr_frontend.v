@@ -147,9 +147,9 @@ end
 always @(posedge clk) begin
     if(~rst_n) begin
         match_enable <= 0;
-    end else if(wr_vld && wr_state == 2'd1) begin   /* 使能匹配过程 */
+    end else if(wr_vld && wr_state == 2'd1) begin                           /* 使能匹配过程 */
         match_enable <= 1;
-    end else if(match_suc) begin                    /* 重置 */
+    end else if(xfer_state == 2'd0 && (match_suc || pst_match_suc)) begin   /* 重置 */
         match_enable <= 0;
     end
 end

@@ -50,7 +50,7 @@ hydra hydra(
     // .ppa(ppa),
 
     .wrr_en(16'hFFFF),
-    .match_threshold(5'd20),
+    .match_threshold(5'd30),
     .match_mode(2'd2)
 );
 
@@ -84,7 +84,7 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
     initial begin
         left_packet_amounts[port_wr] = 0;
         #525
-        for(packet_amount = 0; packet_amount < 20; packet_amount = packet_amount + 1) begin
+        for(packet_amount = 0; packet_amount < 100; packet_amount = packet_amount + 1) begin
             length = $urandom_range(31,511);
             prior = $urandom_range(0,7);
             dest_port = $urandom_range(0,15);
@@ -97,6 +97,11 @@ generate for(port_wr = 0; port_wr < 16; port_wr = port_wr + 1) begin : port_wr_l
             wr_data[port_wr] <= {length[8:0], prior[2:0], dest_port[3:0]};
             #10
             for(i = 0; i < length; i = i + 1) begin
+                while(pause) begin
+                    wr_vld[port_wr] <= 0;
+                    #10;
+                end
+                wr_vld[port_wr] <= 1;
                 wr_data[port_wr] <= i[15:0];
                 #10;
             end
@@ -165,8 +170,8 @@ generate for(port_rd = 0; port_rd < 16; port_rd = port_rd + 1) begin : port_rd_l
 end endgenerate
 
 always @(posedge clk) begin
-    if(finish_wr == 0) begin
-        #100000
+    if(finish_rd == 0) begin
+        #10000
         $fclose(out_file);
         $finish;
     end

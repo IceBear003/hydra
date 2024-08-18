@@ -252,7 +252,6 @@ always @(posedge clk) begin
 end
 
 /* 刚写入时生成并发起入队请求 */
-wire [3:0] out_of_date_stamp = time_stamp[3:0] + 2;
 always @(posedge clk) begin
     join_enable <= wr_state == 2'd0 && wr_xfer_data_vld;                /* 发起入队请求 */
     if(~rst_n) begin

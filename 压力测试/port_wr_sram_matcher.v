@@ -7,6 +7,7 @@ module port_wr_sram_matcher(
     /* 与前端交互的信号 */
     input [5:0] new_length,
     input match_enable,
+    input xfer_ready,
     output reg match_suc,
 
     /*
@@ -67,7 +68,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    if(~match_enable || match_suc) begin
+    if(~match_enable || xfer_ready) begin
         match_find <= 0;
         max_amount <= 0;
         match_best_sram <= 6'd32;

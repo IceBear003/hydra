@@ -284,6 +284,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .new_length(match_length[8:3]), 
         .match_enable(match_enable),
         .match_suc(match_suc),
+        .xfer_ready(xfer_ready),
 
         .match_sram(match_sram),
         .match_best_sram(match_best_sram),
@@ -313,10 +314,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     /* 更新正在写入的SRAM编号 */
     always @(posedge clk) begin
-        if(~rst_n || wr_xfer_end_of_packet) begin   /* 新数据包传输完毕，解除写入占用 */
-            wr_sram <= 6'd32;
-        end else if(wr_xfer_ready) begin            /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
+        if(wr_xfer_ready) begin                                 /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
             wr_sram <= match_best_sram;
+        end else if(~rst_n || wr_xfer_end_of_packet) begin      /* 新数据包传输完毕，解除写入占用 */
+            wr_sram <= 6'd32;
         end
     end
 
