@@ -62,7 +62,7 @@ task my_model::main_phase(uvm_phase phase);
                         break;
                     end
                 end
-                if(tr[i].ctrl[3:0] == 5)
+                if(tr[i].ctrl[3:0] == 7)
                     $display("port_in = %d %d %d %d",i,tr[i].ctrl[3:0],tr[i].ctrl[6:4],port_reach[tr[i].ctrl[3:0]]);
             end
         end
@@ -74,22 +74,11 @@ task my_model::main_phase(uvm_phase phase);
                 `uvm_info("my_model","begin to collect one pkt",UVM_LOW);
                 $display("i = %d %d %d %d",i,port_reach[i],que[i][port_reach[i]][0],que[i][port_reach[i]].size());
                 sd_tr[i] = new($sformatf("sd_tr[%0d]", i));
-                sd_tr[i].ctrl = que[i][port_reach[i]][0];
+                sd_tr[i].ctrl = que[i][port_reach[i]].pop_front();
                 sd_tr[i].vld = 1;
                 $display("port_r each = %d %d %d",port_reach[i],i,que[i][port_reach[i]][0][47:16]);
                 ap[i].write(sd_tr[i]);
-                act_port[i].get(rd_get[i]);
-            end
-        end
-/*
-        for(int i=0; i<16; i=i+1) begin
-            if(rd_tr[i].rd_ready && que[i][port_reach[i]].size() > 0) begin
-                
-            end
-        end*/
-
-        for(int i=0; i<16; i=i+1) begin
-            if(rd_tr[i].rd_ready && que[i][port_reach[i]].size() > 0) begin
+                /*act_port[i].get(rd_get[i]);
                 for(int j=1; j < que[i][port_reach[i]].size() 
                 && que[i][port_reach[i]][j][47:16] == que[i][port_reach[i]][0][47:16]; j=j+1) begin
                     if(que[i][port_reach[i]][j][15:0] == rd_get[i].ctrl[15:0]) begin
@@ -101,7 +90,7 @@ task my_model::main_phase(uvm_phase phase);
                 end
                 sd_tr[i].ctrl = que[i][port_reach[i]].pop_front();
                 sd_tr[i].vld = 1;
-                ap_1[i].write(sd_tr[i]);
+                ap_1[i].write(sd_tr[i]);*/
                 for(int j=7; j >= 0; j=j-1) begin
                     if(que[i][j].size() > 0) begin
                         big_prior[i] = j;

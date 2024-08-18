@@ -264,11 +264,17 @@ always @(posedge clk) begin
         join_dest_port <= wr_xfer_data[3:0];
         join_prior <= wr_xfer_data[6:4];
         join_head <= wr_page;
+        if(sram_idx == 7) begin
+            //$display("interface = %d %d %d", wr_xfer_data[6:4],wr_xfer_data[3:0],(time_stamp + 5'd1) >> 1);
+        end
     end else if(time_stamp[3:0] == join_time_stamp[3:0] && ~(wr_state == 2'd1 && wr_batch == 3'd1)) begin
         join_time_stamp <= 6'd34;                                       /* 16���ں������������ */
     end
     if(wr_state == 2'd1 && wr_batch == 3'd1) begin                      /* β��Ԥ����ɺ�׷�������������ݰ�βҳ��ַ */
         join_tail <= np_dout;
+    end
+    if(sram_idx == 7) begin
+        //$display("wr_face = %d %d %d",wr_state,wr_xfer_data_vld,wr_xfer_data);
     end
 end
 

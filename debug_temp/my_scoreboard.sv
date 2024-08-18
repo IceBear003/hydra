@@ -30,10 +30,14 @@ function void my_scoreboard::build_phase(uvm_phase phase);
 endfunction
 
 task my_scoreboard::main_phase(uvm_phase phase);
-    my_transaction get_expect,get_actual,tmp_tran;
-    //logic [15:0] tmp_tran;
+    my_transaction get_expect,get_actual;
+    logic [15:0] tmp_tran;
     logic result;
+    int num_suc = 0;
+    int num_err = 0;
     super.main_phase(phase);
+    //int file;
+    //file = $fopen("D:/Engineer/Hydra_2/hydra/debug_temp/in.txt","r+");
     `uvm_info("my_scoreboard","begin to compare",UVM_LOW);
     fork
         while(1) begin
@@ -48,19 +52,23 @@ task my_scoreboard::main_phase(uvm_phase phase);
             if(expect_queue.size() > 0 && get_actual.vld) begin
                 $display("acutal = %d %d %d %d",get_actual.ctrl[3:0],
                 get_actual.ctrl,get_actual.vld,get_actual.ctrl[6:4]);
-                //tmp_tran = expect_queue[0];
-                ap.write(get_actual);
-                exp_port_1.get(tmp_tran);
-                result = (get_actual.ctrl[15:0] == tmp_tran.ctrl[15:0]);
+                tmp_tran = expect_queue[0];
+                //ap.write(get_actual);
+                //exp_port_1.get(tmp_tran);
+                result = (get_actual.ctrl[15:0] == tmp_tran);
                 if(result) begin
                     `uvm_info("my_scoreboard","Compare SUCCESSFULLY",UVM_LOW);
                     expect_queue.pop_front();
+                    num_suc = num_suc + 1;
+                    $display("Successful packet number is: %d",num_suc);
                 end else begin
-                    $display("the expect pkt is %d %d",tmp_tran.ctrl[15:0],tmp_tran.ctrl[6:4]);
+                    $display("the expect pkt is %d %d",tmp_tran,tmp_tran[6:4]);
                     $display("the actural pkt is %d %d %d"
                     ,get_actual.ctrl,expect_queue.size(),get_actual.ctrl[6:4]);
                     `uvm_error("my_scoreboard","Com pare FAILED");
                     expect_queue.pop_front();
+                    num_err = num_err + 1;
+                    $display("Failed packet number is: %d",num_err);
                 end/* else begin
                     bit suc_if = 0;
                     for(int i = 0; expect_queue[0][47:16] == expect_queue[i][47:16]; i = i + 1) begin
@@ -85,7 +93,11 @@ task my_scoreboard::main_phase(uvm_phase phase);
             end else if(get_actual.vld) begin
                 $display("the unexpected pkt is %d",get_actual.ctrl);
                 `uvm_error("my_scoreboard","Received from DUT, while Expected Queue is empty");
+                num_err = num_err + 1;
+                $display("Failed packet number is: %d",num_err);
             end
+            $display("Successful packet number is: %d",num_suc);
+            $display("Failed packet number is: %d",num_err);
         end
     join
 endtask

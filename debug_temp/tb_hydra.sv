@@ -224,7 +224,7 @@ end
 
 reg [4:0] cnt_wr_st;
 reg [4:0] cnt_wr_ed;
-
+/*
 always@(posedge clk or  negedge rst_n) begin
     if(!rst_n) begin
         cnt_wr_st <= 0;
@@ -244,7 +244,7 @@ always@(posedge clk or  negedge rst_n) begin
             wr_sop_1 <= 16'hFFFF;
     end
 end
-
+*/
 parameter   IDLE    =   2'b00   ,
             RD_CTRL =   2'b01   ,
             RD_BTW  =   2'b10   ,

@@ -72,19 +72,28 @@ task my_driver::main_phase(uvm_phase phase);
             @(posedge vif.clk);
         end
         for(int i = 0; i < 100; i = i + 1) begin
-            //for(int j = 0; j < vr; j = j + 1)
-            //    @(posedge vif.clk);
+            while(vr[3:0] != (time_stamp[4:0] >> 1)) begin
+                @(posedge vif.clk);
+            end
             len = $random;
+            $display("port in number = %d %d %d",vr,i,time_stamp[4:0]);
             tr = new("tr");
             tr.ctrl = len;
             tr.vld = 0;
             if(len < 31) len = 31;
             if(len > 255) len = 255;
             tr.ctrl[15:7] = len;
-            //tr.ctrl[6:4] = 1;
-            //tr.ctrl[3:0] = vr;
+            /*if(vr < 8) begin
+                //tr.ctrl[6:4] = 1;
+                tr.ctrl[3:0] = 1;
+            end else begin
+                tr.ctrl[3:0] = 2;
+            end*/
+            if(tr.ctrl[15:0] == 30225)
+                $display("7out = %d %d %d",tr.ctrl[6:4],vr,tr.ctrl[3:0]);
             tr.ctrl[47:16] = time_stamp;
             drive_one_pkt(tr);
+            
         end
     join
     //#1000
