@@ -60,7 +60,7 @@ endtask
 
 task my_driver::main_phase(uvm_phase phase);
     my_transaction tr;
-    bit [7:0] len;
+    bit [9:0] len;
     phase.raise_objection(this);
     while(!vif.rst_n) begin
         time_stamp = time_stamp + 1;
@@ -81,14 +81,14 @@ task my_driver::main_phase(uvm_phase phase);
             tr.ctrl = len;
             tr.vld = 0;
             if(len < 31) len = 31;
-            if(len > 255) len = 255;
+            if(len > 1023) len = 1023;
             tr.ctrl[15:7] = len;
-            /*if(vr < 8) begin
+            if(vr < 7) begin
                 //tr.ctrl[6:4] = 1;
                 tr.ctrl[3:0] = 1;
-            end else begin
+            end else if(vr < 14) begin
                 tr.ctrl[3:0] = 2;
-            end*/
+            end
             if(tr.ctrl[15:0] == 30225)
                 $display("7out = %d %d %d",tr.ctrl[6:4],vr,tr.ctrl[3:0]);
             tr.ctrl[47:16] = time_stamp;
