@@ -277,6 +277,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .new_length(match_length[8:3]), 
         .match_enable(match_enable),
         .match_suc(match_suc),
+        .xfer_ready(xfer_ready),
 
         .match_sram(match_sram),
         .match_best_sram(match_best_sram),
@@ -306,10 +307,10 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
 
     /* 更新正在写入的SRAM编号 */
     always @(posedge clk) begin
-        if(~rst_n || wr_xfer_end_of_packet) begin   /* 新数据包传输完毕，解除写入占用 */
-            wr_sram <= 6'd32;
-        end else if(wr_xfer_ready) begin            /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
+        if(wr_xfer_ready) begin            /* 新数据包即将传输，将匹配到的SRAM标记为写占用 */
             wr_sram <= match_best_sram;
+        end else if(~rst_n || wr_xfer_end_of_packet) begin   /* 新数据包传输完毕，解除写入占用 */
+            wr_sram <= 6'd32;
         end
     end
 
@@ -563,10 +564,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             packet_amounts[rd_sram] <= packet_amounts[rd_sram] - 1;
         end
     end
-
-    wire [15:0] debug_head = queue_head[3];
-    wire [15:0] debug_tail = queue_tail[3];
-    wire [15:0] debug_amount = packet_amounts[1];
 end endgenerate
 
 genvar sram;
@@ -578,7 +575,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
      * |- rd_select - 读取选通信号
      */
     wire [15:0] wr_select = {wr_srams[15] == sram, wr_srams[14] == sram, wr_srams[13] == sram, wr_srams[12] == sram, wr_srams[11] == sram, wr_srams[10] == sram, wr_srams[9] == sram, wr_srams[8] == sram, wr_srams[7] == sram, wr_srams[6] == sram, wr_srams[5] == sram, wr_srams[4] == sram, wr_srams[3] == sram, wr_srams[2] == sram, wr_srams[1] == sram, wr_srams[0] == sram};
-    wire [15:0] match_select ={match_srams[15] == sram, match_srams[14] == sram, match_srams[13] == sram, match_srams[12] == sram, match_srams[11] == sram, match_srams[10] == sram, match_srams[9] == sram, match_srams[8] == sram, match_srams[7] == sram, match_srams[6] == sram, match_srams[5] == sram, match_srams[4] == sram, match_srams[3] == sram, match_srams[2] == sram, match_srams[1] == sram, match_srams[0] == sram};
+    wire [15:0] match_select = {match_srams[15] == sram, match_srams[14] == sram, match_srams[13] == sram, match_srams[12] == sram, match_srams[11] == sram, match_srams[10] == sram, match_srams[9] == sram, match_srams[8] == sram, match_srams[7] == sram, match_srams[6] == sram, match_srams[5] == sram, match_srams[4] == sram, match_srams[3] == sram, match_srams[2] == sram, match_srams[1] == sram, match_srams[0] == sram};
     wire [15:0] rd_select = {rd_srams[15] == sram, rd_srams[14] == sram, rd_srams[13] == sram, rd_srams[12] == sram, rd_srams[11] == sram, rd_srams[10] == sram, rd_srams[9] == sram, rd_srams[8] == sram, rd_srams[7] == sram, rd_srams[6] == sram, rd_srams[5] == sram, rd_srams[4] == sram, rd_srams[3] == sram, rd_srams[2] == sram, rd_srams[1] == sram, rd_srams[0] == sram};
     
     /* 当SRAM既没有正被任一端口写入数据，也没有被任一端口当作较优的匹配结果，则认为该SRAM可被匹配 */
@@ -710,8 +707,8 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    full <= accessibilities == 0;                       /* 无SRAM可用时拉高full */
-    almost_full <= (~accessibilities &                  /* 可用的SRAM剩余空间都少于50%时拉高almost_full */
+    full <= accessibilities == 0;                           /* 无SRAM可用时拉高full */
+    almost_full <= (~accessibilities &                      /* 可用的SRAM剩余空间都少于50%时拉高almost_full */
         {free_spaces[0][10], free_spaces[1][10], free_spaces[2][10], free_spaces[3][10], 
         free_spaces[4][10], free_spaces[5][10], free_spaces[6][10], free_spaces[7][10], 
         free_spaces[8][10], free_spaces[9][10], free_spaces[10][10], free_spaces[11][10], 

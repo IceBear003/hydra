@@ -35,7 +35,7 @@ hydra my_dut
     .pause ({input_if[15].pause,input_if[14].pause,input_if[13].pause,input_if[12].pause,input_if[11].pause,input_if[10].pause,input_if[9].pause,input_if[8].pause,input_if[7].pause,input_if[6].pause,input_if[5].pause,input_if[4].pause,input_if[3].pause,input_if[2].pause,input_if[1].pause,input_if[0].pause}),
 
     .wrr_en (16'hFFFF),
-    .match_threshold (30),
+    .match_threshold (20),
     .match_mode (2),
     
     .full (full),
@@ -89,7 +89,7 @@ always #(T/2) clk <= ~clk;
 generate
     for(genvar i=0; i<16; i=i+1) begin
         initial begin
-            #60009
+            #70009
             output_if[i].ready <= 1;
         end
 
