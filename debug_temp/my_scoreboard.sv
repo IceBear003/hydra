@@ -7,7 +7,7 @@ import uvm_pkg::*;
 
 class my_scoreboard extends uvm_scoreboard;
     logic [47:0] expect_queue[$];
-    uvm_blockileft_ng_get_port#(my_transaction) exp_port;
+    uvm_blocking_get_port#(my_transaction) exp_port;
     uvm_blocking_get_port#(my_transaction) exp_port_1;
     uvm_blocking_get_port#(my_transaction) act_port;
     uvm_analysis_port#(my_transaction) ap;

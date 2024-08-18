@@ -8,7 +8,6 @@ module port_wr_frontend(
     input wr_vld,
     input [15:0] wr_data,
     output reg pause,
-    input [4:0] port,
 
     /*
      * 向后端发送数据包的信号
@@ -70,7 +69,6 @@ wire [5:0] xfer_ptr_pls_1 = xfer_ptr + 6'd1;
 
 /* wr_length - 数据包长度，用于更新包尾指针 */
 reg [8:0] wr_length;
-reg tmp_match_suc;
 
 /* 
  * pst_match_suc - 匹配成功信号持久化
@@ -96,16 +94,6 @@ always @(posedge clk) begin
     end
 end
 
-always @(posedge clk) begin
-    if(~rst_n) begin    
-        tmp_match_suc <= 0;
-    end else if(xfer_state == 1 && match_suc == 1) begin
-        tmp_match_suc <= 1;
-    end else if(xfer_ready) begin
-        tmp_match_suc <= 0;
-    end
-end
-
 /* 前端缓冲区传输数据自动机状态转移 */
 always @(posedge clk) begin
     if(~rst_n) begin
@@ -123,9 +111,6 @@ always @(posedge clk) begin
         /* 有新的可传输的数据，从传输暂停态脱离 */
         xfer_state <= 2'd1;
     end
-    //if(port == 14)
-        //$display("xfer_state = %d %d %d %d %d %d %d",xfer_state,
-        //match_suc,pst_match_suc,xfer_ptr_pls_1,end_ptr,xfer_ready,end_of_packet);
 end
 
 always @(posedge clk) begin
@@ -137,8 +122,6 @@ always @(posedge clk) begin
         if (wr_state == 2'd1) begin                 /* 在写入数据包第一个半字时，载入数据包的目的端口与长度信息 */
             match_dest_port <= wr_data[3:0];
             match_length <= wr_data[15:7];
-            //if(wr_data[3:0] == 7)
-                //$display("7in = %d",wr_data[6:4]);
         end
     end
 end
@@ -178,7 +161,7 @@ always @(posedge clk) begin
         pst_match_suc <= 0;
     end else if(match_suc) begin
         pst_match_suc <= 1;
-    end 
+    end
 end
 
 always @(posedge clk) begin

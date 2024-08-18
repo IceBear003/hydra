@@ -127,10 +127,6 @@ wire [5:0] processing_join;
 wire [31:0] processing_join_one_hot_masks [32:0];
 for(genvar sram = 0; sram < 33; sram = sram + 1) assign processing_join_one_hot_masks[sram] = 32'b1 << sram;
 
-always @(posedge clk) begin
-    //$display("process = %d %d %b",processing_time_stamp,join_time_stamps[13],processing_join_select);
-end
-
 /* 
  * 当前正在处理的入队请求
  * |- join_sra - SRAM编号
@@ -172,26 +168,6 @@ encoder_16_4 encoder_concatenate(
     .select(concatenate_select),
     .idx(concatenate_port)
 );
-reg [15:0][11:0] cnt_in = 0;
-reg [15:0][11:0] cnt_out = 0;
-
-integer i;
-
-reg [19:0] cnt_vld = 0;
-
-always @(posedge clk) begin
-    for(i = 0; i < 16; i = i + 1) begin
-        //$display("cnt_in = %d %d",cnt_in[i],i);
-        //$display("cnt_out = %d %d",cnt_out[i],i);
-        if(rd_vld[i])
-            cnt_vld = cnt_vld + 1;
-    end
-    //$display("cnt_vld = %d",cnt_vld);
-    for(i = 0; i < 16; i = i + 1) begin
-        //if(wr_sop[i]) cnt_in[i] = cnt_in[i] + 1;
-        if(rd_eop[i]) cnt_out[i] = cnt_out[i] + 1;
-    end
-end
 
 genvar port;
 generate for(port = 0; port < 16; port = port + 1) begin : Ports
@@ -271,12 +247,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     assign concatenate_heads[port] = concatenate_head;
     assign concatenate_tails[port] = concatenate_tail;
 
-    always @(posedge clk) begin
-        if(wr_eop[port]) begin
-            cnt_in[match_dest_port] = cnt_in[match_dest_port] + 1;
-        end
-    end
-
     port_wr_frontend port_wr_frontend(
         .clk(clk),
         .rst_n(rst_n),
@@ -285,8 +255,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .wr_vld(wr_vld[port]),
         .wr_data(wr_data[port]),
         .wr_eop(wr_eop[port]),
-        .pause(pause[port]),
-        .port(port),
+        .pause(pause[port]), 
 
         .xfer_ready(wr_xfer_ready),
         .xfer_data_vld(wr_xfer_data_vld),
@@ -308,7 +277,7 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         .new_length(match_length[8:3]), 
         .match_enable(match_enable),
         .match_suc(match_suc),
-        .xfer_ready(wr_xfer_ready),
+        .xfer_ready(xfer_ready),
 
         .match_sram(match_sram),
         .match_best_sram(match_best_sram),
@@ -321,25 +290,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
      * 生成下周期尝试匹配的SRAM，并提前抓取匹配参数
      * PORT_IDX与时间戳的参与保证同一周期每个端口总尝试匹配不同的SRAM，避免Crossbar写入仲裁
      */
-     /*
-    reg xfer_wr_ready;
-    always @(posedge clk) begin
-        xfer_wr_ready <= wr_xfer_ready;
-    end
-
-    always @(posedge clk) begin
-        if(xfer_wr_ready && port == 7) begin
-            $display("7prior = %d",wr_xfer_data[6:4]);
-        end
-    end*/
-
-    always @(posedge clk) begin
-        if(port == 14) begin
-            //$display("7prior = %d",wr_xfer_datas[port]);
-            //$display("match = %d %d %d %d",match_enable,match_suc,match_best_sram,wr_xfer_ready);
-        end
-    end
-
     always @(posedge clk) begin
         case(match_mode)
             /* 静态分配模式，在端口绑定的2块SRAM之间来回搜索 */
@@ -353,8 +303,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
         accessibility <= accessibilities[next_match_sram] || wr_sram == next_match_sram; /* 粘滞匹配 */
         free_space <= free_spaces[next_match_sram];
         packet_amount <= port_packet_amounts[match_dest_port][next_match_sram];
-        //if(port == 14)
-        //    $display("match_sram = %d",match_sram);
     end
 
     /* 更新正在写入的SRAM编号 */
@@ -369,17 +317,12 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
     /* 更新入队请求受理使能信号 */
     always @(posedge clk) begin
         join_enable <= join_dest_ports[processing_join] == port;
-        //if(port == 7) begin
-        //    $display("join_dest = %d %d",join_dest_ports[processing_join],processing_join);
-        //end
     end
     
     /* 有新数据包入队时发起拼接请求 */
     always @(posedge clk) begin
         concatenate_enable <= join_enable;
         if(join_enable) begin
-            //if(port == 7)
-            //    $display("join_prior = %d",join_prior);
             if(~queue_empty[join_prior]) begin                          /* 队列非空时 */
                 concatenate_head <= queue_tail[join_prior];             /* 拼接头为原队尾 */
                 concatenate_tail <= join_head;                          /* 拼接尾为新数据包头*/
@@ -450,8 +393,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             rd_sram <= 6'd32;
         end if(rd_xfer_ready) begin                                                                     /* 准备时传输时更新读取SRAM，发起读取请求 */
             pst_rd_prior <= rd_prior;
-            //if(port == 7)
-            //    $display("rd_prior = %d %b",rd_prior,queue_empty);
             rd_sram <= queue_head[rd_prior][15:11];
         end else if(rd_xfer_page_amount == 0 && rd_xfer_batch == 0) begin                               /* 最后一页传输一开始即重置读取SRAM，以防SRAM侧多读 */
             rd_sram <= 6'd32;
@@ -623,10 +564,6 @@ generate for(port = 0; port < 16; port = port + 1) begin : Ports
             packet_amounts[rd_sram] <= packet_amounts[rd_sram] - 1;
         end
     end
-
-    wire [15:0] debug_head = queue_head[3];
-    wire [15:0] debug_tail = queue_tail[3];
-    wire [15:0] debug_amount = packet_amounts[1];
 end endgenerate
 
 genvar sram;
@@ -638,7 +575,7 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
      * |- rd_select - 读取选通信号
      */
     wire [15:0] wr_select = {wr_srams[15] == sram, wr_srams[14] == sram, wr_srams[13] == sram, wr_srams[12] == sram, wr_srams[11] == sram, wr_srams[10] == sram, wr_srams[9] == sram, wr_srams[8] == sram, wr_srams[7] == sram, wr_srams[6] == sram, wr_srams[5] == sram, wr_srams[4] == sram, wr_srams[3] == sram, wr_srams[2] == sram, wr_srams[1] == sram, wr_srams[0] == sram};
-    wire [15:0] match_select ={match_srams[15] == sram, match_srams[14] == sram, match_srams[13] == sram, match_srams[12] == sram, match_srams[11] == sram, match_srams[10] == sram, match_srams[9] == sram, match_srams[8] == sram, match_srams[7] == sram, match_srams[6] == sram, match_srams[5] == sram, match_srams[4] == sram, match_srams[3] == sram, match_srams[2] == sram, match_srams[1] == sram, match_srams[0] == sram};
+    wire [15:0] match_select = {match_srams[15] == sram, match_srams[14] == sram, match_srams[13] == sram, match_srams[12] == sram, match_srams[11] == sram, match_srams[10] == sram, match_srams[9] == sram, match_srams[8] == sram, match_srams[7] == sram, match_srams[6] == sram, match_srams[5] == sram, match_srams[4] == sram, match_srams[3] == sram, match_srams[2] == sram, match_srams[1] == sram, match_srams[0] == sram};
     wire [15:0] rd_select = {rd_srams[15] == sram, rd_srams[14] == sram, rd_srams[13] == sram, rd_srams[12] == sram, rd_srams[11] == sram, rd_srams[10] == sram, rd_srams[9] == sram, rd_srams[8] == sram, rd_srams[7] == sram, rd_srams[6] == sram, rd_srams[5] == sram, rd_srams[4] == sram, rd_srams[3] == sram, rd_srams[2] == sram, rd_srams[1] == sram, rd_srams[0] == sram};
     
     /* 当SRAM既没有正被任一端口写入数据，也没有被任一端口当作较优的匹配结果，则认为该SRAM可被匹配 */
@@ -704,8 +641,6 @@ generate for(sram = 0; sram < 32; sram = sram + 1) begin : SRAMs
         end else if(rd_batch == 7 && rd_select_masked != 0) begin   /* 拉低对应位的安抚掩码 */
             comfort_mask[rd_port] <= 0;
         end
-        //if(sram == 7)
-        //    $display("xfer_data_vld = %b %d",wr_select,wr_port);
     end
 
     sram_interface sram_interface(
@@ -772,8 +707,8 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-    full <= accessibilities == 0;                       /* 无SRAM可用时拉高full */
-    almost_full <= (~accessibilities &                  /* 可用的SRAM剩余空间都少于50%时拉高almost_full */
+    full <= accessibilities == 0;                           /* 无SRAM可用时拉高full */
+    almost_full <= (~accessibilities &                      /* 可用的SRAM剩余空间都少于50%时拉高almost_full */
         {free_spaces[0][10], free_spaces[1][10], free_spaces[2][10], free_spaces[3][10], 
         free_spaces[4][10], free_spaces[5][10], free_spaces[6][10], free_spaces[7][10], 
         free_spaces[8][10], free_spaces[9][10], free_spaces[10][10], free_spaces[11][10], 
