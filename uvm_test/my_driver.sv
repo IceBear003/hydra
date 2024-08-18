@@ -89,8 +89,6 @@ task my_driver::main_phase(uvm_phase phase);
             end else if(vr < 14) begin
                 tr.ctrl[3:0] = 2;
             end*/
-            if(tr.ctrl[15:0] == 30225)
-                $display("7out = %d %d %d",tr.ctrl[6:4],vr,tr.ctrl[3:0]);
             tr.ctrl[47:16] = time_stamp;
             drive_one_pkt(tr);
             
